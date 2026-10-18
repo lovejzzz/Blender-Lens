@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+id = "blenderlens"
+version = "0.1.0"
+name = "BlenderLens Anamorphic"
+tagline = "Ray-traced 2x front-anamorphic lens from public patents"
+maintainer = "BlenderLens project"
+type = "add-on"
+
+blender_version_min = "5.0.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Camera", "Render"]
+
+[permissions]
+files = "Read lens prescription JSON files"
+
+[build]
+paths_exclude_pattern = ["__pycache__/", "*.pyc", ".*"]
