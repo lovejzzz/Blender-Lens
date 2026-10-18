@@ -1,0 +1,512 @@
+===== ABSTRACT =====
+Abstract
+
+ A Gauss type photographic lens comprises a first convergent lens group G1 and a second convergent lens group G2. The first convergent lens group G1 comprises, in the order from the object side, a positive lens component L1, a positive meniscus lens component L2 having its convex surface facing the object side, and a negative meniscus lens component L3 having its convex surface facing the object side, and the second convergent lens group G2 comprises, in the order from the object side, a meniscus lens component L4 consisting of a negative lens and a positive lens cemented together and having its concave surface facing the object side, and a positive lens component L5. Such a lens arrangement is well-known and to maintain the lens construction more compact and better correct the various aberrations, it is necessary that conditions be satisfied.
+
+===== DESCRIPTION =====
+Description
+
+ BACKGROUND OF THE INVENTION
+ 1. Field of the Invention
+
+ This invention relates to a compact Gauss type photographic lens.
+
+ 2. Description of the Prior Art
+
+ Gauss type photographic lenses have been used since early days and numerous examples of the design of the Gauss type photographic lens having a high performance are known. However, it is very difficult to design a Gauss type lens having a certain extent of wide angle of view and bright and yet having a sufficiently long back focal length but having a short entire length (the length from the foremost surface of the lens to the film surface), and how to make the lens compact while maintaining a good image forming performance has been a great task to be solved in the photographic lens of this type.
+
+ SUMMARY OF THE INVENTION
+ It is an object of the present invention to provide a Gauss type photographic lens for use with a single-lens reflex camera which has a high image forming performance and which is bright and compact.
+
+ Generally, a Gauss type photographic lens is characterized in that meniscus-shaped lenses are disposed on the opposite sides of a diaphragm space with their concave surfaces opposed to each other and that positive lenses are disposed on the opposite sides of the meniscus-shaped lenses. In the present invention, such a Gauss type photographic lens is divided into a lens group adjacent to the object side and a lens group adjacent to the image side with the diaphragm space as the boundary, and these lens groups are regarded as a first convergent lens group G1 having a composite focal length f1 and a second convergent lens group G2 having a composite focal length f2, and from such a point of view, the nature of the Gauss type photographic lens is re-evaluated and the optical conditions for reducing the entire length of the lens have been analyzed.
+
+ The invention will become more fully apparent from the following description thereof taken in conjunction with the accompanying drawings.
+
+ BRIEF DESCRIPTION OF THE DRAWINGS
+ FIG. 1 shows a lens construction in which a first convergent lens group and a second convergent lens group of the present invention are regarded as thin lenses.
+
+ FIG. 2 shows a specific example of the construction of FIG. 1.
+
+ FIGS. 3A to 6C illustrate various aberrations in respective lens systems.
+
+ DESCRIPTION OF THE PREFERRED EMBODIMENTS
+ Referring to FIG. 1, it shows a construction in which a first convergent lens group G1 and a second convergent lens group G2 are regarded as thin lenses. As shown, the distance between the principal planes of the two groups is D and the length from the principal plane of the rear group to the focal plane P is B. Here, the total focal length f of the entire system is expressed as follows as is well-known: ##EQU1## The value of B is the back focal length in the basic construction comprising this thin system and is expressed as: ##EQU2##
+
+ When considering a desire for making compact the entire lens, it is obvious that it is advantageous to bring the first G1 and the second convergent lens group G2 as close to each other as possible, namely, minimize the value of D. However, it has been discussed in the designing of Gauss type lenses that adoption of such a construction accompanies increased coma in the intermediate portion of the picture plane which in turn leads to the tendency toward aggravation of the image forming performance, and it has been extremely difficult to positively make small the value of D to make the lens compact and yet maintain an excellent performance. In contrast, the present invention provides a maximum condition for making the lens compact and yet maintain an excellent image forming performance by the formulas as shown below:
+
+ 0.98f<D<1.05f (3)
+
+ 2.5f<f.sub.1 <3.0f (4)
+
+ where D is the distance between the principal planes of the first G1 and the second convergent lens group G2 and f1 is the composite focal length of the first lens group G1.
+
+ These conditions will hereinafter be discussed. First, if D is smaller than the lower limit in expression (3), the diaphragm space becomes narrow and the lenses forming this space are disposed with their concave surface opposed to each other, so that it is difficult to insert a diaphragm therein, or the radii of curvature of these opposed concave surfaces are compelled to be great, thus making it difficult to maintain the Petzval sum of the entire system at a small value. If D is greater than the upper limit in conditions (3), it is essentially difficult to make compact the Gauss type lens of this kind. It is formula (4) which determines the power distribution of the first G1 and the second lens group G2 in formula (3), and if f1 is determined as shown in formula (4) in addition to formula (3), f2 is necessarily determined by the basic relation of equation (1). If f1 is smaller than the lower limit in formula (4), the value of B becomes smaller as seen from equation (2) and necessarily, the so-called back focal length becomes short.
+
+ It is possible to increase the back focal length by intensifying the bending of a meniscus lens component which is present in the second lens group G2 and which is concave with respect to the object side, but in such case it is impossible to provide a sufficient back focal length as a lens for single-lens reflex cameras unless the radius of curvature of the concave surface of that meniscus lens component which forms the diaphragm space is considerably intensified and as the result, occurrence of the coma in this surface becomes so remarkable that it is difficult to correct the coma at the intermediate angle of view. Otherwise, the distance between the two lens groups must be widened and this means that D is increased beyond the upper limit in formula (3), and it departs from the object of the present invention. Also, if f1 is greater, the value of B becomes greater from equation (2) but is it is greater than the upper limit, the actual back focal length becomes unnecessarily long to make it difficult to reduce the distance from the foremost surface to the rearmost surface of the lens.
+
+ The framework for keeping the Gauss type photographic lens compact and at high performance is determined by the above-described conditions for the basic construction and in the present invention, the lens construction as shown in FIG. 2 is specifically adopted for the first G1 and the second convergent lens group G2. The first convergent lens group G1 comprises, in the order from the object side, a positive lens component L1, a positive meniscus lens component 12 having its convex surface facing the object side, and a negative meniscus lens component L3 having its convex surface facing the object side, and the second convergent lens group G2 comprises, in the order from the object side, a meniscus lens component L4 consisting of a negative lens and a positive lens cemented together and having its concave surface facing the object side, and a positive lens component L5.
+
+ Such a lens arrangement is well-known and to maintain the lens construction more compact and better correct the various aberrations, it is necessary that the following further conditions be satisified: ##EQU3## where D1 is the length from the foremost lens surface to the rearmost lens surface of the first convergent lens group, D2 the length from the foremost lens surface to the rearmost lens surface of the second convergent lens group, r the radius of curvature of each lens surface, n the refractive index of each lens, ν the Abbe number of each lens, and subscript numbers represent the order from the object side.
+
+ Significances of these conditions will hereinafter be described.
+
+ First, conditions (5) and (6) are for prescribing the actual lens thicknesses of the first convergent lens group G1 and the second convergent lens group G2. If the lower limits in these two conditions are departed from, the lens should theoretically be compact but actually, the marginal thickness of each lens is small and a sufficient effective diameter becomes difficult to obtain. If the upper limits in these conditions are exceeded, correction of the various aberrations becomes advantageous but in the actual optical system, the entire length thereof becomes long and this does not meet the object of the present invention.
+
+ Conditions (7), (8) and (9) are for choosing the glass material. Condition (7) determines the range of glass selection chiefly for well effecting a high order of achromatism in the positive meniscus lens component L2 of the first convergent group G1 having its convex surface facing the object side and the negative meniscus lens component L3 of the first convergent group G1 having its convex surface facing the object side and in the cemented lens component L4 of the second convergent group G2 having its concave surface facing the object side. In the first convergent group G1, a smaller difference between the refractive indedx n2 of said positive meniscus lens component and the refractive index n3 of said negative meniscus lens component makes it easier to correct a high degree of chromatic aberration, namely, chromatic variation of spherical aberration occurring in the lens construction of this type. At this time, however, the Petzval sum in the first convergent group G1 tends to become positive and it is therefore necessary to select a small refractive index n4 for the negative lens forming said cemented meniscus lens component in the second convergent group G2 and a great refractive index n5 for the positive lens to thereby increase the difference in refractive index between the two lens components and to construct the lens system so as to satisfy at least condition (7). Conditions (8) and (9) are concerned with all the lens components in the Gauss type photographic lens adopted herein and are necessary to well maintain the Petzval sum and correction of the chromatic aberration of the entire system, in addition to the satisfaction of the aforementioned conditions. If these conditions are departed from, the plurality of the image plane cannot be kept and the chromatic aberration becomes difficult to correct and the conditions imposed on the refractive index are important because the Petzval sum essentially tends to increase to the positive in the above-described limited lens construction.
+
+ Conditions (10) and (11) are concerned with the radius of curvature of the image side surface of the positive meniscus lens component L2 in the first convergent group G1 having its convex surface facing the object side and the radius of curvature of the object side surface of the negative meniscus lens component L3 having its convex surface facing the object side, and these conditions are for prescribing that the air lens formed between the two lens components L2 and L3 under the above-described conditions has an appropriate diverging action in the meniscus shape having its convex surface facing the object side and for better correcting a high order of chromatic aberration. If the upper limits in these conditions are exceeded, the condition (7) is satisfied but the chromatic variations of the spherical aberration by the respective surfaces are increased and become difficult to well correct even by the other lens components. If the lower limits in these conditions are departed from, the achromatism by these two lens components must be effected by increasing the difference in refractive index and this departs from the condition (7). Moreover, in this case, the Petzval sum increases to the positive and becomes difficult to correct sufficiently well.
+
+ Condition (2) is for determining the radius of curvature of the surface concave with respect to the object side which lies most toward the object side in the second convergent lens group G2 and which forms the diaphragm space, and as already mentioned in the description of the basic construction, condition (12) is intended to well correct the coma while obtaining an appropriate back focal length. If the upper limit in this condition is exceeded, the diverging action becomes too weak so that the Petzval sum increases to the positive to remarkably intensify the negative curvature of field. If the lower limit in this condition is departed from, occurrence of the coma in the intermediate angle of view becomes pronounced and difficult to well correct even by the other components.
+
+ Condition (13) is for determining the magnitude of the curvature radius r8 of the cemented surface of the cemented meniscus lens component L4 of the second convergent group having its concave surface facing the object side and for effectively effecting achromatism by this lens component. If the cemented surface r8 becomes positive, namely, a surface convex with respect to the object side, the variation in chromatic difference of magnification by the angle of view becomes pronounced and difficult to well correct in the entire picture plane and at the same time, the chromatic variation of the spherical aberration becomes pronounced because condition (7) provides a difference in refractive index between the positive and the negative lens forming the cemented lens component. On the other hand, if the value of |r8 | becomes smaller than the value of |3r7 |, the Abbe number of the negative lens forming this cemented lens component must be made smaller and the Abbe number of the positive lens must be made greater to effect achromatism, and this exceeds conditions (8) and (9) necessary for the correction of the Petzval sum.
+
+ In addition to the above-described conditions, the following condition on the shape factor of the positive lens component L5 of the second convergent lens group G2 should desirably be satisfied. ##EQU4## If the lower limit in this condition is departed from, the unbalance between the spherical aberration and the astigmatism in this lens component becomes pronounced and difficult to correct by the other lens components. On the other hand, if the upper limit in this condition is exceeded, the asymmetry of the shape of the entire optical system is increased to provide occurrence of great negative distortion and expedite the aggravation of the performance during close-up photography.
+
+ Numerical data for various examples of the Gauss type photographic lens according to the present invention will be shown below. In the table of numerical data for each example, r represents the curvature radius of each lens surface, d the air separation between adjacent lens surfaces and the center thickness of each lens, n and ν represent the refractive index and Abbe number of each lens, respectively, and the subscript numbers represent the order from the objective side.
+
+ EXAMPLE 1
+
+ ______________________________________ 
+Focal length f = 100 mm Relative aperture 1 : 2.0 
+Angle of view 2ω = 46° 
+______________________________________ 
+ r.sub.1 = 88.702 
+ d.sub.1 = 6.78 
+ n.sub.1 = 1.713 
+ ν.sub.1 = 53.9 
+ r.sub.2 = 3682.171 
+ d.sub.2 = 0.19 
+ r.sub.3 = 37.399 
+ d.sub.3 = 8.72 
+ n.sub.2 = 1.713 
+ ν.sub.2 = 53.9 
+G1 r.sub.4 = 61.587 
+ d.sub.4 = 2.71 
+ r.sub.5 = 188.525 
+ d.sub.5 = 1.94 
+ n.sub.3 = 1.64831 
+ ν.sub.3 = 33.8 
+ r.sub.6 = 31.585 
+ d.sub.6 = 15.70 
+ r.sub.7 =-35.134 
+ d.sub.7 = 1.94 
+ n.sub.4 = 1.64831 
+ ν.sub.4 = 33.8 
+ r.sub.8 = -112.118 
+ d.sub.8 = 9.63 
+ n.sub.5 = 1.713 
+ ν.sub.5 = 53.9 
+ r.sub.9 = -39.574 
+G2 d.sub.9 = 0.19 
+ r.sub.10 = 156.498 
+ d.sub.10 = 5.62 
+ n.sub.6 = 1.713 
+ ν.sub.6 = 53.9 
+ r.sub.11 = -226.066 
+______________________________________ 
+
+ Back focal length: Bf=74.8
+
+ Entire length=d1 +d2 ' . . . +d10 +Bf=128.3
+
+ f.sub.1 =274.5
+
+ f.sub.2 =100.7
+
+ D=98.8
+
+ D.sub.1 =20.3=0.074f.sub.1
+
+ D.sub.2 =17.4=0.17f.sub.2
+
+ EXAMPLE 2
+
+ ______________________________________ 
+Focal length f = 100 mm Relative aperture 1 : 1.8 
+Angle of view 2ω = 46° 
+______________________________________ 
+ r.sub.1 = 90.983 
+ d.sub.1 = 6.78 
+ n.sub.1 = 1.713 
+ ν.sub.1 = 53.9 
+ r.sub.2 = 1224.651 
+ d.sub.2 = 0.19 
+ r.sub.3 = 38.186 
+ d.sub.3 = 8.72 
+ n.sub.2 = 1.713 
+ ν.sub.2 = 53.9 
+G1 r.sub.4 = 64.196 
+ d.sub.4 = 3.10 
+ r.sub.5 = 176.021 
+ d.sub.5 = 1.94 
+ n.sub.3 = 1.64831 
+ ν.sub.3 = 33.8 
+ r.sub.6 = 32.091 
+ d.sub.6 = 17.64 
+ r.sub.7 = -35.039 
+ d.sub.7 = 1.94 
+ n.sub.4 = 1.64831 
+ ν.sub.4 = 33.8 
+ r.sub.8 = -130.233 
+ d.sub.8 = 9.69 
+ n.sub.5 = 1.713 
+ ν.sub.5 = 53.9 
+ r.sub.9 = -39.922 
+G2 d.sub.9 = 0.19 
+ r.sub.10 = 141.924 
+ d.sub.10 = 5.04 
+ n.sub.6 = 1.713 
+ ν.sub.6 = 53.9 
+ r.sub.11 = -235.310 
+______________________________________ 
+
+ Back Focal length: Bf=75.0
+
+ Entire length=d1 +d2 + . . . +d10 +Bf=130.3
+
+ f.sub.1 =290.5
+
+ f.sub.2 =98.1
+
+ D=103.5
+
+ D.sub.1 =20.7=0.071f.sub.1
+
+ D.sub.2 =16.9=0.172f.sub.2
+
+ EXAMPLE 3
+
+ ______________________________________ 
+Focal length f = 100 mm Relative aperture 1 : 1.8 
+Angle of view 2ω = 46° 
+______________________________________ 
+ r.sub.1 = 97.968 
+ d.sub.1 = 6.79 
+ n.sub.1 = 1.76682 
+ ν.sub.1 = 46.81 
+ r.sub.2 = 3352.693 
+ d.sub.2 = 0.19 
+ r.sub.3 = 38.776 
+ d.sub.3 = 8.05 
+ n.sub.2 = 1.79713 
+ ν.sub.2 = 45.62 
+G1 r.sub.4 = 66.579 
+ d.sub.4 = 2.52 
+ r.sub.5 = 134.941 
+ d.sub.5 = 1.94 
+ n.sub.3 = 1.71714 
+ ν.sub.3 = 29.49 
+ r.sub.6 = 31.254 
+ d.sub.6 = 22.199 
+ r.sub.7 = -32.533 
+ d.sub.7 = 1.94 
+ n.sub.4 = 1.64841 
+ ν.sub.4 = 1.6733 
+ r.sub.8 = -423.785 
+ d.sub.8 = 9.60 
+ n.sub.5 = 1.76682 
+ ν.sub.5 = 46.81 
+ r.sub.9 = -40.463 
+G2 d.sub.9 = 0.19 
+ r.sub.10 = 760.402 
+ d.sub.10 = 5.53 
+ n.sub.6 = 1.71313 
+ ν.sub.6 = 53.94 
+ r.sub.11 = -104.405 
+______________________________________ 
+
+ Back focal length: Bf=74.2
+
+ Entire length=d1 +d2 + . . . +d10 +Bf=133.2
+
+ f.sub.1 =261.3
+
+ f.sub.2 =99.9
+
+ D=100.1
+
+ D.sub.1 =19.5=0.075f.sub.1
+
+ D.sub.2 =17.3=0.173f.sub.2
+
+ EXAMPLE 4
+
+ ______________________________________ 
+Focal length f = 100 mm Relative Aperture 1 : 1.8 
+Angle of view 2 = 46° 
+______________________________________ 
+ r.sub.1 = 87.791 
+ d.sub.1 = 6.78 
+ n.sub.1 = 1.713 
+ ν.sub.1 = 53.9 
+ r.sub.2 = 2363.198 
+ d.sub.2 = 0.19 
+ r.sub.3 = 39.438 
+ d.sub.3 = 8.72 
+ n.sub.2 = 1.713 
+ ν.sub.2 = 53.9 
+G1 r.sub.4 = 64.341 
+ d.sub.4 = 3.10 
+ r.sub.5 = 184.109 
+ d.sub.5 = 1.94 
+ n.sub.3 = 1.64831 
+ ν.sub.3 = 33.8 
+ r.sub.6 = 32.752 
+ d.sub.6 = 17.64 
+ r.sub.7 = -33.411 
+ d.sub.7 = 1.94 
+ n.sub.4 = 1.62004 
+ ν.sub.4 = 36.3 
+ r.sub.8 = -251.938 
+ d.sub.8 = 9.69 
+ n.sub.5 = 1.713 
+ ν.sub.5 = 53.9 
+ r.sub.9 = -39.922 
+G2 d.sub.9 = 0.19 
+ r.sub.10 = 208.907 
+ d.sub.10 = 5.04 
+ n.sub.6 = 1.713 
+ ν.sub.6 = 53.9 
+ r.sub.11 = -160.368 
+______________________________________ 
+
+ Back focal length: Bf=74.7
+
+ Entire length=d1 +d2 + . . . +d10 +Bf=130.0
+
+ f.sub.1 =275.1
+
+ f.sub.2 =99.6
+
+ D=100.8
+
+ D.sub.1 =20.7=0.075f.sub.1
+
+ D.sub.2 =16.9=0.170f.sub.2
+
+ The various aberrations in the examples of the lens system shown above are illustrated in FIGS. 3 to 6 in succession. As seen from these Figures, each example is of compact lens and yet has a high image forming performance.
+
+ According to the present invention, as has hitherto been described, there is achieved a Gauss type photographic lens which is compact and yet bright and has a sufficient resolving power and contrast even in an open aperture condition and which is excellent as the lens for a single-lens reflex camera. More specifically, there is provided a bright Gauss type photographic lens which has a back focal length at least 0.73 times the focal length for an angle of view of the order of 46° and an entire lens length below 1.35 times the focal length and yet has a relative aperture of 1:1.8.
+
+===== CLAIMS =====
+Claims (13)
+
+ I claim:
+
+ 1. A Gauss type photographic lens comprising, in the order from the object side, a positive lens component, a positive meniscus lens component having its convex surface facing the object side, a negative meniscus lens having its convex surface facing the object side, a diaphragm, a meniscus lens component comprising a negative lens and a positive lens cemented together and having its concave surface facing the object side, and a positive lens component, wherein the total focal length of the entire system is f, the lens components adjacent to the object side with respect to the diaphragm forms a first convergent lens group having a composite focal length f1, and the lens components adjacent to the image side with respect to the diaphragm forms a second convergent lens group having a composite focal length f2, said photographic lens satisfying the following two conditions: 0.9f<D<1.05f (a)
+
+ 2.5f<f.sub.1 <3.0f (b)
+
+ where D is the distance between the principal points of said two lens groups, said photographic lens further satisfying the following conditions: ##EQU5## where D1 represents the length from the foremost lens surface to the rearmost lens surface of the first convergent lens group, D2 the length from the foremost lens surface to the rearmost lens surface of the second convergent lens group, r the curvature radius of each lens surface, n and ν represent the refractive index and the Abbe number, respectively, of each lens, and subscript numbers represent the order from the object side.
+
+ 2. A Gauss type photographic lens according to claim 1, having the numerical data substantially as set forth in the following table: ______________________________________ 
+Focal length f = 100 mm 
+ Relative aperture 1 : 2.0 
+ Angle of view 2ω = 46° 
+ r.sub.1 = 88.702 
+ d.sub.1 = 6.78 
+ n.sub.1 = 1.713 
+ ν.sub.1 = 53.9 
+ r.sub.2 = 6682.171 
+ d.sub.2 = 0.19 
+ r.sub.3 = 37.399 
+ d.sub.3 = 8.72 
+ n.sub.2 = 1.713 
+ ν.sub.2 = 53.9 
+G1 r.sub.4 = 61.587 
+ d.sub.4 = 2.71 
+ r.sub.5 = 188.525 
+ d.sub.5 = 1.94 
+ n.sub.3 = 1.64831 
+ ν.sub.3 = 33.8 
+ r.sub.6 = 31.585 
+ d.sub.6 = 15.70 
+ r.sub.7 = -35.134 
+ d.sub.7 = 1.94 
+ n.sub.4 = 1.64831 
+ ν.sub.4 = 33.8 
+ r.sub.8 = -112.118 
+ d.sub.8 = 9.63 
+ n.sub.5 = 1.713 
+ ν.sub.5 = 53.9 
+G1 r.sub.9 = -39.574 
+ d.sub.9 = 0.19 
+ r.sub.10 = 156.498 
+ d.sub.10 = 5.62 
+ n.sub.6 = 1.713 
+ ν.sub.6 = 53.9 
+ r.sub.11 = -226.066 
+______________________________________ 
+
+ Back focal length: Bf=74.8
+
+ Entire length=d1 +d2 + . . . +d10 +Bf=128.3 f.sub.1 =274.5
+
+ f.sub.2 =100.7
+
+ D=98.8
+
+ D.sub.1 =20.3=0.074f.sub.1
+
+ D.sub.2 =17.4=0.173f.sub.2
+
+ wherein r represents the curvature radius of each lens surface, d the air separation between adjacent lens surfaces and the center thickness of each lens, n and ν represent the refractive index and Abbe number of each lens, respectively, and the subscript numbers represent the order from the objective side.
+
+ 3. A Gauss type photographic lens according to claim 1, having the numerical data substantially as set forth in the following table: ______________________________________ 
+Focal length f = 100 mm Relative aperture 1 : 1.8 
+Angle of view 2ω = 46° 
+______________________________________ 
+ r.sub.1 = 90.983 
+ d.sub.1 = 6.78 
+ n.sub.1 = 1.713 
+ ν.sub.1 = 53.9 
+ r.sub.2 = 1224.651 
+ d.sub.2 = 0.19 
+ r.sub.3 = 38.186 
+ d.sub.3 = 8.72 
+ n.sub.2 = 1.713 
+ ν.sub.2 = 53.9 
+G1 r.sub.4 = 64.196 
+ d.sub.4 = 3.10 
+ r.sub.5 = 176.021 
+ d.sub.5 = 1.94 
+ n.sub.3 = 1.64831 
+ ν.sub.3 = 33.8 
+ r.sub.6 = 32.091 
+ d.sub.6 = 17.64 
+ r.sub.7 = -35.039 
+ d.sub.7 = 1.94 
+ n.sub.4 = 1.64831 
+ ν.sub.4 = 33.8 
+ r.sub.8 = -130.233 
+ d.sub.8 = 9.69 
+ n.sub.5 = 1.713 
+ ν.sub.5 = 53.9 
+ r.sub.9 = -39.922 
+G2 d.sub.9 = 0.19 
+ r.sub.10 = 141.924 
+ d.sub.10 = 5.04 
+ n.sub.6 = 1.713 
+ ν.sub.6 = 53.9 
+ r.sub.11 = -235.310 
+______________________________________ 
+
+ Back focal length: Bf=75.0
+
+ Entire length=d1 +d2 + . . . +d10 +Bf=130.3 f.sub.1 =290.5
+
+ f.sub.2 =98.1
+
+ D=103.5
+
+ D.sub.1 =20.7=0.071f.sub.1
+
+ D.sub.2 =16.9=0.172f.sub.2
+
+ wherein r represents the curvature radius of each lens surface, d the air separation between adjacent lens surfaces and the center thickness of each lens, n and ν represent the refractive index and Abb number of each lens, respectively, and the subscript numbers represent the order from the objective side.
+
+ 4. A Gauss type photographic lens according to claim 1, having the numerical data substantially as set forth in the following table: ______________________________________ 
+Focal length f = 100 mm Relative aperture 1 : 1.8 
+Angle of view 2ω = 46° 
+______________________________________ 
+ r.sub.1 = 97.968 
+ d.sub.1 = 6.79 
+ n.sub.1 = 1.76682 
+ ν.sub.1 = 46.81 
+ r.sub.2 = 3352.693 
+ d.sub.2 = 0.19 
+ r.sub.3 = 38.776 
+ d.sub.3 = 8.05 
+ n.sub.2 = 1.79713 
+ ν.sub.2 = 45.62 
+G1 r.sub.4 = 66.579 
+ d.sub.4 = 2.52 
+ r.sub.5 = 134.941 
+ d.sub.5 = 1.94 
+ n.sub.3 = 1.71714 
+ ν.sub.3 = 29.49 
+ r.sub.6 = 31.254 
+ d.sub.6 = 22.199 
+ r.sub.7 = -32.533 
+ d.sub.7 = 1.94 
+ n.sub.4 = 1.64841 
+ ν.sub.4 = 1.6733 
+ r.sub.8 = -423.785 
+ d.sub.8 = 9.60 
+ n.sub.5 = 1.76682 
+ ν.sub.5 = 46.81 
+ r.sub.9 = -40.463 
+G2 d.sub.9 = 0.19 
+ r.sub.10 = 760.402 
+ d.sub.10 = 5.53 
+ n.sub.6 = 1.71313 
+ ν.sub.6 = 53.94 
+ r.sub.11 = -104.405 
+______________________________________ 
+
+ Back focal length: Bf=74.2
+
+ Entire length=d1 +d2 + . . . +d10 +Bf=133.2 f.sub.1 =261.3
+
+ f.sub.2 =99.9
+
+ D=100.1
+
+ D.sub.1 =19.5=0.075f.sub.1
+
+ D.sub.2 =17.3=0.173f.sub.2
+
+ wherein r represents the curvature radius of each lens surface, d the air separation between adjacent lens surfaces and the center thickness of each lens, n and ν represent the refractive index and Abbe number of each lens, respectively, and the subscript numbers represent the order from the objective side.
+
+ 5. A Gauss type photographic lens according to claim 1, having the numerical data substantially as set forth in the following table: ______________________________________ 
+Focal length f = 100 mm Relative Aperture 1 : 1.8 
+Angle of view 2 = 46° 
+______________________________________ 
+ r.sub.1 = 87.791 
+ d.sub.1 = 6.78 
+ n.sub.1 = 1.713 
+ ν.sub.1 = 53.9 
+ r.sub.2 = 2363.198 
+ d.sub.2 = 0.19 
+ r.sub.3 = 39.438 
+ d.sub.3 = 8.72 
+ n.sub.2 = 1.713 
+ ν.sub.2 = 53.9 
+G1 r.sub.4 = 64.341 
+ d.sub.4 = 3.10 
+ r.sub.5 = 184.109 
+ d.sub.5 = 1.94 
+ n.sub.3 = 1.64831 
+ ν.sub.3 = 33.8 
+ r.sub.6 = 32.752 
+ d.sub.6 = 17.64 
+ r.sub.7 = -33.411 
+ d.sub.7 = 1.94 
+ n.sub.4 = 1.62004 
+ ν.sub.4 = 36.3 
+ r.sub.8 = -251.938 
+ d.sub.8 = 9.69 
+ n.sub.5 = 1.713 
+ ν.sub.5 = 53.9 
+ r.sub.9 = -39.922 
+G2 d.sub.9 = 0.19 
+ r.sub.10 = 208.907 
+ d.sub.10 = 5.04 
+ n.sub.6 = 1.713 
+ ν.sub.6 = 53.9 
+ r.sub.11 = -160.368 
+______________________________________ 
+
+ Back focal length: Bf=74.7
+
+ Entire length=d1 +d2 + . . . d10 +Bf=130.0 f.sub.1 =275.1
+
+ f.sub.2 =99.6
+
+ D=100.8
+
+ D.sub.1 =20.7=0.075f.sub.1
+
+ D.sub.2 =16.9=0.170f.sub.2
+
+ where r represents the curvature radius of each lens surface, d the air separation between adjacent lens surfaces and the center thickness of each lens, n and ν represent the refractive index and Abbe number of each lens, respectively, and the subscript numbers represent the order from the objective side.

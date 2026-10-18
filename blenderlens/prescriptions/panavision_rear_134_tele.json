@@ -1,0 +1,1466 @@
+{
+  "meta": {
+    "name": "Panavision 后置 1.34× 变形（US 7,085,066 原处方：变焦镜 + 8 片后置变形组），变焦 Z4（变焦镜单独 49.2 mm）",
+    "short_name": "Panavision 后置 1.34× 长焦端（真实处方）",
+    "order": 5,
+    "tagline": "唯一公开的 Panavision 变形处方：后置变形组，16:9 画幅解挤压到 2.40:1；变焦镜取长焦端 Z4",
+    "note": "Iain A. Neil 为 Panavision 设计，2004 申请、2006 授权。后置变形组位于变焦镜与反光镜之间约 26 mm 内；前 46 面是 US 6,122,111 的变焦镜（Z4（变焦镜单独 49.2 mm）、无穷远；变焦间隔取自该专利 TABLE 1）。变焦镜口径取 US 6,122,111 给出的各面最大通光直径（全变焦、全对焦范围的实物尺寸）；后置组口径为 7,085,066 在 Z1 下给出的值。",
+    "units": "mm",
+    "conventions": {
+      "origin": "像面（传感器）",
+      "object_side": "+Z",
+      "light_travels": "-Z",
+      "surface_order": "从物方到像方",
+      "radius_sign": "R > 0：曲率中心在像方（-Z 一侧）；R < 0：在物方；null = 平面（无穷大）",
+      "surface_z": "z = z_vertex - sag(x, y)",
+      "d": "该面到下一面的轴上距离（专利原值，使用时乘该组 scale）",
+      "medium": "该面之后（像方一侧）的介质",
+      "cylinder": "柱面镜只在水平主截面（x）有光焦度：R_y = null",
+      "aperture": "每面 aperture 为物理 mm（已缩放，不再乘 scale）：柱面镜片 rect(semi_x, semi_y)；球面镜片 circle(clear 通光半径, outer 外半径，二者之间为黑色平台)"
+    }
+  },
+  "glasses": {
+    "air": {
+      "nd": 1.0,
+      "vd": null
+    },
+    "PV_FPL53": {
+      "nd": 1.43875,
+      "vd": 94.96,
+      "code": "438950",
+      "name": "FPL53",
+      "code_values": [
+        1.438,
+        95.0
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PHM52": {
+      "nd": 1.618,
+      "vd": 63.39,
+      "code": "618634",
+      "name": "PHM52",
+      "code_values": [
+        1.6179999999999999,
+        63.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PBH6W": {
+      "nd": 1.80518,
+      "vd": 25.44,
+      "code": "805254",
+      "name": "PBH6W",
+      "code_values": [
+        1.8050000000000002,
+        25.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PBM6": {
+      "nd": 1.63636,
+      "vd": 35.38,
+      "code": "636354",
+      "name": "PBM6",
+      "code_values": [
+        1.6360000000000001,
+        35.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAH63": {
+      "nd": 1.8044,
+      "vd": 39.58,
+      "code": "804396",
+      "name": "LAH63",
+      "code_values": [
+        1.804,
+        39.6
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAM55": {
+      "nd": 1.762,
+      "vd": 40.1,
+      "code": "762401",
+      "name": "LAM55",
+      "code_values": [
+        1.762,
+        40.1
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PBH53W": {
+      "nd": 1.84666,
+      "vd": 23.89,
+      "code": "847239",
+      "name": "PBH53W",
+      "code_values": [
+        1.847,
+        23.9
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAH53": {
+      "nd": 1.8061,
+      "vd": 40.95,
+      "code": "806410",
+      "name": "LAH53",
+      "code_values": [
+        1.806,
+        41.0
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAH65": {
+      "nd": 1.804,
+      "vd": 46.58,
+      "code": "804466",
+      "name": "LAH65",
+      "code_values": [
+        1.804,
+        46.6
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAL59": {
+      "nd": 1.734,
+      "vd": 51.49,
+      "code": "734515",
+      "name": "LAL59",
+      "code_values": [
+        1.734,
+        51.5
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_BPH8": {
+      "nd": 1.72047,
+      "vd": 34.72,
+      "code": "720347",
+      "name": "BPH8",
+      "code_values": [
+        1.72,
+        34.7
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PHM53": {
+      "nd": 1.603,
+      "vd": 65.48,
+      "code": "603655",
+      "name": "PHM53",
+      "code_values": [
+        1.603,
+        65.5
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_SSL5": {
+      "nd": 1.5213,
+      "vd": 52.55,
+      "code": "521526",
+      "name": "SSL5",
+      "code_values": [
+        1.521,
+        52.6
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAM61": {
+      "nd": 1.72,
+      "vd": 46.04,
+      "code": "720460",
+      "name": "LAM61",
+      "code_values": [
+        1.72,
+        46.0
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PBH11W": {
+      "nd": 1.78472,
+      "vd": 25.71,
+      "code": "785257",
+      "name": "PBH11W",
+      "code_values": [
+        1.7850000000000001,
+        25.7
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAH78": {
+      "nd": 1.90135,
+      "vd": 31.55,
+      "code": "901315",
+      "name": "LAH78",
+      "code_values": [
+        1.901,
+        31.5
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_SLAH59": {
+      "nd": 1.816,
+      "vd": 46.62,
+      "code": "816466",
+      "name": "SLAH59",
+      "code_values": [
+        1.8159999999999998,
+        46.6
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_SBAH10": {
+      "nd": 1.67003,
+      "vd": 47.23,
+      "code": "670473",
+      "name": "SBAH10",
+      "code_values": [
+        1.67,
+        47.3
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_STIM1": {
+      "nd": 1.62588,
+      "vd": 35.7,
+      "code": "626357",
+      "name": "STIM1",
+      "code_values": [
+        1.626,
+        35.7
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_STIH53": {
+      "nd": 1.84666,
+      "vd": 23.78,
+      "code": "847238",
+      "name": "STIH53",
+      "code_values": [
+        1.847,
+        23.8
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_SLAH64": {
+      "nd": 1.788,
+      "vd": 47.37,
+      "code": "788474",
+      "name": "SLAH64",
+      "code_values": [
+        1.788,
+        47.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_STIH6": {
+      "nd": 1.80518,
+      "vd": 25.42,
+      "code": "805254",
+      "name": "STIH6",
+      "code_values": [
+        1.8050000000000002,
+        25.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    }
+  },
+  "groups": [
+    {
+      "id": "zoom",
+      "role": "US 6,122,111 变焦镜，F1/Z4，无穷远",
+      "scale": 1.0,
+      "zoom_position": "Z4",
+      "aperture_source": "patent",
+      "f_number": 4.1,
+      "stop": {
+        "after_surface": "S22",
+        "offset_mm": 1.3,
+        "f_number": 4.1,
+        "note": "长焦端：保持系统垂直 f/4.10（专利 Z1 值），光阑半径近轴推算；Z1 时为 10.51 mm（f/3.66 综合）"
+      },
+      "surfaces": [
+        {
+          "id": "S2",
+          "R_x": 218.818,
+          "R_y": 218.818,
+          "d": 5.0,
+          "medium": "PV_FPL53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 62.4,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "1",
+          "aperture": {
+            "shape": "circle",
+            "clear": 62.4,
+            "outer": 62.4
+          }
+        },
+        {
+          "id": "S3",
+          "R_x": 38.506,
+          "R_y": 38.506,
+          "d": 23.534,
+          "medium": "air",
+          "shape": "Asphere",
+          "patent_heights": {
+            "radial": 45.285,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "k": -1.5066,
+          "asph": [
+            2.0962e-06,
+            -7.9395e-10,
+            6.1324e-13,
+            -2.8537e-16,
+            3.1072e-20
+          ],
+          "aperture": {
+            "shape": "circle",
+            "clear": 45.285,
+            "outer": 62.4
+          }
+        },
+        {
+          "id": "S4",
+          "R_x": 222.116,
+          "R_y": 222.116,
+          "d": 3.8,
+          "medium": "PV_PHM52",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 45.12,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "2",
+          "aperture": {
+            "shape": "circle",
+            "clear": 45.12,
+            "outer": 45.12
+          }
+        },
+        {
+          "id": "S5",
+          "R_x": 43.238,
+          "R_y": 43.238,
+          "d": 5.3,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 36.61,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 36.61,
+            "outer": 45.12
+          }
+        },
+        {
+          "id": "S6",
+          "R_x": 51.336,
+          "R_y": 51.336,
+          "d": 15.592,
+          "medium": "PV_PBH6W",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 36.975,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "3",
+          "aperture": {
+            "shape": "circle",
+            "clear": 36.975,
+            "outer": 36.975
+          }
+        },
+        {
+          "id": "S7",
+          "R_x": 77.033,
+          "R_y": 77.033,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 34.165,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 34.165,
+            "outer": 36.975
+          }
+        },
+        {
+          "id": "S8",
+          "R_x": 43.19,
+          "R_y": 43.19,
+          "d": 7.697,
+          "medium": "PV_FPL53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 32.445,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "4",
+          "aperture": {
+            "shape": "circle",
+            "clear": 32.445,
+            "outer": 32.445
+          }
+        },
+        {
+          "id": "S9",
+          "R_x": 55.573,
+          "R_y": 55.573,
+          "d": 4.531,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 31.205,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 31.205,
+            "outer": 32.445
+          }
+        },
+        {
+          "id": "S11",
+          "R_x": 129.546,
+          "R_y": 129.546,
+          "d": 5.181,
+          "medium": "PV_PBM6",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 24.45,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "5",
+          "aperture": {
+            "shape": "circle",
+            "clear": 24.45,
+            "outer": 24.45
+          }
+        },
+        {
+          "id": "S12",
+          "R_x": -318.127,
+          "R_y": -318.127,
+          "d": 2.2,
+          "medium": "PV_LAH63",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 23.96,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "6",
+          "aperture": {
+            "shape": "circle",
+            "clear": 23.96,
+            "outer": 24.45
+          }
+        },
+        {
+          "id": "S13",
+          "R_x": 97.742,
+          "R_y": 97.742,
+          "d": 3.87,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 22.715,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 22.715,
+            "outer": 24.45
+          }
+        },
+        {
+          "id": "S14",
+          "R_x": -515.815,
+          "R_y": -515.815,
+          "d": 2.17,
+          "medium": "PV_LAM55",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 22.575,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "7",
+          "aperture": {
+            "shape": "circle",
+            "clear": 22.575,
+            "outer": 22.575
+          }
+        },
+        {
+          "id": "S15",
+          "R_x": 86.505,
+          "R_y": 86.505,
+          "d": 0.7,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 22.075,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 22.075,
+            "outer": 22.575
+          }
+        },
+        {
+          "id": "S16",
+          "R_x": 44.464,
+          "R_y": 44.464,
+          "d": 3.56,
+          "medium": "PV_PBH53W",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 22.235,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "8",
+          "aperture": {
+            "shape": "circle",
+            "clear": 22.235,
+            "outer": 22.235
+          }
+        },
+        {
+          "id": "S17",
+          "R_x": 56.665,
+          "R_y": 56.665,
+          "d": 2.0,
+          "medium": "PV_LAH53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 21.775,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "9",
+          "aperture": {
+            "shape": "circle",
+            "clear": 21.775,
+            "outer": 22.235
+          }
+        },
+        {
+          "id": "S18",
+          "R_x": 38.814,
+          "R_y": 38.814,
+          "d": 1.38,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.905,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.905,
+            "outer": 22.235
+          }
+        },
+        {
+          "id": "S19",
+          "R_x": 47.058,
+          "R_y": 47.058,
+          "d": 3.798,
+          "medium": "PV_PBH6W",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.92,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "10",
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.92,
+            "outer": 20.92
+          }
+        },
+        {
+          "id": "S20",
+          "R_x": 70.812,
+          "R_y": 70.812,
+          "d": 0.971,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.585,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.585,
+            "outer": 20.92
+          }
+        },
+        {
+          "id": "S21",
+          "R_x": 73.576,
+          "R_y": 73.576,
+          "d": 5.284,
+          "medium": "PV_PHM52",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.56,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "11",
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.56,
+            "outer": 20.56
+          }
+        },
+        {
+          "id": "S22",
+          "R_x": -467.06,
+          "R_y": -467.06,
+          "d": 2.62,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.55,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.55,
+            "outer": 20.56
+          }
+        },
+        {
+          "id": "S24",
+          "R_x": 64.719,
+          "R_y": 64.719,
+          "d": 4.599,
+          "medium": "PV_PHM52",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 21.1,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "12",
+          "aperture": {
+            "shape": "circle",
+            "clear": 21.1,
+            "outer": 21.1
+          }
+        },
+        {
+          "id": "S25",
+          "R_x": 280.545,
+          "R_y": 280.545,
+          "d": 6.476,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.995,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.995,
+            "outer": 21.1
+          }
+        },
+        {
+          "id": "S26",
+          "R_x": -44.031,
+          "R_y": -44.031,
+          "d": 2.15,
+          "medium": "PV_LAH65",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.98,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "13",
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.98,
+            "outer": 22.365
+          }
+        },
+        {
+          "id": "S27",
+          "R_x": -276.492,
+          "R_y": -276.492,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 22.365,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 22.365,
+            "outer": 22.365
+          }
+        },
+        {
+          "id": "S28",
+          "R_x": 104.569,
+          "R_y": 104.569,
+          "d": 11.912,
+          "medium": "PV_FPL53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 23.56,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "14",
+          "aperture": {
+            "shape": "circle",
+            "clear": 23.56,
+            "outer": 23.905
+          }
+        },
+        {
+          "id": "S29",
+          "R_x": -45.864,
+          "R_y": -45.864,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 23.905,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 23.905,
+            "outer": 23.905
+          }
+        },
+        {
+          "id": "S30",
+          "R_x": -125.907,
+          "R_y": -125.907,
+          "d": 2.2,
+          "medium": "PV_LAL59",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 23.615,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "15",
+          "aperture": {
+            "shape": "circle",
+            "clear": 23.615,
+            "outer": 24.03
+          }
+        },
+        {
+          "id": "S31",
+          "R_x": 63.152,
+          "R_y": 63.152,
+          "d": 4.979,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 24.03,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 24.03,
+            "outer": 24.03
+          }
+        },
+        {
+          "id": "S32",
+          "R_x": 14624.0,
+          "R_y": 14624.0,
+          "d": 2.25,
+          "medium": "PV_BPH8",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 24.145,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "16",
+          "aperture": {
+            "shape": "circle",
+            "clear": 24.145,
+            "outer": 26.275
+          }
+        },
+        {
+          "id": "S33",
+          "R_x": 84.356,
+          "R_y": 84.356,
+          "d": 9.972,
+          "medium": "PV_PHM53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 25.705,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "17",
+          "aperture": {
+            "shape": "circle",
+            "clear": 25.705,
+            "outer": 26.275
+          }
+        },
+        {
+          "id": "S34",
+          "R_x": -87.065,
+          "R_y": -87.065,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 26.275,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 26.275,
+            "outer": 26.275
+          }
+        },
+        {
+          "id": "S35",
+          "R_x": 88.905,
+          "R_y": 88.905,
+          "d": 2.55,
+          "medium": "PV_SSL5",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 28.905,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "18",
+          "aperture": {
+            "shape": "circle",
+            "clear": 28.905,
+            "outer": 29.465
+          }
+        },
+        {
+          "id": "S36",
+          "R_x": 56.43,
+          "R_y": 56.43,
+          "d": 14.288,
+          "medium": "PV_FPL53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 29.24,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "19",
+          "aperture": {
+            "shape": "circle",
+            "clear": 29.24,
+            "outer": 29.465
+          }
+        },
+        {
+          "id": "S37",
+          "R_x": -114.09,
+          "R_y": -114.09,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 29.465,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 29.465,
+            "outer": 29.465
+          }
+        },
+        {
+          "id": "S38",
+          "R_x": 84.019,
+          "R_y": 84.019,
+          "d": 6.824,
+          "medium": "PV_LAM61",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 29.705,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "20",
+          "aperture": {
+            "shape": "circle",
+            "clear": 29.705,
+            "outer": 29.705
+          }
+        },
+        {
+          "id": "S39",
+          "R_x": 391.268,
+          "R_y": 391.268,
+          "d": 81.121,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 29.35,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 29.35,
+            "outer": 29.705
+          }
+        },
+        {
+          "id": "S41",
+          "R_x": 1395.656,
+          "R_y": 1395.656,
+          "d": 2.527,
+          "medium": "PV_PBH11W",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.985,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "21",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.985,
+            "outer": 14.985
+          }
+        },
+        {
+          "id": "S42",
+          "R_x": -105.898,
+          "R_y": -105.898,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.86,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.86,
+            "outer": 14.985
+          }
+        },
+        {
+          "id": "S43",
+          "R_x": -220.862,
+          "R_y": -220.862,
+          "d": 1.8,
+          "medium": "PV_LAH78",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.67,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "22",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.67,
+            "outer": 14.67
+          }
+        },
+        {
+          "id": "S44",
+          "R_x": 72.073,
+          "R_y": 72.073,
+          "d": 0.911,
+          "medium": "air",
+          "shape": "Asphere",
+          "patent_heights": {
+            "radial": 14.25,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "k": -2.2286,
+          "asph": [
+            2.2871e-06,
+            -2.1575e-09,
+            9.2167e-12,
+            -1.2856e-14,
+            0.0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.25,
+            "outer": 14.67
+          }
+        },
+        {
+          "id": "S45",
+          "R_x": 128.877,
+          "R_y": 128.877,
+          "d": 3.169,
+          "medium": "PV_LAM61",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.29,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "element": "23",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.29,
+            "outer": 14.375
+          }
+        },
+        {
+          "id": "S46",
+          "R_x": -118.373,
+          "R_y": -118.373,
+          "d": 1.432,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.375,
+            "Y": null,
+            "X": null,
+            "source": "US 6,122,111 claim 35（最大通光直径 / 2）"
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.375,
+            "outer": 14.375
+          }
+        }
+      ],
+      "source": {
+        "patent": "US 7,085,066 B2 — I. A. Neil, Anamorphic imaging system（Panavision International），2004 申请 / 2006 授权",
+        "url": "https://patents.google.com/patent/US7085066B2/en",
+        "table": "TABLE I（CODE V 导出，20 °C；玻璃为 Ohara 代码）",
+        "patent_values": {
+          "efl_x": 15.81,
+          "efl_y": 20.6,
+          "f_number_x": 3.15,
+          "f_number_y": 4.1,
+          "f_number_effective": 3.66,
+          "squeeze_nominal": 1.34,
+          "zoom_efl_alone": 15.3,
+          "corner_relative_illumination": 0.5
+        }
+      }
+    },
+    {
+      "id": "anamorph",
+      "role": "后置变形组：Y 向柱面 3 片（挤压）+ X 向柱面 5 片（像差控制），垂直拉伸 1.34×",
+      "scale": 1.0,
+      "aperture_source": "patent",
+      "surfaces": [
+        {
+          "id": "S47",
+          "R_x": null,
+          "R_y": 136.373,
+          "d": 2.444,
+          "medium": "PV_SLAH59",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 14.12,
+            "Y": null,
+            "X": null
+          },
+          "element": "24",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.12,
+            "outer": 14.12
+          }
+        },
+        {
+          "id": "S48",
+          "R_x": null,
+          "R_y": -176.528,
+          "d": 0.125,
+          "medium": "air",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 14.01,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.01,
+            "outer": 14.12
+          }
+        },
+        {
+          "id": "S49",
+          "R_x": null,
+          "R_y": 19.172,
+          "d": 4.09,
+          "medium": "PV_SLAH59",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 13.48,
+            "Y": 11.1,
+            "X": null
+          },
+          "element": "25",
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.48,
+            "outer": 13.48,
+            "semi_y": 11.1
+          }
+        },
+        {
+          "id": "S50",
+          "R_x": null,
+          "R_y": 18.137,
+          "d": 3.765,
+          "medium": "air",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 13.22,
+            "Y": 9.6,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.22,
+            "outer": 13.48,
+            "semi_y": 9.6
+          }
+        },
+        {
+          "id": "S51",
+          "R_x": null,
+          "R_y": -192.507,
+          "d": 1.047,
+          "medium": "PV_SBAH10",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 12.84,
+            "Y": 9.3,
+            "X": null
+          },
+          "element": "26",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.84,
+            "outer": 12.84,
+            "semi_y": 9.3
+          }
+        },
+        {
+          "id": "S52",
+          "R_x": null,
+          "R_y": 24.412,
+          "d": 2.982,
+          "medium": "air",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 12.77,
+            "Y": 8.8,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.77,
+            "outer": 12.84,
+            "semi_y": 8.8
+          }
+        },
+        {
+          "id": "S53",
+          "R_x": 385.928,
+          "R_y": null,
+          "d": 1.039,
+          "medium": "PV_SLAH59",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.48,
+            "Y": null,
+            "X": null
+          },
+          "element": "27",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.48,
+            "outer": 12.48
+          }
+        },
+        {
+          "id": "S54",
+          "R_x": 31.262,
+          "R_y": null,
+          "d": 0.793,
+          "medium": "air",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.27,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.27,
+            "outer": 12.48
+          }
+        },
+        {
+          "id": "S55",
+          "R_x": 35.527,
+          "R_y": null,
+          "d": 0.978,
+          "medium": "PV_STIM1",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.39,
+            "Y": null,
+            "X": null
+          },
+          "element": "28",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.39,
+            "outer": 12.39
+          }
+        },
+        {
+          "id": "S56",
+          "R_x": 29.063,
+          "R_y": null,
+          "d": 2.085,
+          "medium": "PV_STIH53",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.38,
+            "Y": null,
+            "X": null
+          },
+          "element": "29",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.38,
+            "outer": 12.39
+          }
+        },
+        {
+          "id": "S57",
+          "R_x": 36.17,
+          "R_y": null,
+          "d": 0.076,
+          "medium": "air",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.37,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.37,
+            "outer": 12.39
+          }
+        },
+        {
+          "id": "S58",
+          "R_x": 32.52,
+          "R_y": null,
+          "d": 5.371,
+          "medium": "PV_SLAH64",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.47,
+            "Y": null,
+            "X": null
+          },
+          "element": "30",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.47,
+            "outer": 12.47
+          }
+        },
+        {
+          "id": "S59",
+          "R_x": -182.118,
+          "R_y": null,
+          "d": 1.037,
+          "medium": "PV_STIH6",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.45,
+            "Y": null,
+            "X": null
+          },
+          "element": "31",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.45,
+            "outer": 12.47
+          }
+        },
+        {
+          "id": "S60",
+          "R_x": 261.747,
+          "R_y": null,
+          "d": 35.754,
+          "medium": "air",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": null,
+            "Y": 8.4,
+            "X": 11.8
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.47,
+            "outer": 12.47,
+            "semi_y": 8.4,
+            "semi_x": 11.8
+          }
+        }
+      ]
+    }
+  ],
+  "image_distance_mm": 35.754,
+  "anamorphic": {
+    "desqueeze": 1.35,
+    "type": "rear",
+    "note": "专利：把 2.40:1 物方画面垂直拉伸到 16:9 像面（正文称压缩比约 1.34）。真实追迹：画面边缘物方张角比 2.401，整幅解挤压比 1.350；压缩比从中心 1.304 增到边缘 1.351（水平畸变），所以中心物体解挤压后略宽约 3.5%"
+  },
+  "look": {
+    "reference": "Panavision 2004 年后置变形组（专利实施例）；无公开的成品镜头规格。最近对焦取变焦镜专利 F3：物面到 S1 133 mm = 距像面 476 mm",
+    "f_number": 4.1,
+    "min_focus_mm": 476.0,
+    "coating_nm": 100.0,
+    "flare_color": "PHYSICAL",
+    "flare_gain": 0.6
+  },
+  "focus": {
+    "mechanism": "按 US 6,122,111 的内对焦：前组（第 1–2 片，S2–S5）移动 Δ，第二组（第 3–4 片，S6–S9）移动 0.909·Δ（专利 TABLE 1：F2 时 S5/S9 间隔 +1.022/+10.077、F3 时 +1.960/+19.724 → 两组位移比 0.908/0.910）；变焦组与后置变形组不动。中间像位置不变 → 两向同时合焦、无发腮。专利物距从物面量到 S1（第一面前 1 mm 的虚面，随前组移动）；按此定义，前组行程模型/专利：F2（330 mm）11.221 / 11.099 mm，F3（133 mm）21.686 / 21.684 mm",
+    "groups": [
+      {
+        "ids": [
+          "S2",
+          "S3",
+          "S4",
+          "S5"
+        ],
+        "moves": [
+          1,
+          0
+        ]
+      },
+      {
+        "ids": [
+          "S6",
+          "S7",
+          "S8",
+          "S9"
+        ],
+        "moves": [
+          0.9088,
+          0
+        ]
+      }
+    ],
+    "solve": [
+      "Ry"
+    ],
+    "min_distance_mm": 476.0
+  },
+  "sensor": {
+    "format": "16:9（3 齿孔 35 mm 或同尺寸数字传感器），像高半径 13.60 mm",
+    "width": 23.71,
+    "height": 13.34
+  }
+}

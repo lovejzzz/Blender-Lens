@@ -30,7 +30,47 @@ def exit_pupil(rx, S=None):
 def _arr(name, vals, fmt="{:.9g}", typ="float"):
     return f"  {typ} {name}[{len(vals)}] = {{ " + ", ".join(fmt.format(v) for v in vals) + " };\n"
 
-def generate(rx, name="blenderlens_camera"):
+# 传感器光谱响应（高斯近似，中心与旧版三波长一致）：用于连续波长色散的颜色权重
+SENSOR_RGB = ((0.610, 0.032), (0.550, 0.032), (0.465, 0.026))   # (中心 μm, σ μm)
+
+def spectral_table(l0=0.400, l1=0.700, dl=0.005):
+    """分段常数的采样表：cdf[j]（第 j 段的累积概率）与每段的 R/G/B 权重 w_c = (S_c / ΣS_c) / p。
+    对等能光谱，每个通道的期望权重 = 1（白光保持白）。"""
+    n = int(round((l1 - l0) / dl))
+    lam = [l0 + (j + 0.5) * dl for j in range(n)]
+    S = [[math.exp(-0.5 * ((x - c) / s) ** 2) for x in lam] for c, s in SENSOR_RGB]
+    Sn = [[v / sum(row) for v in row] for row in S]                 # 每个通道在分段上归一（Σ = 1）
+    p = [sum(Sn[c][j] for c in range(3)) / 3.0 for j in range(n)]   # 采样概率（每段）
+    cdf, acc = [], 0.0
+    for v in p:
+        acc += v; cdf.append(acc)
+    cdf[-1] = 1.0
+    w = [[Sn[c][j] / p[j] if p[j] > 0 else 0.0 for j in range(n)] for c in range(3)]
+    return dict(l0=l0, dl=dl, cdf=cdf, w=w)
+
+_PUPIL_CACHE = {}
+_T0_CACHE = {}
+
+def pupil_table(rx):
+    """出瞳重要性采样表（见 pupil.py），按处方内容缓存。"""
+    import json
+    try:
+        from . import pupil as PU
+    except ImportError:
+        import pupil as PU
+    key = hash(json.dumps(rx, sort_keys=True, default=str))
+    if key not in _PUPIL_CACHE:
+        if len(_PUPIL_CACHE) > 8:
+            _PUPIL_CACHE.clear()
+        _PUPIL_CACHE[key] = PU.table(rx)
+    return _PUPIL_CACHE[key]
+
+_DATA_KEYS = ("S", "z_exp", "r_exp", "z_stop", "r_stop", "NS", "Z", "CX", "CY", "KX", "KY", "A_", "B_", "CLR", "MSX", "MSY",
+              "AS", "G1", "G2", "CO", "AG", "NPAIRS", "SG1", "SG2", "W", "H", "N0", "sources", "SPEC", "T0", "PNX", "PNY", "PB",
+              "AT", "AC", "AMX", "AMY")
+
+def lens_data(rx, importance=True):
+    """OSL 相机与 GPU 内核（gpugen）共用的处方数据：同一份数组，两边结果才能逐像素对得上。"""
     S = O.layout(rx)
     for sf in S:
         if sf["ap"] is None:
@@ -47,6 +87,14 @@ def generate(rx, name="blenderlens_camera"):
     CLR = [l[0] for l in lim]; MSX = [l[1] for l in lim]; MSY = [l[2] for l in lim]
     AS = [[(sf.get("asph") or []) [m] if m < len(sf.get("asph") or []) else 0.0 for sf in S] for m in range(5)]
     G1 = [float(sf["move"][0]) for sf in S]; G2 = [float(sf["move"][1]) for sf in S]
+    # 解析求交：平面 / 球面 / 纯柱面（无圆锥、无非球面）走顶点平面上的二次方程；其余走牛顿
+    AT, AC, AMX, AMY = [], [], [], []
+    for sf in S:
+        cx, cy = O.curv(sf["Rx"]), O.curv(sf["Ry"])
+        general = any(sf.get("asph") or []) or sf["kx"] or sf["ky"] or (cx and cy and cx != cy)
+        AT.append(0 if general else 1)
+        AC.append(cx or cy)
+        AMX.append(1.0 if cx else 0.0); AMY.append(1.0 if cy else 0.0)
     before = [1.0] + [sf["glass"]["nd"] for sf in S[:-1]]
     CO = [1 if (before[k] == 1.0) != (sf["glass"]["nd"] == 1.0) else 0 for k, sf in enumerate(S)]   # 空气-玻璃面（镀膜）
     AG = [k for k in range(NS) if CO[k]]                                                             # 鬼影反射候选面
@@ -56,6 +104,30 @@ def generate(rx, name="blenderlens_camera"):
     W, H = rx["sensor"]["width"], rx["sensor"]["height"]
     N0 = O.nominal_f_number(rx)
     sources = ", ".join(g["source"]["patent"].split(" — ")[0] for g in rx["groups"] if "source" in g)
+    SPEC = spectral_table()
+    try:
+        from . import pupil as PU
+    except ImportError:
+        import pupil as PU
+    import json as _json
+    _k = hash(_json.dumps(rx, sort_keys=True, default=str))
+    if _k not in _T0_CACHE:
+        _T0_CACHE[_k] = PU.axial_transmission(rx)
+    T0 = _T0_CACHE[_k]
+    if importance:
+        T = pupil_table(rx)
+        PNX, PNY = T["NX"], T["NY"]
+        PB = [list(T[k].ravel()) for k in ("X0", "X1", "Y0", "Y1")]     # 下标 ix * NY + iy
+    else:
+        PNX, PNY = 2, 2
+        PB = [[-1e3] * 4, [1e3] * 4, [-1e3] * 4, [1e3] * 4]
+    loc = locals()
+    return {k: loc[k] for k in _DATA_KEYS}
+
+def generate(rx, name="blenderlens_camera", importance=True):
+    D = lens_data(rx, importance)
+    (S, z_exp, r_exp, z_stop, r_stop, NS, Z, CX, CY, KX, KY, A_, B_, CLR, MSX, MSY, AS, G1, G2, CO, AG, NPAIRS,
+     SG1, SG2, W, H, N0, sources, SPEC, T0, PNX, PNY, PB, AT, AC, AMX, AMY) = (D[k] for k in _DATA_KEYS)
 
     src = f"""// 自动生成：{rx['meta']['name']}
 // 来源处方：{sources}
@@ -133,15 +205,24 @@ shader {name}(
   int coated = 1 [[ string widget = "checkBox", string help = "空气-玻璃面 MgF₂ 单层镀膜" ]],
   float coating_nm = 100.0 [[ float min = 0.0, float max = 400.0, string help = "膜厚（nm）；~100 = 550 nm 四分之一波" ]],
   float coating_ior = 1.38 [[ float min = 1.0, float max = 2.5 ]],
+  int pupil_importance = {1 if importance else 0} [[ string widget = "checkBox",
+                  string help = "出瞳重要性采样：只在各视场真正通光的区域里采样（无偏；鬼影 / Geometry 模式自动关闭）" ]],
+  float dispersion_strength = 1.0 [[ float min = 0.0, float max = 1.0,
+                  string help = "色散强度：n(λ) 在 n_d 与真实值之间插值（0 = 无色散，1 = 物理）" ]],
+  float unit_scale = 1.0 [[ string help = "场景单位 / mm（米制场景 0.001）：出射光线起点按此缩放、方向不变，镜头内部仍按毫米追迹" ]],
   output point position = 0.0,
   output vector direction = vector(0.0, 0.0, 1.0),
   output color throughput = 1.0)
 {{
-{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}
+{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}{_arr("PX0", PB[0])}{_arr("PX1", PB[1])}{_arr("PY0", PB[2])}{_arr("PY1", PB[3])}{_arr("AT", AT, "{:d}", "int")}{_arr("AC", AC)}{_arr("AMX", AMX)}{_arr("AMY", AMY)}{_arr("SPC", SPEC["cdf"])}{_arr("SPR", SPEC["w"][0])}{_arr("SPG", SPEC["w"][1])}{_arr("SPB", SPEC["w"][2])}
   float SENSOR_W = {W:.6g}, SENSOR_H = {H:.6g};
   float Z_STOP = {z_stop:.9g}, R_STOP = {r_stop:.9g}, Z_EXP = {z_exp:.9g}, R_EXP = {r_exp:.9g};
   float N0 = {N0:.6g};
+  float EXPOSURE_NORM = {1.0 / T0:.6g};   // 1 / 轴上满光瞳透过率（{T0:.4f}）：轴上满光瞳 = 1
   int NS = {NS}, NAG = {len(AG)}, NPAIRS = {NPAIRS};
+  int PNX = {PNX}, PNY = {PNY};
+  int SPN = {len(SPEC["cdf"])};
+  float SP_L0 = {SPEC["l0"]:.6g}, SP_DL = {SPEC["dl"]:.6g};
 
   // 传感器点：镜头成倒像，再经镜头→相机坐标的 x 取反（绕 Y 转 180°），
   // 所以画面向右 = 传感器 +x、画面向上 = 传感器 −y，输出正立且不镜像。
@@ -149,39 +230,73 @@ shader {name}(
   float sx = (ras[0] - 0.5) * SENSOR_W;
   float sy = -(ras[1] - 0.5) * SENSOR_H;
 
-  // 出瞳盘上均匀采样（同心映射）
   vector rnd = camera_shader_random_sample();
-  float a = 2.0 * rnd[0] - 1.0, b = 2.0 * rnd[1] - 1.0, rr = 0.0, th = 0.0;
-  if (a == 0.0 && b == 0.0) {{ rr = 0.0; th = 0.0; }}
-  else if (fabs(a) > fabs(b)) {{ rr = a; th = M_PI / 4.0 * (b / a); }}
-  else {{ rr = b; th = M_PI / 2.0 - M_PI / 4.0 * (a / b); }}
   float k_stop = N0 / f_number;
   float r_samp = R_EXP * k_stop * pupil_margin;
   float zexp = Z_EXP + {SG1} * delta_unit + {SG2} * delta_front;
   point p = point(sx, sy, 0.0);
-  vector d = normalize(point(rr * cos(th) * r_samp, rr * sin(th) * r_samp, zexp) - p);
+  float ex = 0.0, ey = 0.0, area_w = 1.0;
+  int use_box = 0;
+  float bx0 = 0.0, bx1 = 0.0, by0 = 0.0, by1 = 0.0;
+  if (pupil_importance && mode == 0 && !ghosts && fabs(pupil_margin - 1.4) < 1e-4) {{
+    // 出瞳重要性采样：按 |sx|、|sy| 在象限表里双线性插值得到通光区的包围盒，镜像到本象限，
+    // 再夹到当前光圈的采样盘的外接正方形里；盒内均匀采样，盘外照旧算挡光。权重 × 盒面积 / 盘面积 → 无偏。
+    float fx = fabs(sx) / (0.5 * SENSOR_W) * (PNX - 1), fy = fabs(sy) / (0.5 * SENSOR_H) * (PNY - 1);
+    int ix = min((int)floor(fx), PNX - 2), iy = min((int)floor(fy), PNY - 2);
+    float tx = clamp(fx - ix, 0.0, 1.0), ty = clamp(fy - iy, 0.0, 1.0);
+    int k00 = ix * PNY + iy, k10 = (ix + 1) * PNY + iy, k01 = ix * PNY + iy + 1, k11 = (ix + 1) * PNY + iy + 1;
+    bx0 = mix(mix(PX0[k00], PX0[k10], tx), mix(PX0[k01], PX0[k11], tx), ty);
+    bx1 = mix(mix(PX1[k00], PX1[k10], tx), mix(PX1[k01], PX1[k11], tx), ty);
+    by0 = mix(mix(PY0[k00], PY0[k10], tx), mix(PY0[k01], PY0[k11], tx), ty);
+    by1 = mix(mix(PY1[k00], PY1[k10], tx), mix(PY1[k01], PY1[k11], tx), ty);
+    if (sx < 0.0) {{ float t0 = bx0; bx0 = -bx1; bx1 = -t0; }}
+    if (sy < 0.0) {{ float t0 = by0; by0 = -by1; by1 = -t0; }}
+    bx0 = max(bx0, -r_samp); bx1 = min(bx1, r_samp); by0 = max(by0, -r_samp); by1 = min(by1, r_samp);
+    if (bx1 <= bx0 || by1 <= by0) {{ throughput = color(0.0); return; }}
+    // 盒面积不小于采样盘（收光圈后通光区接近整盘）→ 整盘采样更省（盒的四角落在盘外）
+    use_box = (bx1 - bx0) * (by1 - by0) < M_PI * r_samp * r_samp;
+  }}
+  if (use_box) {{
+    ex = bx0 + rnd[0] * (bx1 - bx0); ey = by0 + rnd[1] * (by1 - by0);
+    if (ex * ex + ey * ey > r_samp * r_samp) {{ throughput = color(0.0); return; }}
+    area_w = (bx1 - bx0) * (by1 - by0) / (M_PI * r_samp * r_samp);
+  }} else {{
+    // 出瞳盘上均匀采样（同心映射）
+    float a = 2.0 * rnd[0] - 1.0, b = 2.0 * rnd[1] - 1.0, rr = 0.0, th = 0.0;
+    if (a == 0.0 && b == 0.0) {{ rr = 0.0; th = 0.0; }}
+    else if (fabs(a) > fabs(b)) {{ rr = a; th = M_PI / 4.0 * (b / a); }}
+    else {{ rr = b; th = M_PI / 2.0 - M_PI / 4.0 * (a / b); }}
+    ex = rr * cos(th) * r_samp; ey = rr * sin(th) * r_samp;
+  }}
+  vector d = normalize(point(ex, ey, zexp) - p);
 
   float c2 = d[2] * d[2];
-  float w = c2 * c2 * pupil_margin * pupil_margin;        // cos⁴θ；乘采样盘/出瞳面积比 → 轴上满光瞳 ≈ 1
+  float w = c2 * c2 * pupil_margin * pupil_margin * area_w * EXPOSURE_NORM;   // cos⁴θ × 采样域/出瞳面积比 ÷ 轴上透过率 → 轴上满光瞳 = 1
   if (!exposure_compensate) w *= k_stop * k_stop;         // 采样盘随光圈缩放，物理变暗需显式乘面积比
 
   if (mode == 1) {{
-    position = point(-p[0], p[1], p[2]);
+    position = point(-p[0], p[1], p[2]) * unit_scale;
     direction = vector(-d[0], d[1], d[2]);
     throughput = color(w);
     return;
   }}
 
-  // 波长：用随机数与光栅位置混出第三个随机数（光栅位置含亚像素抖动）
+  // 连续波长色散：λ 按三条传感器光谱响应之和做重要性采样（5 nm 分段的逆 CDF 表），
+  // 每条光线同时贡献给 R/G/B（权重 = 响应 / 采样概率，等能白光仍是白色）。
+  // OSL 相机只有两维随机数（都给了出瞳），第三维用随机数与光栅位置（含亚像素抖动）的哈希。
   color chan = color(1.0);
   float lam = {O.LAMBDA_D:.7f};
-  if (dispersion) {{
+  if (dispersion && dispersion_strength > 0.0) {{
     float h = noise("hash", ras * 1000.0 + vector(rnd[0], rnd[1], 0.37) * 17.0);
-    if (h < 1.0 / 3.0) {{ lam = 0.610; chan = color(3.0, 0.0, 0.0); }}
-    else if (h < 2.0 / 3.0) {{ lam = 0.550; chan = color(0.0, 3.0, 0.0); }}
-    else {{ lam = 0.465; chan = color(0.0, 0.0, 3.0); }}
+    int j = 0;
+    while (j < SPN - 1 && h > SPC[j]) j += 1;
+    float c0 = j > 0 ? SPC[j - 1] : 0.0;
+    float fr = clamp((h - c0) / max(SPC[j] - c0, 1e-9), 0.0, 1.0);
+    lam = SP_L0 + (j + fr) * SP_DL;
+    chan = color(SPR[j], SPG[j], SPB[j]);
   }}
-  float il2 = 1.0 / (lam * lam);
+  float il2d = 1.0 / ({O.LAMBDA_D:.7f} * {O.LAMBDA_D:.7f});
+  float il2 = il2d + dispersion_strength * (1.0 / (lam * lam) - il2d);   // n(λ) 在 n_d 与真实值之间插值
 
   float r_stop = R_STOP * k_stop;
   float z_stop = Z_STOP + {SG1} * delta_unit + {SG2} * delta_front;
@@ -224,11 +339,23 @@ shader {name}(
       }} else if (qx * qx + qy * qy > r_stop * r_stop) {{ throughput = color(0.0); return; }}
     }}
 
-    // 求交（牛顿）
+    // 求交：平面 / 球面 / 纯柱面用解析解（顶点平面上的二次方程 c(x²+y²+w²) + 2w = 0，取靠近顶点的根，数值稳定）；
+    // 带圆锥或非球面的面用牛顿
     float t = tz;
     float gx = 0, gy = 0;
     int ok = 1;
-    for (int it = 0; it < 12; ++it) {{
+    if (AT[i]) {{
+      float x0 = p[0] + tz * d[0], y0 = p[1] + tz * d[1];
+      float c_ = AC[i], mx = AMX[i], my = AMY[i];
+      float qa = c_ * (mx * d[0] * d[0] + my * d[1] * d[1] + d[2] * d[2]);
+      float qb = 2.0 * (c_ * (mx * x0 * d[0] + my * y0 * d[1]) + d[2]);
+      float qc = c_ * (mx * x0 * x0 + my * y0 * y0);
+      float disc = qb * qb - 4.0 * qa * qc;
+      if (disc < 0.0) {{ throughput = color(0.0); return; }}
+      float den = qb + (qb >= 0.0 ? 1.0 : -1.0) * sqrt(disc);
+      t = tz + (den != 0.0 ? -2.0 * qc / den : 0.0);
+    }}
+    for (int it = 0; it < (AT[i] ? 0 : 12); ++it) {{
       float x = p[0] + t * d[0], y = p[1] + t * d[1];
       float sg = sag_grad(x, y, CX[i], CY[i], KX[i], KY[i], AA4[i], AA6[i], AA8[i], AA10[i], AA12[i], gx, gy, ok);
       if (!ok) {{ throughput = color(0.0); return; }}
@@ -289,7 +416,7 @@ shader {name}(
   }}
   if (i != -1 || dirn != 1 || state != (ga >= 0 ? 2 : 0)) {{ throughput = color(0.0); return; }}
 
-  position = point(-p[0], p[1], p[2]);
+  position = point(-p[0], p[1], p[2]) * unit_scale;
   direction = vector(-d[0], d[1], d[2]);
   throughput = color(w * wsel) * T * chan;
 }}

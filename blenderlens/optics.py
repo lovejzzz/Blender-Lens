@@ -596,3 +596,95 @@ def pupil_transmission(rx, field, f_number=None, focus_dist=math.inf, n=41):
             if d is not None and trace_reverse(S, (field[0], field[1], 0.0), d, stop=(zs, rs * 1.0001), clip=True) is not None:
                 passed += 1
     return passed / tot
+
+
+# ───────────────────────── 统一焦段 ─────────────────────────
+
+def _scale_aperture(a, k):
+    return {key: (v * k if isinstance(v, (int, float)) and not isinstance(v, bool) else v) for key, v in a.items()}
+
+def rescale_to_vertical_efl(rx, target_mm, reestimate=True):
+    """整支镜头按比例缩放到垂直焦距 target_mm（压缩比、f 值、像差形态不变）。
+    处方口径为估算的组（非 aperture_source=patent）按新视场重新估算并处理相撞；专利口径按比例缩放。"""
+    import copy
+    rx = copy.deepcopy(rx)
+    fy = paraxial_infinity(layout(rx), "Ry")[0]
+    k = target_mm / fy
+    for g in rx["groups"]:
+        g["scale"] = g.get("scale", 1.0) * k
+        if "target_f" in g:
+            g["target_f"] = round(g["target_f"] * k, 3)
+        for sf in g["surfaces"]:
+            if sf.get("aperture"):
+                sf["aperture"] = _scale_aperture(sf["aperture"], k)
+        st = g.get("stop")
+        if st:
+            for key in ("semi_diameter", "offset_mm", "semi_diameter_at_f_number", "z_at_infinity"):
+                if key in st:
+                    st[key] = st[key] * k
+    if rx.get("image_distance_mm") is not None:
+        rx["image_distance_mm"] *= k
+    # 整支镜头等比缩放 → 最近对焦距离（从像面量起）也等比缩放，否则缩大的镜头会「对焦到镜头里面」
+    if rx.get("focus", {}).get("min_distance_mm"):
+        rx["focus"]["min_distance_mm"] = round(rx["focus"]["min_distance_mm"] * k, 1)
+    if rx.get("look", {}).get("min_focus_mm"):
+        rx["look"]["min_focus_mm"] = round(rx["look"]["min_focus_mm"] * k, 1)
+    m = rx["meta"]
+    m["rescaled"] = {"from_vertical_efl": round(fy, 3), "to_vertical_efl": target_mm, "factor": round(k, 5)}
+    m["short_name"] = f'{m.get("short_name", m["name"])} @ {target_mm:g} mm'
+    if reestimate and any(g.get("aperture_source") != "patent" for g in rx["groups"]):
+        rx, _ = apply_apertures(rx)
+    return rx
+
+
+# ───────────────────────── 画幅 / 光窗 ─────────────────────────
+
+GATES = {
+    "FULL": "处方原光窗（Full aperture）",
+    "2.39": "2.39:1 抽取（解挤压后 2.39:1，从处方光窗里裁出的最大矩形）",
+    "16:9": "16:9 抽取（解挤压后 16:9，从处方光窗里裁出的最大矩形）",
+    "16:9_NATIVE": "原生 16:9 满像圈（解挤压后 16:9，不裁切：取镜头像圈内最大的矩形，画面比处方光窗更高）",
+    "CUSTOM": "自定义（压缩前的光窗宽 × 高，mm）",
+}
+
+def image_circle_radius(rx):
+    """镜头设计覆盖的像圈半径：处方原光窗（full_aperture）的半对角线。Panavision 后置 = 13.60（专利像高）。"""
+    s = rx["sensor"].get("full_aperture") or rx["sensor"]
+    return 0.5 * math.hypot(s["width"], s["height"])
+
+def apply_gate(rx, gate="FULL", width=None, height=None):
+    """按画幅改处方的 sensor（光窗，压缩前）。口径不重算：镜头本身不变，只是用光窗里的一部分。
+    2.39 / 16:9：解挤压后达到该宽高比、且装在处方原光窗里的最大矩形（与原光窗同中心）。"""
+    import copy
+    if gate in (None, "", "FULL"):
+        return rx
+    rx = copy.deepcopy(rx)
+    s = rx["sensor"]
+    W, H = s["width"], s["height"]
+    D = desqueeze(rx)
+    if gate == "CUSTOM":
+        if not (width and height):
+            raise ValueError("自定义画幅需要宽和高（mm）")
+        w, h = float(width), float(height)
+    elif gate == "16:9_NATIVE":
+        a = (16.0 / 9.0) / D                                  # 压缩前光窗的宽高比
+        R = image_circle_radius(rx)
+        h = 2.0 * R / math.sqrt(1.0 + a * a)
+        w = a * h
+    else:
+        target = {"2.39": 2.39, "16:9": 16.0 / 9.0}[gate]
+        if W * D / H >= target:
+            h, w = H, target * H / D
+        else:
+            w, h = W, W * D / target
+    s.setdefault("full_aperture", {"width": W, "height": H, "format": s.get("format")})
+    s["width"], s["height"] = round(w, 4), round(h, 4)
+    s["gate"] = gate
+    s["format"] = f'{GATES[gate].split("（")[0]}：{w:.2f} × {h:.2f} mm（原光窗 {W:g} × {H:g}）'
+    return rx
+
+def gate_corner_transmission(rx, f_number=None, focus_dist=math.inf, n=25):
+    """光窗四角与上边缘中点（取 98% 处）的光瞳通过率取小：判断该画幅是否超出像圈（过低 = 发黑）。"""
+    W, H = rx["sensor"]["width"], rx["sensor"]["height"]
+    return min(pupil_transmission(rx, (0.49 * W, 0.49 * H), f_number=f_number, focus_dist=focus_dist, n=n),
+               pupil_transmission(rx, (0.0, 0.49 * H), f_number=f_number, focus_dist=focus_dist, n=n))

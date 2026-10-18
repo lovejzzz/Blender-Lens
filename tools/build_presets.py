@@ -89,6 +89,28 @@ OHARA_CATALOG = {   # 牌号: (n_d, V_d)
     "SLAH64": (1.78800, 47.37), "STIH6": (1.80518, 25.42),
 }
 
+# US 6,122,111（Neil & Betensky，Panavision）TABLE 1 的变焦间隔（F1 无穷远对焦）：S10、S20、S39 后的空气间隔
+# 专利：Z1 15.3 mm、Z2 23.9 mm、Z3 42.5 mm、Z4 49.2 mm（变焦镜单独）
+PV_ZOOM = {"Z1": (0.109, 81.386, 0.100), "Z2": (27.982, 26.018, 27.592),
+           "Z3": (9.423, 3.205, 68.959), "Z4": (0.100, 0.971, 80.521)}
+PV_ZOOM_EFL = {"Z1": 15.3, "Z2": 23.9, "Z3": 42.5, "Z4": 49.2}
+# US 6,122,111 权利要求 35 / TABLE 1 末列：变焦镜各面最大通光直径（mm，546.1 nm，像高 14.45，f/2.2，
+# 「for all Focus and Zoom Positions」= 镜片实物尺寸）。US 7,085,066 TABLE I 只给 Z1 / f/3.66 下的光束高度，
+# 用在长焦端会把轴上光束切掉一半以上（实测轴上通过率 0.34 → 应为 0.77），所以 Z1 以外的变焦位置改用这张表。
+PV_ZOOM_MAX_DIA = {
+    "S2": 124.80, "S3": 90.57, "S4": 90.24, "S5": 73.22, "S6": 73.95, "S7": 68.33, "S8": 64.89, "S9": 62.41,
+    "S11": 48.90, "S12": 47.92, "S13": 45.43, "S14": 45.15, "S15": 44.15, "S16": 44.47, "S17": 43.55, "S18": 41.81,
+    "S19": 41.84, "S20": 41.17, "S21": 41.12, "S22": 41.10, "S24": 42.20, "S25": 41.99, "S26": 41.96, "S27": 44.73,
+    "S28": 47.12, "S29": 47.81, "S30": 47.23, "S31": 48.06, "S32": 48.29, "S33": 51.41, "S34": 52.55, "S35": 57.81,
+    "S36": 58.48, "S37": 58.93, "S38": 59.41, "S39": 58.70, "S41": 29.97, "S42": 29.72, "S43": 29.34, "S44": 28.50,
+    "S45": 28.58, "S46": 28.75,
+}
+# 对焦间隔（S5、S9）：F1 无穷远、F2 约 330 mm、F3 约 133 mm
+PV_FOCUS = {"F1": (5.300, 4.431), "F2": (6.322, 14.508), "F3": (7.260, 24.155)}
+# 两组位移：前组 = ΔS5 + ΔS9，第二组 = ΔS9 → 比值（F2、F3 平均）
+_r = [(PV_FOCUS[f][1] - PV_FOCUS["F1"][1]) / ((PV_FOCUS[f][0] - PV_FOCUS["F1"][0]) + (PV_FOCUS[f][1] - PV_FOCUS["F1"][1])) for f in ("F2", "F3")]
+PV_FOCUS_RATIO = round(sum(_r) / 2, 4)
+
 PV_ASPH = {   # Z = c r² / (1 + √(1 − (1+K) c² r²)) + A r⁴ + B r⁶ + C r⁸ + D r¹⁰ + E r¹²
     "S3":  (-1.5066, [2.0962e-6, -7.9395e-10, 6.1324e-13, -2.8537e-16, 3.1072e-20]),
     "S44": (-2.2286, [2.2871e-6, -2.1575e-9, 9.2167e-12, -1.2856e-14, 0.0]),
@@ -178,7 +200,7 @@ def isco_preset(fname, meta, look, prime_scale, att_scale):
     return rx
 
 
-def panavision_rear():
+def panavision_rear(zoom_pos="Z1"):
     glasses = {"air": {"nd": 1.0, "vd": None}}
     groups = {"zoom": [], "anamorph": []}
     stop = None
@@ -186,7 +208,11 @@ def panavision_rear():
     pending_d = 0.0
     rows = [r for r in PV_TABLE_I if r[1] not in ("S62",)]
     out = []
+    # 以 US 7,085,066 TABLE I（Z1，已逐行核实）为基准，只叠加 US 6,122,111 中该变焦位置相对 Z1 的间隔变化
+    # （两份专利的虚拟面安排不同：S39 在 7,085,066 为 0.600，在 6,122,111 为 0.100）
+    dz = {sid: PV_ZOOM[zoom_pos][k] - PV_ZOOM["Z1"][k] for k, sid in enumerate(("S10", "S20", "S39"))}
     for item, sid, shape, ry, rx_, d, code, rad, hy, hx in rows:
+        d = round(d + dz.get(sid, 0.0), 4)
         if item == "Dummy":
             if out:
                 out[-1]["d"] = round(out[-1]["d"] + d, 4)
@@ -213,6 +239,11 @@ def panavision_rear():
         if item:
             sf["element"] = item
         out.append(sf)
+    if zoom_pos != "Z1":                         # 变焦镜部分改用 6,122,111 的实物最大口径（见 PV_ZOOM_MAX_DIA）
+        for sf in out:
+            if sf["id"] in PV_ZOOM_MAX_DIA:
+                sf["patent_heights"] = {"radial": PV_ZOOM_MAX_DIA[sf["id"]] / 2, "Y": None, "X": None,
+                                        "source": "US 6,122,111 claim 35（最大通光直径 / 2）"}
     # 口径：用专利通光高度。镜片外径 = 该片各面 radial 最大值；Y/X 高度作遮罩（切边或矩形视场光阑）
     els = []
     cur = []
@@ -230,18 +261,25 @@ def panavision_rear():
             if h["X"]:
                 ap["semi_x"] = h["X"]
             s["aperture"] = ap
+    if zoom_pos != "Z1":
+        # 原变焦镜全焦段恒定 f/2.2 → 长焦端光阑开大。保持专利在 Z1 给出的系统垂直 f 值（f/4.10），由近轴推算光阑半径
+        stop = {"after_surface": stop["after_surface"], "offset_mm": stop["offset_mm"], "f_number": 4.10,
+                "note": "长焦端：保持系统垂直 f/4.10（专利 Z1 值），光阑半径近轴推算；Z1 时为 10.51 mm（f/3.66 综合）"}
     zoom = [s for s in out if int(s["id"][1:]) <= 46]
     ana = [s for s in out if int(s["id"][1:]) >= 47]
     image_distance = ana[-1]["d"]
-    meta = {"name": "Panavision 后置 1.34× 变形（US 7,085,066 原处方：变焦镜 + 8 片后置变形组）",
-            "short_name": "Panavision 后置 1.34×（真实处方）", "order": 4,
-            "tagline": "唯一公开的 Panavision 变形处方：后置变形组，16:9 画幅解挤压到 2.40:1；变焦镜取短焦端",
-            "note": "Iain A. Neil 为 Panavision 设计，2004 申请、2006 授权。后置变形组位于变焦镜与反光镜之间约 26 mm 内；前 46 面是 US 6,122,111 的变焦镜（短焦端、无穷远）。",
+    tele = zoom_pos == "Z4"
+    pos = f"{zoom_pos}（变焦镜单独 {PV_ZOOM_EFL[zoom_pos]} mm）"
+    meta = {"name": f"Panavision 后置 1.34× 变形（US 7,085,066 原处方：变焦镜 + 8 片后置变形组），变焦 {pos}",
+            "short_name": "Panavision 后置 1.34× 长焦端（真实处方）" if tele else "Panavision 后置 1.34×（真实处方）",
+            "order": 5 if tele else 4,
+            "tagline": "唯一公开的 Panavision 变形处方：后置变形组，16:9 画幅解挤压到 2.40:1；变焦镜取" + ("长焦端 Z4" if tele else "短焦端 Z1"),
+            "note": f"Iain A. Neil 为 Panavision 设计，2004 申请、2006 授权。后置变形组位于变焦镜与反光镜之间约 26 mm 内；前 46 面是 US 6,122,111 的变焦镜（{pos}、无穷远；变焦间隔取自该专利 TABLE 1）。" + ("变焦镜口径取 US 6,122,111 给出的各面最大通光直径（全变焦、全对焦范围的实物尺寸）；后置组口径为 7,085,066 在 Z1 下给出的值。" if zoom_pos != "Z1" else "口径为专利在 Z1 下给出的光束高度。"),
             "units": "mm", "conventions": json.load(open(os.path.join(PDIR, "c_series_style.json"), encoding="utf-8"))["meta"]["conventions"]}
     rx = {"meta": meta, "glasses": glasses,
           "groups": [
-              {"id": "zoom", "role": "US 6,122,111 变焦镜，短焦端 F1/Z1，无穷远", "scale": 1.0,
-               "aperture_source": "patent", "f_number": 3.66, "stop": stop, "surfaces": zoom,
+              {"id": "zoom", "role": f"US 6,122,111 变焦镜，F1/{zoom_pos}，无穷远", "scale": 1.0, "zoom_position": zoom_pos,
+               "aperture_source": "patent", "f_number": stop["f_number"], "stop": stop, "surfaces": zoom,
                "source": {"patent": "US 7,085,066 B2 — I. A. Neil, Anamorphic imaging system（Panavision International），2004 申请 / 2006 授权",
                           "url": "https://patents.google.com/patent/US7085066B2/en",
                           "table": "TABLE I（CODE V 导出，20 °C；玻璃为 Ohara 代码）",
@@ -253,12 +291,16 @@ def panavision_rear():
           "image_distance_mm": image_distance,
           "anamorphic": {"desqueeze": 1.35, "type": "rear",
                          "note": "专利：把 2.40:1 物方画面垂直拉伸到 16:9 像面（正文称压缩比约 1.34）。真实追迹：画面边缘物方张角比 2.401，整幅解挤压比 1.350；压缩比从中心 1.304 增到边缘 1.351（水平畸变），所以中心物体解挤压后略宽约 3.5%"},
-          "look": {"reference": "Panavision 2004 年后置变形组（专利实施例）；无公开的成品镜头规格",
-                   "f_number": 3.66, "min_focus_mm": 1000.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.6},
-          "focus": {"mechanism": "整体移动（近似）：原变焦镜的对焦组在 US 6,122,111 中，未转录；这里整支镜头一起移动，只解垂直截面",
-                    "groups": [{"ids": [s["id"] for s in out], "moves": [1, 0]}], "solve": ["Ry"], "min_distance_mm": 1000.0},
+          "look": {"reference": "Panavision 2004 年后置变形组（专利实施例）；无公开的成品镜头规格。最近对焦取变焦镜专利 F3：物面到 S1 133 mm = 距像面 476 mm",
+                   "f_number": 3.66 if zoom_pos == "Z1" else 4.10, "min_focus_mm": 476.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.6},
+          "focus": {"mechanism": "按 US 6,122,111 的内对焦：前组（第 1–2 片，S2–S5）移动 Δ，第二组（第 3–4 片，S6–S9）移动 0.909·Δ"
+                                 "（专利 TABLE 1：F2 时 S5/S9 间隔 +1.022/+10.077、F3 时 +1.960/+19.724 → 两组位移比 0.908/0.910）；变焦组与后置变形组不动。"
+                                 "中间像位置不变 → 两向同时合焦、无发腮。专利物距从物面量到 S1（第一面前 1 mm 的虚面，随前组移动）；按此定义，前组行程模型/专利：F2（330 mm）11.221 / 11.099 mm，F3（133 mm）21.686 / 21.684 mm",
+                    "groups": [{"ids": ["S2", "S3", "S4", "S5"], "moves": [1, 0]},
+                               {"ids": ["S6", "S7", "S8", "S9"], "moves": [PV_FOCUS_RATIO, 0]}],
+                    "solve": ["Ry"], "min_distance_mm": 476.0},
           "sensor": {"format": "16:9（3 齿孔 35 mm 或同尺寸数字传感器），像高半径 13.60 mm", "width": 23.71, "height": 13.34}}
-    O.save(rx, os.path.join(PDIR, "panavision_rear_134.json"))
+    O.save(rx, os.path.join(PDIR, "panavision_rear_134_tele.json" if tele else "panavision_rear_134.json"))
     return rx
 
 
@@ -282,8 +324,9 @@ if __name__ == "__main__":
                 {"reference": "Panavision G Series 100 mm T3，最近对焦 91.4 cm（panavision.com）；页面描述：excellent glare resistance、minimal breathing",
                  "f_number": 3.0, "min_focus_mm": 914.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.15, "corner_pupil_fraction": 0.75},
                 prime_scale=0.763, att_scale=0.763)
-    panavision_rear()
-    for fn in ("e_series_style.json", "panavision_rear_134.json"):
+    panavision_rear("Z1")
+    panavision_rear("Z4")
+    for fn in ("e_series_style.json", "panavision_rear_134.json", "panavision_rear_134_tele.json"):
         rx = O.load(os.path.join(PDIR, fn))
         S = O.layout(rx)
         fx = O.paraxial_infinity(S, "Rx")[0]; fy = O.paraxial_infinity(S, "Ry")[0]

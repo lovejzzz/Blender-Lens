@@ -33,4 +33,13 @@ ys, xs = np.nonzero(px[..., 0] > 0.5)
 rep.update(build=list(r), resolution=list(img.size), lit_pixels=int(len(xs)),
            lit_centroid_uv_from_top_left=None if not len(xs) else (round(float(xs.mean()) / img.size[0], 3), round(1 - float(ys.mean()) / img.size[1], 3)),
            squeeze=round(pkg.rig.squeeze_info(cam_ob), 4))
+import blenderlens.api as bl                      # 稳定入口：不写安装仓库名
+rep["api_module"] = bl.__name__
+rep["api_lens_info_squeeze"] = round(bl.lens_info(cam_ob)["squeeze"], 4)
+rep["units"] = cam_ob.get("bl_units")
+# 为命令行 GPU 测试存一个 .blend（install_test.sh 里用 -b … --python-expr "bl.enable_gpu()" -f 1 渲染）
+sc.cycles.device = 'CPU'
+sc.render.filepath = os.path.join(os.environ["BL_TEST_OUT"], "installed_cpu.png")
+bpy.ops.render.render(write_still=True)
+bpy.ops.wm.save_as_mainfile(filepath=os.path.join(os.environ["BL_TEST_OUT"], "installed_gpu.blend"))
 print("INSTALLED " + json.dumps(rep, ensure_ascii=False))

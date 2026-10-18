@@ -1,14 +1,16 @@
 # 在 Blender 里由处方搭镜头：OSL 相机 + 界面法镜片网格 + 镜框/镜筒 + 对焦分组。
 # 层级：BL_Camera（相机，传感器中心）
-#        └ BL_Rig（绕 Y 转 180°：镜头坐标 +Z 物方 → 相机视线方向）
+#        └ BL_Rig（绕 Y 转 180°：镜头坐标 +Z 物方 → 相机视线方向；缩放 = 场景单位 / mm，镜头内部恒为毫米）
 #            ├ BL_Move_c1_c2（对焦分组：该组镜片移动 c1·Δ1 + c2·Δ2，系数来自处方 focus.groups）
 #            └ 固定的镜片、镜筒、后盖
 import json, math
 import bpy
+import numpy as np
 
 from . import optics as O
 from . import meshgen as G
 from . import oslgen
+from . import gpukernel
 
 TEXT_RX = "BL_prescription.json"
 TEXT_OSL = "BL_camera.osl"
@@ -102,16 +104,55 @@ def setup_scene_units(scene):
     us.scale_length = 0.001
     us.length_unit = 'MILLIMETERS'
 
+# ── 场景单位：镜头内部（处方、对焦求解、OSL 追迹）恒为毫米；与场景之间只差一个统一比例 ──
+FACTORY_OBJECTS = {"Cube", "Light", "Camera"}
+
+def mm_per_unit(scene):
+    """1 个场景单位 = 多少 mm（毫米场景 1，米制场景 1000）。"""
+    # scale_length 是 float32（0.001 存成 0.0010000000475）→ 取 6 位小数，毫米场景恰好为 1
+    return round(max(scene.unit_settings.scale_length, 1e-12) * 1000.0, 6)
+
+def unit_scale(scene):
+    """场景单位 / mm：OSL 出射光线起点与 BL_Rig 的缩放。"""
+    return 1.0 / mm_per_unit(scene)
+
+def _cam_scene(cam_ob):
+    sc = cam_ob.users_scene
+    return sc[0] if sc else bpy.context.scene
+
+def resolve_units(scene, units='AUTO'):
+    """'MM'：把场景改成毫米（旧行为）；'SCENE'：保留场景单位；
+    'AUTO'：已是毫米或场景里有用户内容（除默认立方体/灯/相机之外的物体）→ 保留，空场景 → 改成毫米。
+    返回实际采用的方式（'MM' / 'SCENE'）。"""
+    if units == 'AUTO':
+        if abs(scene.unit_settings.scale_length - 0.001) < 1e-12:
+            units = 'SCENE'
+        else:
+            user = [o for o in scene.objects if o.name.split(".")[0] not in FACTORY_OBJECTS
+                    and not o.name.startswith("BL_")]
+            units = 'SCENE' if user else 'MM'
+    if units == 'MM':
+        setup_scene_units(scene)
+    return units
+
+def focus_mm(cam_ob):
+    """面板对焦距离（场景单位）→ 镜头对焦距离（mm，从像面量起），并按最近对焦截断；0 = 无穷远。"""
+    p = cam_ob.data.blenderlens
+    if p.focus_distance <= 0:
+        return math.inf
+    return max(p.focus_distance * mm_per_unit(_cam_scene(cam_ob)), cam_ob.get("bl_min_focus_mm", 0.0))
+
 def desqueezed_resolution(rx, height, desqueeze=None):
     """输出分辨率：传感器宽高比 × 解挤压比（处方 anamorphic.desqueeze）。"""
     W, H = rx["sensor"]["width"], rx["sensor"]["height"]
     return int(round(height * W / H * (desqueeze or O.desqueeze(rx)))), int(height)
 
-def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_Camera"):
-    """搭整支镜头。返回相机对象。重复调用会先删除旧的同名镜头。"""
+def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_Camera", units='AUTO'):
+    """搭整支镜头。返回相机对象。重复调用会先删除旧的同名镜头。
+    units：'AUTO' / 'SCENE'（保留场景单位，如米制生产场景）/ 'MM'（把场景改成毫米），见 resolve_units。"""
     rx = rx or O.load()
     scene = context.scene
-    setup_scene_units(scene)
+    units_used = resolve_units(scene, units)
     if rx_needs_apertures(rx):
         rx, _ = O.apply_apertures(rx)
     store_prescription(rx)
@@ -132,8 +173,8 @@ def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_
     cam.custom_shader = txt
     cam.sensor_fit = 'HORIZONTAL'
     cam.sensor_width = rx["sensor"]["width"]
-    cam.clip_start = 0.1
-    cam.clip_end = 1e7
+    cam.clip_start = 0.1 * unit_scale(scene)
+    cam.clip_end = 1e7 * unit_scale(scene)
     cam_ob = bpy.data.objects.new(name, cam)
     col.objects.link(cam_ob)
     compile_camera(cam)
@@ -178,6 +219,7 @@ def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_
     _mesh_object("BL_Barrel", G.merge(G.tube(R_barrel, -0.5, z_front), G.disc(R_barrel, -0.5)), [black], rig, lens_col)
 
     cam_ob["bl_R_barrel"] = R_barrel
+    cam_ob["bl_units"] = units_used
     lens_col.hide_render = True                 # 默认 Analytic 模式不需要镜片几何
     apply_look(cam_ob, rx)
     return cam_ob
@@ -241,8 +283,14 @@ def apply_settings(cam_ob):
     cam = cam_ob.data
     p = cam.blenderlens
     rx = _rx_cached()
-    dist = math.inf if p.focus_distance <= 0 else max(p.focus_distance, cam_ob.get("bl_min_focus_mm", 0.0))
+    dist = focus_mm(cam_ob)
+    us = unit_scale(_cam_scene(cam_ob))
     d1, d2 = O.solve_focus(rx, dist)
+    for ch in cam_ob.children:
+        if ch.name.startswith("BL_Rig"):
+            ch.scale = (us, us, us)                  # 镜片网格与对焦分组都在 BL_Rig 下，内部仍是毫米
+    cam.clip_start = 0.1 * us
+    cam.clip_end = 1e7 * us
     for ch in cam_ob.children_recursive:
         if "bl_move" in ch:
             c1, c2 = ch["bl_move"]
@@ -250,11 +298,15 @@ def apply_settings(cam_ob):
     cc = cam.cycles_custom
     vals = dict(mode=1 if p.mode == 'GEOMETRY' else 0, f_number=max(p.f_number, O.nominal_f_number(rx)), blades=p.blades,
                 blade_rotation=p.blade_rotation, delta_unit=d1, delta_front=d2,
-                dispersion=int(p.dispersion), exposure_compensate=int(p.exposure_compensate),
-                ghosts=int(p.ghosts), ghost_gain=p.ghost_gain, coated=int(p.coated), coating_nm=p.coating_nm)
+                dispersion=int(p.dispersion and p.dispersion_mode == 'FULL'), exposure_compensate=int(p.exposure_compensate),
+                ghosts=int(p.ghosts), ghost_gain=p.ghost_gain, coated=int(p.coated), coating_nm=p.coating_nm,
+                unit_scale=us)
     for k, v in vals.items():
         if k in cc.keys():
             cc[k] = v
+    _write_gpu_fields(cam, d1, d2, vals["f_number"], p.blades)
+    if gpukernel.is_active():
+        sync_gpu_lens(cam_ob)
     col = bpy.data.collections.get("BL_LensGeometry")
     if col:
         col.hide_render = (p.mode != 'GEOMETRY')
@@ -267,11 +319,34 @@ def apply_settings(cam_ob):
     cam_ob.update_tag()
     return d1, d2
 
+def _write_gpu_fields(cam, d1, d2, f_number, blades):
+    """GPU 路径的每帧参数通道（见 gpukernel.FIELD_MAP）。自定义相机用不到这些字段；CPU / OSL 路径忽略它们。
+    它们跟随对焦 / 光圈的关键帧（frame_change 时 apply_settings 重写），所以动画在 GPU 路径下同样生效。"""
+    cam.stereo.convergence_distance = 1000.0 + d1
+    cam.fisheye_fov = 16.0 + d2 / 5.0
+    cam.dof.use_dof = True
+    cam.dof.aperture_ratio = 1.0 / max(f_number, 1e-3)
+    cam.dof.aperture_blades = int(blades)
+
+def gpu_settings(cam_ob):
+    cam = cam_ob.data
+    p = cam.blenderlens
+    cc = cam.cycles_custom
+    get = lambda k, d: cc[k] if k in cc.keys() else d
+    return gpukernel.static_settings(dispersion=p.dispersion and p.dispersion_mode == 'FULL',
+                                     dispersion_strength=get("dispersion_strength", 1.0),
+                                     exposure_compensate=p.exposure_compensate,
+                                     pupil_importance=bool(get("pupil_importance", 1)),
+                                     blade_rotation_deg=p.blade_rotation, unit_scale=unit_scale(_cam_scene(cam_ob)))
+
+def sync_gpu_lens(cam_ob):
+    """把当前镜头写进 GPU 内核头文件（内容不变则不动；变了下一次 GPU 渲染会重编内核，约 10 秒）。"""
+    changed = gpukernel.sync_lens(_rx_cached(), gpu_settings(cam_ob))
+    cam_ob["bl_gpu_header"] = gpukernel.status()["header_hash"]
+    return changed
+
 def squeeze_info(cam_ob):
-    rx = _rx_cached()
-    p = cam_ob.data.blenderlens
-    dist = math.inf if p.focus_distance <= 0 else max(p.focus_distance, cam_ob.get("bl_min_focus_mm", 0.0))
-    return O.squeeze_at(rx, dist)
+    return O.squeeze_at(_rx_cached(), focus_mm(cam_ob))
 
 def black_world(world):
     """Blender 5.x 新建 World 默认带节点背景（≈0.05 灰），world.color 不起作用 → 显式置黑。"""
@@ -281,6 +356,34 @@ def black_world(world):
             if n.type == 'BACKGROUND':
                 n.inputs["Color"].default_value = (0, 0, 0, 1)
                 n.inputs["Strength"].default_value = 0.0
+
+def is_blenderlens_camera(ob):
+    return bool(ob and ob.type == 'CAMERA' and any(c.name.startswith("BL_Rig") for c in ob.children))
+
+def gpu_block_reason(scene):
+    """场景相机是 BlenderLens、Cycles 设为 GPU、后端不是 OptiX 时，GPU 能否渲染。返回 None = 可以；否则返回原因。
+    可以的条件：GPU 路径已启用（gpukernel.enable）、Analytic 模式、不开相机端鬼影、内核头文件与当前镜头一致。"""
+    if scene.render.engine != 'CYCLES' or getattr(scene.cycles, "device", 'CPU') != 'GPU':
+        return None
+    cam_ob = scene.camera
+    if not is_blenderlens_camera(cam_ob):
+        return None
+    try:
+        backend = bpy.context.preferences.addons["cycles"].preferences.compute_device_type
+    except (KeyError, AttributeError):
+        return None
+    if backend == 'OPTIX':
+        return None
+    if not gpukernel.is_active():
+        return f"{backend} 不支持 OSL 相机，且 BlenderLens GPU 路径未启用（{gpukernel.status()['reason']}）"
+    p = cam_ob.data.blenderlens
+    if p.mode != 'ANALYTIC' or p.ghosts:
+        return "GPU 路径只支持 Analytic 模式且不开相机端鬼影（Geometry / Ghosts 需要 CPU）"
+    sync_gpu_lens(cam_ob)
+    return None
+
+def gpu_unsupported(scene):
+    return gpu_block_reason(scene) is not None
 
 def render_preset(scene, mode=None):
     """Cycles 设置：自定义相机在非 OptiX 设备上走 CPU；几何模式需要深反弹。
@@ -333,9 +436,10 @@ def flare_sources(scene, auto_threshold=2.0e4):
     return obs
 
 def _to_lens(cam_ob, world_co):
-    """世界坐标 → 镜头坐标（原点像面、物方 +Z）。相机对象局部：视线 −Z；镜头 = (−x, y, −z)。"""
+    """世界坐标 → 镜头坐标（mm；原点像面、物方 +Z）。相机对象局部：视线 −Z；镜头 = (−x, y, −z)。"""
     lo = cam_ob.matrix_world.inverted() @ world_co
-    return (-lo.x, lo.y, -lo.z)
+    k = mm_per_unit(_cam_scene(cam_ob))
+    return (-lo.x * k, lo.y * k, -lo.z * k)
 
 AMBER = (1.0, 0.55, 0.12)
 _LUMA = (0.2126, 0.7152, 0.0722)
@@ -354,17 +458,40 @@ def recolor(layer, source_color, mode='PHYSICAL', tint=(0.25, 0.55, 1.0)):
     mono = (layer * (src * luma)[None, None, :]).sum(axis=2)                          # 物理结果（含灯光颜色）的亮度
     return mono[:, :, None] * (target / y_tgt)[None, None, :]
 
+_LATERAL_CACHE = {}
+
+def _lateral_post(px, cam_ob, W, H):
+    """色散模式 LATERAL_POST：给关色散渲染（d 线）的线性图像加横向色差。px：Blender 像素顺序（行 0 = 底部）。"""
+    from . import lenspack as LP
+    rx = _rx_cached()
+    dist = focus_mm(cam_ob)
+    key = (hash(json.dumps(rx, sort_keys=True, default=str)), round(dist, 3) if math.isfinite(dist) else -1, W, H)
+    if key not in _LATERAL_CACHE:                      # 对焦不变的动画只算一次映射
+        if len(_LATERAL_CACHE) > 4:
+            _LATERAL_CACHE.clear()
+        _LATERAL_CACHE[key] = LP.pixel_maps(rx, W, H, dist)
+    img = px[::-1, :, :3].astype(np.float64)
+    out = LP.apply_lateral_ca(img, rx, dist, maps=_LATERAL_CACHE[key])
+    px[:, :, :3] = out[::-1].astype(np.float32)
+    return px
+
 def render_with_flare(scene, filepath, n_grid=260, blur_px=0.8):
-    """渲染 + 正向炫光层合成。返回合成后的 Image 数据块（线性），并按场景色彩管理写出 filepath。"""
+    """渲染 + 正向炫光层合成（旧接口，等同 render_frame(flare=True)）。"""
+    return render_frame(scene, filepath, flare=True, n_grid=n_grid, blur_px=blur_px)
+
+def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_layer_path=None):
+    """渲染当前帧并做插件的后期：LATERAL_POST 的横向色差、正向炫光层（flare=True）。
+    返回 (合成后的 Image 数据块（线性）, 炫光光源名单, 炫光层 H×W×3)。filepath 按扩展名写出（PNG/TIFF 16 位按场景色彩管理，EXR 线性）。
+    flare_layer_path：另存炫光层为线性 EXR（单独调色 / 时域稳定用）。"""
     import os, tempfile
-    import numpy as np
     from . import flare as FL
     cam_ob = scene.camera
     p = cam_ob.data.blenderlens
     ghosts_was = p.ghosts
-    p.ghosts = False                                   # 正向通道取代相机端鬼影，避免重复
+    if flare:
+        p.ghosts = False                               # 正向通道取代相机端鬼影，避免重复
     apply_settings(cam_ob)
-    tmp = os.path.join(tempfile.gettempdir(), "blenderlens_beauty.exr")
+    tmp = os.path.join(tempfile.gettempdir(), f"blenderlens_beauty_{os.getpid()}.exr")
     fmt, path0 = scene.render.image_settings.file_format, scene.render.filepath
     scene.render.image_settings.file_format = 'OPEN_EXR'
     scene.render.filepath = tmp
@@ -374,27 +501,43 @@ def render_with_flare(scene, filepath, n_grid=260, blur_px=0.8):
         scene.render.image_settings.file_format, scene.render.filepath = fmt, path0
         p.ghosts = ghosts_was
         apply_settings(cam_ob)
-    W, H = scene.render.resolution_x, scene.render.resolution_y
     img = bpy.data.images.load(tmp, check_existing=False)
+    W, H = img.size                                    # 实际输出尺寸（含 resolution_percentage）
+    if scene.render.use_border and scene.render.use_crop_to_border and (flare or p.dispersion_mode == 'LATERAL_POST'):
+        bpy.data.images.remove(img)
+        raise RuntimeError("Render with Flare / Lateral in Post 需要整幅画面：请关闭 Crop to Render Region（或关闭 Render Region）")
     px = np.array(img.pixels[:], dtype=np.float32).reshape(H, W, 4)
     bpy.data.images.remove(img)
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    if p.dispersion_mode == 'LATERAL_POST':
+        px = _lateral_post(px, cam_ob, W, H)
     rx = _rx_cached()
-    dist = math.inf if p.focus_distance <= 0 else max(p.focus_distance, cam_ob.get("bl_min_focus_mm", 0.0))
+    dist = focus_mm(cam_ob)
     layer = np.zeros((H, W, 3))
     used = []
-    for ob in flare_sources(scene):
+    for ob in (flare_sources(scene) if flare else []):
         strength, color = _emission_of(ob)
         if not color:
             continue
         src = _to_lens(cam_ob, ob.matrix_world.translation)
         if src[2] <= 0:
             continue
-        radius = 0.5 * max(ob.dimensions)
+        radius = 0.5 * max(ob.dimensions) * mm_per_unit(scene)
         lay, info = FL.flare_layer(rx, src, strength, radius, W, H, focus_dist=dist, f_number=p.f_number,
                                    coated=p.coated, coating_nm=p.coating_nm, n_grid=n_grid, blur_px=blur_px)
         layer += recolor(lay, color, p.flare_color, tuple(p.flare_tint)) * p.flare_gain
         used.append(ob.name)
     px[:, :, :3] += layer[::-1].astype(np.float32)     # 图像行 0 = 底部
+    if flare_layer_path:
+        fl = bpy.data.images.new("BL Flare Layer", W, H, float_buffer=True)
+        a = np.ones((H, W, 4), np.float32); a[:, :, :3] = layer[::-1]
+        fl.pixels.foreach_set(a.ravel())
+        fl.filepath_raw = bpy.path.abspath(flare_layer_path); fl.file_format = 'OPEN_EXR'
+        fl.save()
+        bpy.data.images.remove(fl)
     out = bpy.data.images.get("BL Flare Composite") or bpy.data.images.new("BL Flare Composite", W, H, float_buffer=True)
     if tuple(out.size) != (W, H):
         out.scale(W, H)

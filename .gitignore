@@ -6,3 +6,8 @@ L1_test.blend
 __pycache__/
 *.pyc
 .DS_Store
+assets/
+
+# 根目录的零散测试输出
+/*.exr
+/*.png

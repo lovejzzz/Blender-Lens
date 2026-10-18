@@ -1,0 +1,190 @@
+===== DESCRIPTION =====
+Description
+
+35o-42o 5R K 4 mo (if July 12, 1960 S. ROSIN ANAIIORPHIC LENS SYSTEM Filed Oct. 31, 1957 TZO; X227 United States Patent O ANAMORPHIC LENS SYSTEM Seymour Rosin, Massapequa Park, N. assignor to Scanoptic, Inc., New York, N.Y. 
+
+Filed Oct. 31, 1957, Ser. No. 693,628 
+
+ Claims. (CL 88-57) The present invention relates to an anamorphic lens system, and more particularly to an anamorphic lens system constructed of cylindrical lens elements and intended for the purpose of squeezing the image of a subject into the framing proportions of a camera objective lens before the same focusses the image. 
+
+ Anamorphic systems of this type are known, and it is one object of the present invention to overcome certain disadvantages of the known art, and to provide a compact anamorphic lens system capable of producing pictures of excellent quality. 
+
+ lt is another object of the present invention to provide an anamorphic lens system in which spherical aberration, coma, curvature of eld, astigmatism, and distortion are corrected. 
+
+ It is another object of the present invention to provide an anamorphic lens system in which axial and lateral color aberrations are highly corrected. 
+
+ lt is another object of the present invention to provide an anamorphic lens system which has a wide angular lield, while the size of the foremost lens element is comparatively small. 
+
+ Itis a further object of the prent invention to provide an anamorphic lens system which can be economically manufactured, and requires a comparatively small amount of glass. 
+
+ With these objects in view, the present invention mainly consists in an anamorphic lens system which comprises a negative front member including a negative cylindrical single lens element and a cemented negative meniscus doublet rearwardly spaced a first airspace from the negative single lens element; and a positive rear member spaced a second airspace from the negative meniscus doublet and being a positive cemented doublet. 
+
+ The cylindrical lens elements have all generatrices parallel, and the principal points of the front and rear members are spaced an axial distance which is the sum of the focal lengths of the negative front member and or' the positive rear member when the lens system is focused for innity. 
+
+ The power of the negative meniscus doublet is substantially less than the power of the single lens element in order to minimize spreading of the rays. 'I'he outer air surfaces of the negative meniscus doublet are concave to the rear and toward the positive rear member so that the chief rays are substantially normal to the outer air surfaces of the negative meniscus doublet whereby aberrations are minimized. For thesame reason, the rst airspace between the negative single element and the negative meniscus doublet is at least ve percent and less than 25 percent of the focal length of the negative front member. 
+
+ The negative and positive doublets have cemented interfaces, and the change of the index of refraction across the interfaces, and particularly across the interface of the positive doublet is extremely small to higher ICC order aberrations including zonal and spherical aberrations, and sphero-chromatism. 
+
+ The positive rear member is under-corrected for spherical aberration so as to balance a corresponding overcorrection of the negative front member whereby distortion is particularly well controlled. 
+
+ The novel features which are considered as characteristic for the invention are set forth in particular in the appended claims. The invention itself, however, both as to its construction and its method of operation, together with additional objects and advantages thereof, will be best understood from the following description of specic embodiments when read in connection with the accompanying drawings, in which: 
+
+ Fig. l is a plan view of an anamorphic lens system yaccording to the present invention shown placed before a camera objective lens; 
+
+ Fig. 2 is a side view of the arrangement shown in Fig. l; and 
+
+Fig. 3 is a rear view taken on line 3--3 in Fig. 2; and 
+
+Fig. 4 is a plan view of a modified rear member. 
+
+ Referring now to the drawing, the anamorphic lens system comprises Ia positive rear member which is a positive cemented biconvex doublet including a rearwardly located positive cylindrical lens element 1, and a forwardly located negative cylindrical lens element 2. The rearwardly facing outer air surface of the lens element 1 is convex to the rear, and the forwardly facing outer air surface of the lens element 2 is concave to the rear. The interface between the lens elements 1 and 2 is cemented and concave to the rear. The radii of the outer air surfaces are r1 and r3, respectively, and the radius of the cemented interface is r2. The thickness of the lens element 1 is t1 and the thickness of the lens element 2 is t2. The positive rear member has a focal length fp. 
+
+ The positive rear member 1, 2 is spaced an airspace S1 from the negative front member which includes the lens elements 3, 4, and 5. Lens elements 3 and 4 are cemented to each other and form a negative meniscus doublet having outer air surfaces concave to the rear. The outer air surface of the lens element 3 has the radius r1, and the outer air surface of the lens element 4 has the radius rs. The cemented interface has the radius r5. The lens element 3 is negative and has a thickness t3, and the lens element 4 is positive and has a thickness t1. 
+
+ The negative front member also includes a negative single lens element 5 having a thickness t5 and being spaced from the doublet 3, 4 `an airspace S1. The outer air surfaces of the singlet 5 have rad of curvature r., and ra respectively. The focal length of the negative front member 3, 4, 5 is fn. 
+
+ The negative front member, and more particularly the negative doublet 3, 4, is spaced from the positive doublet 1, 2 an airspace S1. The length of the airspace S1 is determined by the fact that the principal points of the rear member 1, 2 and of the front member 3, 4, 5 are spaced an axial distance which is the sum of the focal lengths fn and fp of the front and rear members when focussed at infinity. 
+
+ All lens elements 1, l2, 3, 4, and 5 are cylindrical and have parallel generatrices as clearly shown in Figs. 1 and 2. The lens elements 3, 4, S are substantially rectangular, whereas the lens elements 1, 2 are octagonal. 
+
+ 'I'he entire anamorphic lens system is placed in front of a camera objective lens 6 which is associated with a diaphragm 7 having an aperture. -Rays 8 are illustrated to show that rays entering at an angle of will pass through the aperture of the diaphragm 7. 
+
+ In accordance with the present invention, the radius of curvature r1 of the lens element 1 is not greater than the 3 focal length fp of the doublet l, 2 and not smaller than two thirds of the focal length fp which may be mathematically expressed as follows: 
+
+(l) fpr1%fp The radius of curvature r3 is not greater than three times the focal length fp and not smaller than two times the focal length fp of the doublet 1, 2. This may be mathematically expressed as follows: (2) 3fPra2P The radius of curvature r2 of the cemented interface is determined by r1 and r3 and by the need for color correction. Figs. 1 and 2 show the rearwardly located lens element 1 to be positive, and the forwardly located lens element 2 to be negative. As shown in Fig. 4, this arrangement can be reversed so that lens element 1 lis negative and lens element 2 is positive. The ranges of r1 and r3 are valid for the reversed arrangement of the positive doublet 1, 2 and r2' is determined by the need for color correction. 
+
+wherein r1 and r3 are the radii of the outer air surfaces of the negative lens element 1 and of the positive lens element 2, respectively. 
+
+ It is important that the change of the index of refraction across the cement interface between the lens elements 1 and 2 should not exceed 0.03 in order to minimize higher order aberrations including zonal and spherical aberrations, and sphero-chromatism. 
+
+ The radius of curvature r4 is between two thirds and four thirds of the focal length fn, and the radius of curvature r6 is between ve thirds and eight thirds of the focal length fn of the negative front member 3, 4, 5 which may be mathematically expressed as follows: 
+
+ The radius of curvature f5 of the cemented interface is determined similar to the radius r2 in view of the need for color correction. The change of the index of refraction across the interface between the lens elements 3 and 4 should not exceed 0.06. 
+
+ The radii of curvature r, and rs ofthe single lens element 5 should not be greater than 2.5 times the focal length fn of the front member 3, 4, 5 which may be mathematically expressed as follows: 
+
+ In accordance with the present invention, the sum of the surface powers of the doublet 3, 4 does not exceed half of the sum of the surface powers of the singlet 5 so that the spreading of rays is minimized. 
+
+ The following example giving the data of a preferred embodiment of the present invention is illustrative for anamorphic lens systems according to the present invention. 
+
+ The focal length fp of the positive rear member is 149.88 and the focal length of the negative front member is 74.74, which corresponds to a ratio of 2:1. The distance between the principal points of the front member and of the rear member corresponds to fp-l-fn and is 75.14. The airspace S1 is actually 60.9 due to the fact that the principal points are inside the glass. The power of the negative doublet 3, 4 is 3.055 diopter, and the power of `the negative singlet 5 is 9.650 diopter. The 
+
+ 4 angle of eld is substantially 80. The lens elements are constructed in accordance with the following table: 
+
+ Lens Elements Radii Thlcknesses n v 5 n+125.o mm. 
+
+ :la 8.5 mm. 1.611 58.8 n 43.76 mm. 
+
+ 2.5mm. 1.605 38.0 r.- -354.2 mm. 
+
+ 01,150.9 mm. 10 n= 77.5 mm. 
+
+3 t1= 2.9 mrn. 1.611 58.8 
+
+ n+ 52.67 mm. 4 tt=15.8 mm. 1.640 33.8 
+
+rer-158.0 mm. 
+
+ n* 6.3 mm. r1133.3 mm. 5 l5= 2.6 mm. 1.611 58.8 
+
+r1=+120.6 mm. 
+
+The plus and minus signs in the second column correspond to refractive surfaces which are, respectively, convex and concave to the rear. 
+
+ In the arrangement in which, as shown in Fig. 4, the positive and negative elements of the positive rear doublet are reversed, the above table is modified as follows: 
+
+ Lens Elements Radll Thtcknesses 1m v r 125.0 mm. 1 l .laws t,=2.5 mm. 1. 605 38.0 
+
+ f l mm. 2 I t.- 8.5 mm. 1.611 58.8 3o n- 354.2 mm. 
+
+ While the above example refers to an anamorphic lens system in which the ratio between the focal length of the positive rear member and the focal length of the negative front member is 2:1, the data when expressed in terms of focal length are valid for ratios of the focal length within the range from 1.5:1 to 3:1, which may be mathematically expressed as follows: 
+
+ The table of data for the positive rear member assuming fp to be 1.000 is as follows: 
+
+5 Lens Elements Radll Thlcknesses nn v MODIFIED REAR MEMBER f3'=l=+0.238 2 t1=0.051 1.611 58.8 11:-2363 The table of data for the negative front member assuming fn to be 1.000 is as follows: 
+
+Lens Elements Radi! Thieknesses nn n TLS-1.034 3 h=0.039 1.611 58.8 
+
+ n+0.7047 4 40.211 1.649 33.8 n--am As pointed out above, the principal points of the front and rear members are spaced the distance fn plus fp so that the airspace between the front and rear members can be determined when suitable values for fn and fp are chosen. 
+
+ In the above example of an anamo hic lens s stem .5 according to the present invention, the negative front member is over-corrected for spherical aberration, and the positive rear member is under-corrected for spherical aberration to balance the over correction of the negative front member. 
+
+ As best seen in Fig. 3, the positive doublet 1, 2 is octagonal and has a height and width of 36 mm. The negative doublet 3, 4 has a height of 67 mm. and a transverse width of 58 mm. The singlet 5 has a height of 71 mm. and a transverse width of 65 mm. 
+
+ It will be understood that each of the elements described above, or two or more together, may also find a useful application in other types of anamorphic lens systems differing from the types described above. 
+
+ While the invention has been illustrated and described as embodied in an anamorphic lens system comprising a negative singlet and a negative doublet in front, and a positive doublet in the rear, it is not intended to be limited to the details shown, since various modifications and structural changes may be made without departing in any way from the spirit of the present invention. 
+
+ Without further analysis, the foregoing will so fully reveal the gist of the present invention that others can by applying current knowledge readily adapt it for various applications without omitting features that, from the standpoint of prior art, fairly constitute essential characteristics of the generic or specific aspects of this invention and, therefore, such adaptations should and are intended to be comprehended within the meaning and range of equivalence of the following claims. 
+
+ What is claimed as new and desired to be secured by Letters Patent is: 
+
+ l. An anamorphic lens system comprising, in combination, a negative front member including a negative cylindrical single lens element having a forwardly facing outer air face concave to the front, the absolute value of the radii of curvature of the outer airsurfaces of said single lens element being not greater than 2.5 times the focal length of said negative front member, and a cemented negative meniscus doublet rearwardly spaced a first airspace from said negative single lens element, said meniscus doublet including a forwardly located positive cylindrical lens element and a rearwardly located negative cylindrical lens element, said negative meniscus doublet having outer airsurfaces concave to the rear and a cemented interface convex to the rear, the radius of curvature of the rearwardly facing outer airsurface of said negative meniscus doublet being between two thirds and four thirds of the focal length of said negative front member, and the radius of curvature of the forwardly facing airsurface of said negative meniscus doublet being between five third and eight thirds of the focal length of said negative front member, the sum of surface powers of said negative meniscus doublet being not greater than half the sum of surface powers of said single lens element; and a positive rear member spaced a second airspace from said negative meniscus doublet and being a positive cemented doublet including a negative cylindrical lens element and a positive cylindrical lens element, said positive doublet having a rearwardly facing outer airsurface convex to the rear, the radius of curvature of said rearwardly facing outer surface being not greater than the focal length of said positive doublet and not'smaller than two thirds of said focal length of said positive doublet, a forwardly facing outer airsurface concave to the rear, the absolute value of the radius of curvature of'said forwardly facing outer airsurface being not greater than three times said focal length of said positive doublet and not smaller than two times said focal length of said positive doublet, and a cemented interface, said cylindrical lens elements having the generatrices thereof parallel, the principal points of said front and rear members being spaced an axial distance which is the sum of the focal lengths of said negative front member and of said positive rear member when the lens system is focused for infinity, the ratio between the focal lengths of said positive rear member and said negative front member being between 1.5:1 and 3:1. 
+
+ 2. An anamorphic lens system as set forth in claim l wherein said ratio between the focal lengths of said positive rear member and said negative front member is 2:1. 
+
+ 3. An anamorphic lens system comprising, in combination, a negative front member including three cylindrical lens elements and having the focal length fn, and a positive rear member including two cylindrical lens elements and having the focal length fp, the distance between the principal points of said front and rear members being fp plus fn when the lens system is focused for infinity, said cylindrical lens elements having the generatrices thereof all parallel, the lens system being constructed substantially according to the specifications in the following table, assuming that the focal length fn is 1.000 and focal length fp is 1.000: 
+
+wherein the first column lists the lens elements in order from the rear to the front; wherein nD is the index of refraction for the D-line of the spectrum, and v is the dispersive index; wherein r, t and S refer, respectively, to the radii of curvature of the refractive surfaces, the axial thicknesses of the lens elements, and the axial airspaces between the lens elements, the subscripts on the characters r, t and S being numbered from the rear to the front, and the plus and minus signs in the second column corresponding to refractive surfaces which are, respectively, convex and concave to the rear. 
+
+ 4. An anamorphic lens system comprising, in combination, a negative front member including three cylindrical lens elements and having the focal length In, and a positive rear member including two cylindrical lens elements and having the focal length fp, the ratio between fp and fn being between 1.5 :1 and 3:1, the distance between the principal points of said front and rear members being fp plus fn when the lens system is focused for infinity, said cylindrical lens elements having the generatrices thereof all parallel, the lens system being constructed substantially according to the specifications in the following table, assuming that the focal length fn is 1.000 and the focal length fp is 1.000: 
+
+Lens Elements Radil Thicknesses nn u ri=+0.834 fp 1 t, =0.051fp 1. 611 5s. s 
+
+ Tz= 0.292 fp 2 h =0.017fp l. 605 38. 0 
+
+r3: 2.363 fp Si=0.81 (jp+fn) 1.034 fu 3 t; =0.039fn 1. 611 58.8 
+
+ rr=+0.7047 fn 4 h =0.2l1fn 1.649 33.8 
+
+ro= 2.114 fn Sz=0.084f1 r7= 1.784 fn 5 ls =0.035fn 1. 611 58.8 
+
+rg=+l .U14 fn wherein the first column lists the lens elements in order from the rear to the front; wherein nn is the index of refraction for the D-line of the spectrum, and v is the dispersive index; wherein r, t and S refer, respectively, to the radii of curvature of the refractive surfaces, the axial thicknesses of the lens elements, and the axial airspaces between the lens elements, the subscripts on the characters r, t and S being numbered from the rear to the front, and the plus and minus signs in the second column corresponding to refractive surfaces which are, respectively, convex and concave to the rear. 
+
+ 5. An anamorphic lens system comprising, in combination, a negative front member including three cylindrical lens elements and having the focal length fri, and a positive rear member including two cylindrical lens elements and having the focal length fp. the ratio between fp and fn being substantially 2:1, the distance between the principal points of said front and rear members being fp plus fn when the lens system is focused for innity, said cylindrical lens elements having the generatrices thereof all parallel, the lens system being constructed substantially according to the specifications in the following table, assuming that the focal length fn is 1.000 and the focal thicknesses of the lens elements, and the axial airspaces between the lens elements, the subscripts on the characters r, t and S being numbered from the rear to the front, and the plus and minus signs in the second column corresponding to refractive surfaces which are, respectively convex and concave to the rear. 
+
+ 7. An anamorphic lens system, comprising, in combination, a negative front member including three cylindrical lens elements and having the focal length 74.74 mm. and a positive rear member including two cylindrical lens elements and having the focal length 149.88 mm., the distance between the principal points of said front and rear members being 75.14 mm. when the lens system is focused for infinity, said cylindrical lens elements having the generatrices thereof all parallel, the lens system being constructed substantially according to the specifications in the following table: 
+
+length fp 1S 1.0002 Lens Elements Radli Thicknesses nu v Lens Elements Radi! Thlckriesscs 1m v ri=+1250 111111. 
+
+. 1 i1=2.5 mm. 1. 605 38.0 
+
+ ri=+35.68 mm. r,=+o.8a4fp 2 ii=8.5 mm. 1. 611 58. 8 1 n .10.057 fp 1. 611 5s. 8 ri=354.2 mm. 
+
+ 0.292 fp Si=60.9 mm. 2 i, =o.oi1fp 1.605 as. o 25 n= -715 mm. 
+
+ri= -aasafp 3 i3=2.9 mm. 1. 611 58. 8 
+
+ S|=0.81 Upd-fn) ri=+52.67 mm. ri=1.034fn 4 t.=15.8 mm. 1. 649 33.8 3 t; =0.o39 fn 1.611 58.8 r= -158.0 mm. 
+
+ rif-+0.7047/n Si=68 mm. 4 z. =o.211 f1', 1. 649 33. 8 r1=-133.3 mm. 
+
+r.=2.114fn 30 5 i5=2.6 mm. 1.611 58.8 
+
+ Sg=0.084 fn ri=+l20.6 mm. r1=-1.784/1i 5 i. =0.035 fn 1. 611 58. 8 
+
+f=+1614 fn wherein the rst column lists the lens elements 1n order from the rear to the front; wherein nD 1s the index of rewherein the rst column lists the lens elements in order from the rear to the front; wherein nn is the index of refraction for the D-line of the spectrum, and v is the dispersive index; wherein r, t and S refer, respectively, to the radii of curvature of the refractive surfaces, the axial thicknesses of the lens elements, and the axial airspaces between the lens elements, the subscripts on the characters r, t and S being numbered from the rear to the front, and the plus and minus signs in the second column corresponding to refractive surfaces which are, respectively, convex and concave to the rear. 
+
+ 6. An anamorphic lens system, comprising, in combination, a negative front member including three cylindrical lens elements and having the focal length --74.74 mm., and a positive rear member including two cylindrical lens elements and having the focal length 149.88 mm., the distance between the principal points of said front and rear members being 75.14 mm. when the lens system is focused for inlinity, said cylindrical lens elements having the generatrices thereof all parallel, the lens system being constructed substantially according to the specifications in the following table: 
+
+fraction for the D-line of the spectrum, and v is the dispersive index; wherein r, t and S refer, respectively, to the radii of curvature of the refractive surfaces, the axial thicknesses of the lens elements, and the axial airspaces between the lens elements, the subscripts on the characters r, t and S being numbered from the rear to the front, and the plus and minus signs in the second column corresponding to refractive surfaces which are, respectively, convex and concave to the rear. 
+
+ 8. An anamorphic lens system comprising, in combination, a negative front member including three cylindrical lens elements and having the focal length fn, and a positive rear member including two cylindrical lens elements and having the focal length fp, the ratio between fp and fn being between 1.5 :1 and 3: 1, the distance between the principal points of said front and rear members being fp plus fn when the lens system is focused for infinity, said cylindrical lens elements having the generatrices thereof all parallel, the lens system being constructed substantially according to the specification in the following table, assuming that the focal length fn is 1.000 and the focal length fp is 1.000: 
+
+Lens Elements Radil Thicknesscs 1m v Lens Elements Radii Thickuesses no v n=+125.0 mm. r1=+0.834 fp 1 n=s.5 mm. 1. 611 58. 8 30 1 i1=0.017 fp 1. 605 as. o 
+
+ r1= -43.76 mm. ri=+0.238 fp 2 t1=2.5 mm. l. 605 38. 0 2 tz=0.057fp 1. 611 58. 8 
+
+ri= 354.2 mm. r3= 2.363 fp S1=60.9 mm. Si=0.81 fp+f1i) r4=-77.5 mm. ri=-1.034f1i 3 t;=2.9 mm. 1. 611 58. 8 3 t3=0.039 fn. 1. 611 58. 8 
+
+ r5==+52.67 mm. 65 ri=+0.7047 [n 4 4=15.8 mm. l. 649 33. 8 4 t4=0.211f1i 1. 649 33.8 
+
+r= -158.0 mm. n= -2.114 fn S2=6.3 mm. S3=.084f17, r1=l33.3 mm. r1= -1.784fn 5 t5=2.6 mm. 1. 611 58. 8 5 t5=0.035f1i 1. Gll 58. 8 
+
+ri=+120.6 min. ri=+1.6l4f1i wherein the first column lists the lens elements in order from the rear to the front; wherein nD is the index of refraction for the D-line of the spectrum, and v is the dispersive index; wherein r, t and S refer, respectively, to the radii of curvature of the refractive surfaces, the axial wherein the first column lists the lens elements in order from the rear to the front; wherein nD is the index of refraction for the D-line of the spectrum, and v is the dispersive index; wherein r, t and S refer, respectively, to the radii of curvature of the refractive surfaces, the axial thicknesses of the lens elements, and the axial airspaces between the lens elements, the subscripts on the characters r, t and S being numbered from the rear to the front, and the plus and minus signs in the second column corresponding to refractive surfaces which are, respectively, convex and concave to the rear. 
+
+ 9. An anamorphic lens system comprising, in combination, a negative front member, including a negative cylindrical single lens element, having a forwardly facing outer airface concave to the front, the absolute value of the radii of curvature of the outer airsurface of said single lens element being not greater than 2.5 times the focal length'of said negative front member, and a cemented negative meniscus doublet rearwardly spaced a first airspace from said negative single lens element, said meniscus doublet including a forwardly located positive cylindrical lens element and a rearwardly located negative cylindrical lens element, said negative meniscus doublet having outer airsurfaces concave to the rear and a cemented interface convex to the rear, the change of the index of refraction across said cemented interface being less than 0.06, the radius of curvature of the rearwardly facing outer airsurface of said negative meniscus doublet being between two thirds and four thirds of the focal length of said negative front member, and the radius of curvature of the forwardly facing airsurface of said negative meniscus doublet being between tive thirds and eight thirds of the focal length of said negative front member, the sum of surface powers of said negative meniscus doublet being not greater than half the sum of surface powers of said single lens element; and a positive rear member spaced a second airspace from said negative meniscus doublet and being a positive cemented doublet including a negative cylindrical lens element and a positive cylindrical lens element, said positive doublet having a rearwardly facing outer airsurface convex to the rear, the radius of curvature of said rearwardly facing outer suface being not greater than the focal length of said positive doublet and not smaller than two thirds of said focal length of said positive doublet, a forwardly facing outer airsurface concave to the rear, the absolute value of the radius of curvature of said forwardly facing outer airsurface being not greater than three times said focal length of said positive doublet and not smaller than two times said focal length of said positive doublet, and a cemented interface, the change of the index of refraction across the cemented interface of said positive doublet being less than 0.03 so as to minimize higher order aberrations, said cylindrical lens elements having the generatrices thereof parallel, the principal points of said front and rear members being spaced an axial distance which is the sum of the focal lengths of said negative front member and of said positive rear member when the lens system is focused for infinity, the ratio between the focal lengths of said positive rear member and said negative front member being between 1.5 :1 and 3:1. 
+
+10. An anamorphic lens system comprising, in combination, a negative front member including a negative cylindrical single lens element having a forwardly facing outer airface concave to the front, the absolute value of the radii of curvature of the outer airsurfaces of said single lens element being not greater than 2.5 times the focal length of said negative front member, and a cemented negative meniscus doublet rearwardly spaced a first airspace from said negative single lens element, said meniscus doublet including a forwardly located positive cylindrical lens element and a rearwardly located negative cylindrical lens element, said negative front member being overcorrected for spherical aberration, said negative meniscus doublet having outer airsurfaces'concave to the rear and a cemented interface convex to the rear, the radius of curvature of the rearwardly facing outer airsurface of said negative meniscus doublet being between two thirds and four thirds of the focal length of said negative front member, and the radius of curvature of the forwardly facing airsurface of said negative meniscus doublet being between live thirds and eight thirds of the focal length of said negative front member, the sum of surface powers of said negative meniscus doublet being not greater than half the sum of surface powers of said single lens element; and a positive rear member spaced a second airspace from said negative meniscus doublet and being a positive cemented doublet including a negative cylindrical lens element and a positive cylindrical lens element, said positive doublet having a rearwardly facing outer airsurface convex to the rear, the radius of curvature of said rearwardly facing outer surface being not greater than the focal length of said positive doublet and not smaller than two thirds of said focal length of said positive doublet, said positive rear member being undercorrected for spherical aberration to balance the overcorrection of said negative front member, a forwardly facing outer airsurface concave to the rear, the absolute value of the radius of curvature of said forwardly facing outer airsurface being not greater than three times said focal length of said positive doublet and not smaller than two times said focal length of said positive doublet, and a cemented interface, said cylindrical lens elements having the generatrices thereof parallel, the principal points of said front and rear members being spaced an axial distance which is the sum of the focal lengths of said negative front member and of said positive rear member when the lens system is focused for infinity, the ratio between the focal lengths of said positivo rear member and said negative front member being between 1.5:1 and 3:1. 
+
+References Cited in the le of this patent UNITED STATES PATENTS 1,962,892 Chretien June 12, 1934 2,720,813 Cox Oct. 18, 1955 2,721,500 Kohler et al Oct. 25, 1955 2,752,821 Cook July 3, 1956

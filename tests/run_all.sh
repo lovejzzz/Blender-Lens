@@ -7,11 +7,22 @@ cd "$ROOT"
 python3 tests/test_optics.py | tail -1
 python3 tests/test_flare.py | tail -1
 python3 tests/test_presets.py | tail -1
+python3 tests/test_pupil.py | tail -1
+python3 tests/test_gpu_lenspack.py | tail -1
 "$BLENDER" -b --factory-startup --python tests/bl_smoke.py 2>&1 | grep -E "SMOKE|Traceback|rror:"
 "$BLENDER" -b --factory-startup --python tests/bl_presets_smoke.py 2>&1 | grep -E "PRESETS|Traceback|rror:"
-for p in c_series_style e_series_style g_series_style panavision_rear_134; do
+for p in c_series_style e_series_style g_series_style panavision_rear_134 panavision_rear_134_tele; do
   "$BLENDER" -b --factory-startup --python tests/bl_verify_mapping.py -- $p.json 2>&1 | grep -E "MAPPING|Traceback|rror:"
 done
+"$BLENDER" -b --factory-startup --python tests/bl_units.py 2>&1 | grep -E "UNITS|Traceback|rror:"
+"$BLENDER" -b --factory-startup --python tests/bl_sampling.py 2>&1 | grep -E "^SAMPLING |Traceback|rror:"
+"$BLENDER" -b --factory-startup --python tests/bl_gpu.py 2>&1 | grep -E "^GPU |Traceback|rror:"
+for p in c_series_style panavision_rear_134_tele; do
+  "$BLENDER" -b --factory-startup --python tests/bl_verify_mapping.py -- $p.json --gpu 2>&1 | grep -E "MAPPING|Traceback|rror:"
+done
+"$BLENDER" -b --factory-startup --python tests/bl_dispersion.py 2>&1 | grep -E "^DISP|Traceback|rror:"
+"$BLENDER" -b --factory-startup --python tests/bl_percentage.py 2>&1 | grep -E "^PCT |Traceback|rror:"
+"$BLENDER" -b --factory-startup --python tests/bl_frames.py 2>&1 | grep -E "^FRAMES|Traceback|rror:"
 "$BLENDER" -b --factory-startup --python tests/bl_acceptance.py -- all 2>&1 | grep -E "ACCEPT|Traceback|rror:"
 mkdir -p dist
 "$BLENDER" --command extension build --source-dir blenderlens --output-dir dist | tail -1

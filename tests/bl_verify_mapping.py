@@ -8,13 +8,19 @@ import blenderlens
 from blenderlens import rig, optics as O
 
 OUT = os.path.join(ROOT, "renders")
-PRESET = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "c_series_style.json"
-TAG = PRESET.replace(".json", "")
+_args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+GPU = "--gpu" in _args                           # Analytic 用 BlenderLens GPU 路径（Metal 等）渲染
+_args = [a for a in _args if not a.startswith("--")]
+PRESET = _args[0] if _args else "c_series_style.json"
+TAG = PRESET.replace(".json", "") + ("_gpu" if GPU else "")
 LT = 3000.0                       # 靶面到像面距离（mm）
 H_PX = 540
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 blenderlens.register()
+if GPU:
+    import blenderlens.api as bl
+    assert bl.enable_gpu(use_gpu=True)[0], "GPU 路径不可用"
 bpy.ops.blenderlens.build(preset=PRESET, height=H_PX)
 sc = bpy.context.scene
 cam_ob = sc.camera
@@ -110,6 +116,8 @@ def centroids(sig, thr):
 def render_and_measure(mode, samples):
     p.mode = mode
     rig.render_preset(sc, mode)
+    if GPU:
+        sc.cycles.device = 'GPU'                     # Geometry 模式会被 render_init 自动改回 CPU
     sc.cycles.samples = samples
     path = os.path.join(OUT, f"map_{TAG}_{mode.lower()}.png")
     sc.render.filepath = path

@@ -58,6 +58,29 @@ fz = O.paraxial_infinity(zoom, "Ry")[0]
 ok(abs(fz / 15.3 - 1) < 0.01, f"PV: zoom alone EFL {fz:.3f} vs patent ≈15.3")
 ok(O.stop_geometry(rx, S)[1] == 10.51, "PV: iris semi-diameter 10.51 at f/3.66")
 
+# ── Panavision 内对焦：两向同时合焦、无发腮（短焦与长焦）──
+for fn in ("panavision_rear_134.json", "panavision_rear_134_tele.json"):
+    r = P(fn)
+    for dist in (3000.0, 1000.0):
+        ry, rxx = O.focus_residual(r, dist)
+        ok(abs(ry) < 1e-6 and abs(rxx) < 1e-3, f"{fn}: focus {dist / 1000:.0f} m residual v {ry:+.5f} h {rxx:+.5f} mm")
+    ok(abs(O.squeeze_at(r, 1000.0) / O.squeeze_at(r, math.inf) - 1) < 1e-3, f"{fn}: no mumps (squeeze 1 m / ∞ = {O.squeeze_at(r, 1000.0) / O.squeeze_at(r, math.inf):.5f})")
+# 专利 US 6,122,111 TABLE 1：物距从物面量到 S1（S2 前 1 mm，随前组移动），前组行程 F2 11.099、F3 21.684 mm
+r = P("panavision_rear_134.json"); z2 = O.layout(r)[0]["z"]
+for od, pat, tol in ((330.0, 11.099, 0.02), (133.0, 21.684, 0.002)):
+    d = 0.0
+    for _ in range(30):
+        d = O.solve_focus(r, od + 1.0 + z2 + d)[0]
+    ok(abs(d / pat - 1) < tol, f"PV internal focus: travel at {od:.0f} mm from S1 {d:.3f} vs patent {pat}")
+for fn in ("panavision_rear_134.json", "panavision_rear_134_tele.json"):
+    ry, rxx = O.focus_residual(P(fn), 476.0)
+    ok(abs(ry) < 1e-6 and abs(rxx) < 1e-3, f"{fn}: focus at MFD 476 mm residual v {ry:+.5f} h {rxx:+.5f}")
+tele = P("panavision_rear_134_tele.json")
+import copy as _c
+rz = _c.deepcopy(tele); rz["groups"] = [rz["groups"][0]]; rz.pop("image_distance_mm"); rz["focus"]["groups"] = []
+fz = O.paraxial_infinity(O.layout(rz), "Ry")[0]
+ok(abs(fz / 49.2 - 1) < 0.005, f"PV tele: zoom alone at Z4 EFL {fz:.2f} vs patent 49.2")
+
 # ── 非球面梯度（S3）──
 s3 = next(s for s in S if s["id"] == "S3")
 for x, y in ((12.0, 5.0), (25.0, -18.0), (-30.0, 20.0)):
