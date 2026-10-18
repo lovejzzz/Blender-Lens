@@ -1,7 +1,7 @@
 {
   "meta": {
-    "name": "Panavision 风格 2× 前组变形镜头（公开专利组合）",
-    "note": "单一事实来源：改处方只改本文件，网格全部由它生成。Panavision 真实处方未公开，这里是同架构的公开专利组合。",
+    "name": "C 系列风格 · 前置 2× 变形 50 mm（Rosin 1957 + Nikon f/2）",
+    "note": "Panavision C 系列处方未公开。本选项用同时代、同结构的公开专利（Rosin/Scanoptic 1957 前置 2× 柱面组）加公开的 f/2 双高斯主镜，观感参数按 Panavision 公布的 C 系列 50 mm 规格设定。不是 C 系列的复刻。",
     "units": "mm",
     "conventions": {
       "origin": "像面（传感器）",
@@ -14,7 +14,10 @@
       "medium": "该面之后（像方一侧）的介质",
       "cylinder": "柱面镜只在水平主截面（x）有光焦度：R_y = null",
       "aperture": "每面 aperture 为物理 mm（已缩放，不再乘 scale）：柱面镜片 rect(semi_x, semi_y)；球面镜片 circle(clear 通光半径, outer 外半径，二者之间为黑色平台)"
-    }
+    },
+    "short_name": "C 系列风格（1968）",
+    "order": 1,
+    "tagline": "1950–60 年代前置变形器：靠改变柱面组间距对焦，发腮明显；单层镀膜的蓝色拉丝"
   },
   "glasses": {
     "air": {
@@ -61,7 +64,8 @@
           "fp": 149.88,
           "fp_over_fn": 2.0,
           "field_angle_deg": 80
-        }
+        },
+        "verified": "2026-10-18 逐位对照扫描原件（第 4 栏毫米表）无误；近轴 fn −74.73 / fp 149.87"
       },
       "scale": 1.0,
       "surfaces": [
@@ -75,8 +79,8 @@
           "element": "5 双凹负单片",
           "aperture": {
             "shape": "rect",
-            "semi_x": 29.75,
-            "semi_y": 32.25
+            "semi_x": 27.75,
+            "semi_y": 28.5
           }
         },
         {
@@ -89,8 +93,8 @@
           "note": "d = s2",
           "aperture": {
             "shape": "rect",
-            "semi_x": 29.75,
-            "semi_y": 32.25
+            "semi_x": 27.75,
+            "semi_y": 28.5
           }
         },
         {
@@ -103,8 +107,8 @@
           "element": "4 双凸正（胶合）",
           "aperture": {
             "shape": "rect",
-            "semi_x": 27.0,
-            "semi_y": 30.75
+            "semi_x": 25.25,
+            "semi_y": 27.0
           }
         },
         {
@@ -117,8 +121,8 @@
           "element": "3 双凹负（胶合）",
           "aperture": {
             "shape": "rect",
-            "semi_x": 27.0,
-            "semi_y": 30.75
+            "semi_x": 25.25,
+            "semi_y": 27.0
           }
         },
         {
@@ -131,8 +135,8 @@
           "note": "d = s1；归一化表 r4=-1.034fn(=-77.28) 与毫米表不符，近轴验证取 -77.5",
           "aperture": {
             "shape": "rect",
-            "semi_x": 27.0,
-            "semi_y": 30.75
+            "semi_x": 25.25,
+            "semi_y": 27.0
           }
         },
         {
@@ -145,8 +149,8 @@
           "element": "2 负弯月（胶合）",
           "aperture": {
             "shape": "rect",
-            "semi_x": 16.0,
-            "semi_y": 16.5
+            "semi_x": 12.5,
+            "semi_y": 12.5
           }
         },
         {
@@ -159,8 +163,8 @@
           "element": "1 双凸正（胶合）",
           "aperture": {
             "shape": "rect",
-            "semi_x": 16.0,
-            "semi_y": 16.5
+            "semi_x": 12.5,
+            "semi_y": 12.5
           }
         },
         {
@@ -173,8 +177,8 @@
           "note": "d = 到主镜第一面的间隔：专利未给，我方取值，可调",
           "aperture": {
             "shape": "rect",
-            "semi_x": 16.0,
-            "semi_y": 16.5
+            "semi_x": 12.5,
+            "semi_y": 12.5
           }
         }
       ]
@@ -183,7 +187,7 @@
       "id": "prime",
       "role": "后组球面主镜：双高斯 6 片 5 组，f/2，2ω = 46°",
       "source": {
-        "patent": "US 4,234,242 — S. Nakamura, Gauss Type Photographic Lens（Nippon Kogaku），1979 申请 / 1980 授权",
+        "patent": "US 4,234,242 — S. Nakamura, Gauss Type Photographic Lens（Nippon Kogaku），1979-01-30 申请（优先权 1978-02-03）/ 1980-11-18 授权",
         "url": "https://patents.google.com/patent/US4234242A",
         "table": "实施例 1（f = 100 归一化）",
         "patent_values": {
@@ -192,7 +196,7 @@
           "bfl": 74.8,
           "total_length": 128.3
         },
-        "verified": "近轴追迹 EFL = 100.000、BFL = 74.84；r2 取说明书 3682.171（权利要求 6682.171 为笔误，代入得 EFL 99.40）"
+        "verified": "近轴追迹 EFL = 100.000、BFL = 74.84；r2 取说明书 3682.171（权利要求 6682.171 为笔误，代入得 EFL 99.40）；2026-10-18 逐位对照扫描原件（第 5–6 栏 Example 1）无误"
       },
       "normalized_f": 100.0,
       "target_f": 50.0,
@@ -208,8 +212,8 @@
           "element": "L1",
           "aperture": {
             "shape": "circle",
-            "clear": 14.0,
-            "outer": 14.0
+            "clear": 11.75,
+            "outer": 11.75
           }
         },
         {
@@ -220,8 +224,8 @@
           "medium": "air",
           "aperture": {
             "shape": "circle",
-            "clear": 13.75,
-            "outer": 14.0
+            "clear": 11.5,
+            "outer": 11.75
           }
         },
         {
@@ -233,8 +237,8 @@
           "element": "L2",
           "aperture": {
             "shape": "circle",
-            "clear": 12.25,
-            "outer": 12.25
+            "clear": 10.75,
+            "outer": 10.75
           }
         },
         {
@@ -245,8 +249,8 @@
           "medium": "air",
           "aperture": {
             "shape": "circle",
-            "clear": 10.75,
-            "outer": 12.25
+            "clear": 9.75,
+            "outer": 10.75
           }
         },
         {
@@ -258,8 +262,8 @@
           "element": "L3",
           "aperture": {
             "shape": "circle",
-            "clear": 10.75,
-            "outer": 10.75
+            "clear": 9.5,
+            "outer": 9.5
           }
         },
         {
@@ -271,8 +275,8 @@
           "note": "光阑在此空气间隔内，专利未给位置",
           "aperture": {
             "shape": "circle",
-            "clear": 10.0,
-            "outer": 10.75
+            "clear": 8.75,
+            "outer": 9.5
           }
         },
         {
@@ -284,8 +288,8 @@
           "element": "L4 负（胶合）",
           "aperture": {
             "shape": "circle",
-            "clear": 9.75,
-            "outer": 11.0
+            "clear": 8.5,
+            "outer": 9.5
           }
         },
         {
@@ -297,8 +301,8 @@
           "element": "L4 正（胶合）",
           "aperture": {
             "shape": "circle",
-            "clear": 10.5,
-            "outer": 11.0
+            "clear": 9.0,
+            "outer": 9.5
           }
         },
         {
@@ -309,8 +313,8 @@
           "medium": "air",
           "aperture": {
             "shape": "circle",
-            "clear": 11.0,
-            "outer": 11.0
+            "clear": 9.5,
+            "outer": 9.5
           }
         },
         {
@@ -322,8 +326,8 @@
           "element": "L5",
           "aperture": {
             "shape": "circle",
-            "clear": 11.25,
-            "outer": 11.25
+            "clear": 9.25,
+            "outer": 9.25
           }
         },
         {
@@ -335,8 +339,8 @@
           "note": "d = BFL，由近轴追迹求出",
           "aperture": {
             "shape": "circle",
-            "clear": 11.0,
-            "outer": 11.25
+            "clear": 9.0,
+            "outer": 9.25
           }
         }
       ],
@@ -345,38 +349,57 @@
         "offset_fraction": 0.5,
         "assumed": true,
         "note": "暂取间隔中点，待按出瞳/渐晕调整",
-        "semi_diameter_at_f_number": 9.206,
-        "z_at_infinity": 50.034
+        "semi_diameter_at_f_number": 8.005,
+        "z_at_infinity": 50.034,
+        "f_number": 2.0
       }
     }
   ],
   "focus": {
-    "mechanism": "双组联动：整体单元（主镜 + 变形器后组 A6–A8）前移 Δ1 使垂直截面合焦；变形器前组 A1–A5 再额外移动 Δ2（改变 s1）使水平截面合焦",
-    "unit": [
-      "P1",
-      "P2",
-      "P3",
-      "P4",
-      "P5",
-      "P6",
-      "P7",
-      "P8",
-      "P9",
-      "P10",
-      "P11",
-      "A6",
-      "A7",
-      "A8"
+    "mechanism": "双组联动：整体单元（主镜 + 变形器后组 A6–A8）移动 Δ1；变形器前组 A1–A5 移动 Δ1+Δ2（改变 s1）。两截面同时求解",
+    "min_distance_mm": 762.0,
+    "note": "物距从像面量起。变形器靠改变间距对焦属于老式结构，会产生明显发腮；这正是第四节第 4 项要测的",
+    "groups": [
+      {
+        "ids": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "A6",
+          "A7",
+          "A8"
+        ],
+        "moves": [
+          1,
+          0
+        ]
+      },
+      {
+        "ids": [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5"
+        ],
+        "moves": [
+          1,
+          1
+        ]
+      }
     ],
-    "front_member": [
-      "A1",
-      "A2",
-      "A3",
-      "A4",
-      "A5"
-    ],
-    "min_distance_mm": 900.0,
-    "note": "物距从像面量起。变形器靠改变间距对焦属于老式结构，会产生明显发腮；这正是第四节第 4 项要测的"
+    "solve": [
+      "Ry",
+      "Rx"
+    ]
   },
   "sensor": {
     "format": "35 mm 变形光窗（SMPTE 59）",
@@ -392,8 +415,21 @@
   "aperture_design": {
     "method": "真实光线追迹：传感器 9 个视场点 × 光阑边缘 48 点 + 中心，追到物方取各面最大高度",
     "margin": 0.07,
-    "corner_pupil_fraction": 0.6,
+    "corner_pupil_fraction": 0.4,
     "round_to_mm": 0.25,
-    "note": "角落视场只放行 60% 光瞳 → 机械渐晕，即边缘猫眼焦外的来源；收光圈后渐晕消失、焦外变圆"
+    "note": "角落视场只放行 40% 光瞳 → 机械渐晕，即边缘猫眼焦外的来源；收光圈后渐晕消失、焦外变圆"
+  },
+  "anamorphic": {
+    "desqueeze": 2.0,
+    "type": "front"
+  },
+  "look": {
+    "reference": "Panavision C Series 50 mm T2.3，最近对焦 76.2 cm（panavision.com C Series 产品页）；页面原文：a pronounced anamorphic flare",
+    "f_number": 2.3,
+    "min_focus_mm": 762.0,
+    "coating_nm": 135.0,
+    "flare_color": "PHYSICAL",
+    "flare_gain": 1.5,
+    "corner_pupil_fraction": 0.4
   }
 }

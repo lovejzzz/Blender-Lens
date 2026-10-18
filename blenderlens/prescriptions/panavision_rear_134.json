@@ -1,0 +1,1464 @@
+{
+  "meta": {
+    "name": "Panavision 后置 1.34× 变形（US 7,085,066 原处方：变焦镜 + 8 片后置变形组）",
+    "short_name": "Panavision 后置 1.34×（真实处方）",
+    "order": 4,
+    "tagline": "唯一公开的 Panavision 变形处方：后置变形组，16:9 画幅解挤压到 2.40:1；变焦镜取短焦端",
+    "note": "Iain A. Neil 为 Panavision 设计，2004 申请、2006 授权。后置变形组位于变焦镜与反光镜之间约 26 mm 内；前 46 面是 US 6,122,111 的变焦镜（短焦端、无穷远）。",
+    "units": "mm",
+    "conventions": {
+      "origin": "像面（传感器）",
+      "object_side": "+Z",
+      "light_travels": "-Z",
+      "surface_order": "从物方到像方",
+      "radius_sign": "R > 0：曲率中心在像方（-Z 一侧）；R < 0：在物方；null = 平面（无穷大）",
+      "surface_z": "z = z_vertex - sag(x, y)",
+      "d": "该面到下一面的轴上距离（专利原值，使用时乘该组 scale）",
+      "medium": "该面之后（像方一侧）的介质",
+      "cylinder": "柱面镜只在水平主截面（x）有光焦度：R_y = null",
+      "aperture": "每面 aperture 为物理 mm（已缩放，不再乘 scale）：柱面镜片 rect(semi_x, semi_y)；球面镜片 circle(clear 通光半径, outer 外半径，二者之间为黑色平台)"
+    }
+  },
+  "glasses": {
+    "air": {
+      "nd": 1.0,
+      "vd": null
+    },
+    "PV_FPL53": {
+      "nd": 1.43875,
+      "vd": 94.96,
+      "code": "438950",
+      "name": "FPL53",
+      "code_values": [
+        1.438,
+        95.0
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PHM52": {
+      "nd": 1.618,
+      "vd": 63.39,
+      "code": "618634",
+      "name": "PHM52",
+      "code_values": [
+        1.6179999999999999,
+        63.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PBH6W": {
+      "nd": 1.80518,
+      "vd": 25.44,
+      "code": "805254",
+      "name": "PBH6W",
+      "code_values": [
+        1.8050000000000002,
+        25.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PBM6": {
+      "nd": 1.63636,
+      "vd": 35.38,
+      "code": "636354",
+      "name": "PBM6",
+      "code_values": [
+        1.6360000000000001,
+        35.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAH63": {
+      "nd": 1.8044,
+      "vd": 39.58,
+      "code": "804396",
+      "name": "LAH63",
+      "code_values": [
+        1.804,
+        39.6
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAM55": {
+      "nd": 1.762,
+      "vd": 40.1,
+      "code": "762401",
+      "name": "LAM55",
+      "code_values": [
+        1.762,
+        40.1
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PBH53W": {
+      "nd": 1.84666,
+      "vd": 23.89,
+      "code": "847239",
+      "name": "PBH53W",
+      "code_values": [
+        1.847,
+        23.9
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAH53": {
+      "nd": 1.8061,
+      "vd": 40.95,
+      "code": "806410",
+      "name": "LAH53",
+      "code_values": [
+        1.806,
+        41.0
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAH65": {
+      "nd": 1.804,
+      "vd": 46.58,
+      "code": "804466",
+      "name": "LAH65",
+      "code_values": [
+        1.804,
+        46.6
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAL59": {
+      "nd": 1.734,
+      "vd": 51.49,
+      "code": "734515",
+      "name": "LAL59",
+      "code_values": [
+        1.734,
+        51.5
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_BPH8": {
+      "nd": 1.72047,
+      "vd": 34.72,
+      "code": "720347",
+      "name": "BPH8",
+      "code_values": [
+        1.72,
+        34.7
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PHM53": {
+      "nd": 1.603,
+      "vd": 65.48,
+      "code": "603655",
+      "name": "PHM53",
+      "code_values": [
+        1.603,
+        65.5
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_SSL5": {
+      "nd": 1.5213,
+      "vd": 52.55,
+      "code": "521526",
+      "name": "SSL5",
+      "code_values": [
+        1.521,
+        52.6
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAM61": {
+      "nd": 1.72,
+      "vd": 46.04,
+      "code": "720460",
+      "name": "LAM61",
+      "code_values": [
+        1.72,
+        46.0
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_PBH11W": {
+      "nd": 1.78472,
+      "vd": 25.71,
+      "code": "785257",
+      "name": "PBH11W",
+      "code_values": [
+        1.7850000000000001,
+        25.7
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_LAH78": {
+      "nd": 1.90135,
+      "vd": 31.55,
+      "code": "901315",
+      "name": "LAH78",
+      "code_values": [
+        1.901,
+        31.5
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_SLAH59": {
+      "nd": 1.816,
+      "vd": 46.62,
+      "code": "816466",
+      "name": "SLAH59",
+      "code_values": [
+        1.8159999999999998,
+        46.6
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_SBAH10": {
+      "nd": 1.67003,
+      "vd": 47.23,
+      "code": "670473",
+      "name": "SBAH10",
+      "code_values": [
+        1.67,
+        47.3
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_STIM1": {
+      "nd": 1.62588,
+      "vd": 35.7,
+      "code": "626357",
+      "name": "STIM1",
+      "code_values": [
+        1.626,
+        35.7
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_STIH53": {
+      "nd": 1.84666,
+      "vd": 23.78,
+      "code": "847238",
+      "name": "STIH53",
+      "code_values": [
+        1.847,
+        23.8
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_SLAH64": {
+      "nd": 1.788,
+      "vd": 47.37,
+      "code": "788474",
+      "name": "SLAH64",
+      "code_values": [
+        1.788,
+        47.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    },
+    "PV_STIH6": {
+      "nd": 1.80518,
+      "vd": 25.42,
+      "code": "805254",
+      "name": "STIH6",
+      "code_values": [
+        1.8050000000000002,
+        25.4
+      ],
+      "note": "Ohara 目录值；专利只给代码"
+    }
+  },
+  "groups": [
+    {
+      "id": "zoom",
+      "role": "US 6,122,111 变焦镜，短焦端 F1/Z1，无穷远",
+      "scale": 1.0,
+      "aperture_source": "patent",
+      "f_number": 3.66,
+      "stop": {
+        "after_surface": "S22",
+        "offset_mm": 1.3,
+        "semi_diameter": 10.51,
+        "f_number": 3.66,
+        "note": "Iris S23（专利：f/3.66 时半径 10.51）"
+      },
+      "surfaces": [
+        {
+          "id": "S2",
+          "R_x": 218.818,
+          "R_y": 218.818,
+          "d": 5.0,
+          "medium": "PV_FPL53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 50.12,
+            "Y": null,
+            "X": null
+          },
+          "element": "1",
+          "aperture": {
+            "shape": "circle",
+            "clear": 50.12,
+            "outer": 50.12
+          }
+        },
+        {
+          "id": "S3",
+          "R_x": 38.506,
+          "R_y": 38.506,
+          "d": 23.534,
+          "medium": "air",
+          "shape": "Asphere",
+          "patent_heights": {
+            "radial": 38.15,
+            "Y": null,
+            "X": null
+          },
+          "k": -1.5066,
+          "asph": [
+            2.0962e-06,
+            -7.9395e-10,
+            6.1324e-13,
+            -2.8537e-16,
+            3.1072e-20
+          ],
+          "aperture": {
+            "shape": "circle",
+            "clear": 38.15,
+            "outer": 50.12
+          }
+        },
+        {
+          "id": "S4",
+          "R_x": 222.116,
+          "R_y": 222.116,
+          "d": 3.8,
+          "medium": "PV_PHM52",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 35.31,
+            "Y": null,
+            "X": null
+          },
+          "element": "2",
+          "aperture": {
+            "shape": "circle",
+            "clear": 35.31,
+            "outer": 35.31
+          }
+        },
+        {
+          "id": "S5",
+          "R_x": 43.238,
+          "R_y": 43.238,
+          "d": 5.3,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 30.67,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 30.67,
+            "outer": 35.31
+          }
+        },
+        {
+          "id": "S6",
+          "R_x": 51.336,
+          "R_y": 51.336,
+          "d": 15.592,
+          "medium": "PV_PBH6W",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 30.72,
+            "Y": null,
+            "X": null
+          },
+          "element": "3",
+          "aperture": {
+            "shape": "circle",
+            "clear": 30.72,
+            "outer": 30.72
+          }
+        },
+        {
+          "id": "S7",
+          "R_x": 77.033,
+          "R_y": 77.033,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 27.53,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 27.53,
+            "outer": 30.72
+          }
+        },
+        {
+          "id": "S8",
+          "R_x": 43.19,
+          "R_y": 43.19,
+          "d": 7.697,
+          "medium": "PV_FPL53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 26.53,
+            "Y": null,
+            "X": null
+          },
+          "element": "4",
+          "aperture": {
+            "shape": "circle",
+            "clear": 26.53,
+            "outer": 26.53
+          }
+        },
+        {
+          "id": "S9",
+          "R_x": 55.573,
+          "R_y": 55.573,
+          "d": 4.54,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 24.8,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 24.8,
+            "outer": 26.53
+          }
+        },
+        {
+          "id": "S11",
+          "R_x": 129.546,
+          "R_y": 129.546,
+          "d": 5.181,
+          "medium": "PV_PBM6",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 24.45,
+            "Y": null,
+            "X": null
+          },
+          "element": "5",
+          "aperture": {
+            "shape": "circle",
+            "clear": 24.45,
+            "outer": 24.45
+          }
+        },
+        {
+          "id": "S12",
+          "R_x": -318.127,
+          "R_y": -318.127,
+          "d": 2.2,
+          "medium": "PV_LAH63",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 23.9,
+            "Y": null,
+            "X": null
+          },
+          "element": "6",
+          "aperture": {
+            "shape": "circle",
+            "clear": 23.9,
+            "outer": 24.45
+          }
+        },
+        {
+          "id": "S13",
+          "R_x": 97.742,
+          "R_y": 97.742,
+          "d": 3.87,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 22.48,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 22.48,
+            "outer": 24.45
+          }
+        },
+        {
+          "id": "S14",
+          "R_x": -515.815,
+          "R_y": -515.815,
+          "d": 2.17,
+          "medium": "PV_LAM55",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 22.29,
+            "Y": null,
+            "X": null
+          },
+          "element": "7",
+          "aperture": {
+            "shape": "circle",
+            "clear": 22.29,
+            "outer": 22.29
+          }
+        },
+        {
+          "id": "S15",
+          "R_x": 86.505,
+          "R_y": 86.505,
+          "d": 0.7,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 21.63,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 21.63,
+            "outer": 22.29
+          }
+        },
+        {
+          "id": "S16",
+          "R_x": 44.464,
+          "R_y": 44.464,
+          "d": 3.56,
+          "medium": "PV_PBH53W",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 21.57,
+            "Y": null,
+            "X": null
+          },
+          "element": "8",
+          "aperture": {
+            "shape": "circle",
+            "clear": 21.57,
+            "outer": 21.57
+          }
+        },
+        {
+          "id": "S17",
+          "R_x": 56.665,
+          "R_y": 56.665,
+          "d": 2.0,
+          "medium": "PV_LAH53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 21.05,
+            "Y": null,
+            "X": null
+          },
+          "element": "9",
+          "aperture": {
+            "shape": "circle",
+            "clear": 21.05,
+            "outer": 21.57
+          }
+        },
+        {
+          "id": "S18",
+          "R_x": 38.814,
+          "R_y": 38.814,
+          "d": 1.38,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.14,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.14,
+            "outer": 21.57
+          }
+        },
+        {
+          "id": "S19",
+          "R_x": 47.058,
+          "R_y": 47.058,
+          "d": 3.798,
+          "medium": "PV_PBH6W",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 20.15,
+            "Y": null,
+            "X": null
+          },
+          "element": "10",
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.15,
+            "outer": 20.15
+          }
+        },
+        {
+          "id": "S20",
+          "R_x": 70.812,
+          "R_y": 70.812,
+          "d": 81.386,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 19.74,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 19.74,
+            "outer": 20.15
+          }
+        },
+        {
+          "id": "S21",
+          "R_x": 73.576,
+          "R_y": 73.576,
+          "d": 5.284,
+          "medium": "PV_PHM52",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 11.34,
+            "Y": null,
+            "X": null
+          },
+          "element": "11",
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.34,
+            "outer": 11.34
+          }
+        },
+        {
+          "id": "S22",
+          "R_x": -467.06,
+          "R_y": -467.06,
+          "d": 2.62,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 10.82,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.82,
+            "outer": 11.34
+          }
+        },
+        {
+          "id": "S24",
+          "R_x": 64.719,
+          "R_y": 64.719,
+          "d": 4.599,
+          "medium": "PV_PHM52",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 10.62,
+            "Y": null,
+            "X": null
+          },
+          "element": "12",
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.62,
+            "outer": 10.62
+          }
+        },
+        {
+          "id": "S25",
+          "R_x": 280.545,
+          "R_y": 280.545,
+          "d": 6.476,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 10.48,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.48,
+            "outer": 10.62
+          }
+        },
+        {
+          "id": "S26",
+          "R_x": -44.031,
+          "R_y": -44.031,
+          "d": 2.15,
+          "medium": "PV_LAH65",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 10.31,
+            "Y": null,
+            "X": null
+          },
+          "element": "13",
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.31,
+            "outer": 10.59
+          }
+        },
+        {
+          "id": "S27",
+          "R_x": -276.492,
+          "R_y": -276.492,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 10.59,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.59,
+            "outer": 10.59
+          }
+        },
+        {
+          "id": "S28",
+          "R_x": 104.569,
+          "R_y": 104.569,
+          "d": 11.912,
+          "medium": "PV_FPL53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 10.7,
+            "Y": null,
+            "X": null
+          },
+          "element": "14",
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.7,
+            "outer": 11.27
+          }
+        },
+        {
+          "id": "S29",
+          "R_x": -45.864,
+          "R_y": -45.864,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 11.27,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.27,
+            "outer": 11.27
+          }
+        },
+        {
+          "id": "S30",
+          "R_x": -125.907,
+          "R_y": -125.907,
+          "d": 2.2,
+          "medium": "PV_LAL59",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 11.24,
+            "Y": null,
+            "X": null
+          },
+          "element": "15",
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.24,
+            "outer": 11.32
+          }
+        },
+        {
+          "id": "S31",
+          "R_x": 63.152,
+          "R_y": 63.152,
+          "d": 4.979,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 11.32,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.32,
+            "outer": 11.32
+          }
+        },
+        {
+          "id": "S32",
+          "R_x": 14624.0,
+          "R_y": 14624.0,
+          "d": 2.25,
+          "medium": "PV_BPH8",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 12.02,
+            "Y": null,
+            "X": null
+          },
+          "element": "16",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.02,
+            "outer": 13.37
+          }
+        },
+        {
+          "id": "S33",
+          "R_x": 84.356,
+          "R_y": 84.356,
+          "d": 9.972,
+          "medium": "PV_PHM53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 12.34,
+            "Y": null,
+            "X": null
+          },
+          "element": "17",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.34,
+            "outer": 13.37
+          }
+        },
+        {
+          "id": "S34",
+          "R_x": -87.065,
+          "R_y": -87.065,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 13.37,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.37,
+            "outer": 13.37
+          }
+        },
+        {
+          "id": "S35",
+          "R_x": 88.905,
+          "R_y": 88.905,
+          "d": 2.55,
+          "medium": "PV_SSL5",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 13.7,
+            "Y": null,
+            "X": null
+          },
+          "element": "18",
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.7,
+            "outer": 14.68
+          }
+        },
+        {
+          "id": "S36",
+          "R_x": 56.43,
+          "R_y": 56.43,
+          "d": 14.288,
+          "medium": "PV_FPL53",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 13.84,
+            "Y": null,
+            "X": null
+          },
+          "element": "19",
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.84,
+            "outer": 14.68
+          }
+        },
+        {
+          "id": "S37",
+          "R_x": -114.09,
+          "R_y": -114.09,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.68,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.68,
+            "outer": 14.68
+          }
+        },
+        {
+          "id": "S38",
+          "R_x": 84.019,
+          "R_y": 84.019,
+          "d": 6.824,
+          "medium": "PV_LAM61",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.83,
+            "Y": null,
+            "X": null
+          },
+          "element": "20",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.83,
+            "outer": 14.83
+          }
+        },
+        {
+          "id": "S39",
+          "R_x": 391.268,
+          "R_y": 391.268,
+          "d": 0.7,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.6,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.6,
+            "outer": 14.83
+          }
+        },
+        {
+          "id": "S41",
+          "R_x": 1395.656,
+          "R_y": 1395.656,
+          "d": 2.527,
+          "medium": "PV_PBH11W",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.58,
+            "Y": null,
+            "X": null
+          },
+          "element": "21",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.58,
+            "outer": 14.58
+          }
+        },
+        {
+          "id": "S42",
+          "R_x": -105.898,
+          "R_y": -105.898,
+          "d": 0.1,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.54,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.54,
+            "outer": 14.58
+          }
+        },
+        {
+          "id": "S43",
+          "R_x": -220.862,
+          "R_y": -220.862,
+          "d": 1.8,
+          "medium": "PV_LAH78",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.44,
+            "Y": null,
+            "X": null
+          },
+          "element": "22",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.44,
+            "outer": 14.44
+          }
+        },
+        {
+          "id": "S44",
+          "R_x": 72.073,
+          "R_y": 72.073,
+          "d": 0.911,
+          "medium": "air",
+          "shape": "Asphere",
+          "patent_heights": {
+            "radial": 14.25,
+            "Y": null,
+            "X": null
+          },
+          "k": -2.2286,
+          "asph": [
+            2.2871e-06,
+            -2.1575e-09,
+            9.2167e-12,
+            -1.2856e-14,
+            0.0
+          ],
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.25,
+            "outer": 14.44
+          }
+        },
+        {
+          "id": "S45",
+          "R_x": 128.877,
+          "R_y": 128.877,
+          "d": 3.169,
+          "medium": "PV_LAM61",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.27,
+            "Y": null,
+            "X": null
+          },
+          "element": "23",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.27,
+            "outer": 14.29
+          }
+        },
+        {
+          "id": "S46",
+          "R_x": -118.373,
+          "R_y": -118.373,
+          "d": 1.432,
+          "medium": "air",
+          "shape": "Sphere",
+          "patent_heights": {
+            "radial": 14.29,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.29,
+            "outer": 14.29
+          }
+        }
+      ],
+      "source": {
+        "patent": "US 7,085,066 B2 — I. A. Neil, Anamorphic imaging system（Panavision International），2004 申请 / 2006 授权",
+        "url": "https://patents.google.com/patent/US7085066B2/en",
+        "table": "TABLE I（CODE V 导出，20 °C；玻璃为 Ohara 代码）",
+        "patent_values": {
+          "efl_x": 15.81,
+          "efl_y": 20.6,
+          "f_number_x": 3.15,
+          "f_number_y": 4.1,
+          "f_number_effective": 3.66,
+          "squeeze_nominal": 1.34,
+          "zoom_efl_alone": 15.3,
+          "corner_relative_illumination": 0.5
+        }
+      }
+    },
+    {
+      "id": "anamorph",
+      "role": "后置变形组：Y 向柱面 3 片（挤压）+ X 向柱面 5 片（像差控制），垂直拉伸 1.34×",
+      "scale": 1.0,
+      "aperture_source": "patent",
+      "surfaces": [
+        {
+          "id": "S47",
+          "R_x": null,
+          "R_y": 136.373,
+          "d": 2.444,
+          "medium": "PV_SLAH59",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 14.12,
+            "Y": null,
+            "X": null
+          },
+          "element": "24",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.12,
+            "outer": 14.12
+          }
+        },
+        {
+          "id": "S48",
+          "R_x": null,
+          "R_y": -176.528,
+          "d": 0.125,
+          "medium": "air",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 14.01,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.01,
+            "outer": 14.12
+          }
+        },
+        {
+          "id": "S49",
+          "R_x": null,
+          "R_y": 19.172,
+          "d": 4.09,
+          "medium": "PV_SLAH59",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 13.48,
+            "Y": 11.1,
+            "X": null
+          },
+          "element": "25",
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.48,
+            "outer": 13.48,
+            "semi_y": 11.1
+          }
+        },
+        {
+          "id": "S50",
+          "R_x": null,
+          "R_y": 18.137,
+          "d": 3.765,
+          "medium": "air",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 13.22,
+            "Y": 9.6,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.22,
+            "outer": 13.48,
+            "semi_y": 9.6
+          }
+        },
+        {
+          "id": "S51",
+          "R_x": null,
+          "R_y": -192.507,
+          "d": 1.047,
+          "medium": "PV_SBAH10",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 12.84,
+            "Y": 9.3,
+            "X": null
+          },
+          "element": "26",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.84,
+            "outer": 12.84,
+            "semi_y": 9.3
+          }
+        },
+        {
+          "id": "S52",
+          "R_x": null,
+          "R_y": 24.412,
+          "d": 2.982,
+          "medium": "air",
+          "shape": "Y Cylinder",
+          "patent_heights": {
+            "radial": 12.77,
+            "Y": 8.8,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.77,
+            "outer": 12.84,
+            "semi_y": 8.8
+          }
+        },
+        {
+          "id": "S53",
+          "R_x": 385.928,
+          "R_y": null,
+          "d": 1.039,
+          "medium": "PV_SLAH59",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.48,
+            "Y": null,
+            "X": null
+          },
+          "element": "27",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.48,
+            "outer": 12.48
+          }
+        },
+        {
+          "id": "S54",
+          "R_x": 31.262,
+          "R_y": null,
+          "d": 0.793,
+          "medium": "air",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.27,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.27,
+            "outer": 12.48
+          }
+        },
+        {
+          "id": "S55",
+          "R_x": 35.527,
+          "R_y": null,
+          "d": 0.978,
+          "medium": "PV_STIM1",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.39,
+            "Y": null,
+            "X": null
+          },
+          "element": "28",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.39,
+            "outer": 12.39
+          }
+        },
+        {
+          "id": "S56",
+          "R_x": 29.063,
+          "R_y": null,
+          "d": 2.085,
+          "medium": "PV_STIH53",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.38,
+            "Y": null,
+            "X": null
+          },
+          "element": "29",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.38,
+            "outer": 12.39
+          }
+        },
+        {
+          "id": "S57",
+          "R_x": 36.17,
+          "R_y": null,
+          "d": 0.076,
+          "medium": "air",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.37,
+            "Y": null,
+            "X": null
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.37,
+            "outer": 12.39
+          }
+        },
+        {
+          "id": "S58",
+          "R_x": 32.52,
+          "R_y": null,
+          "d": 5.371,
+          "medium": "PV_SLAH64",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.47,
+            "Y": null,
+            "X": null
+          },
+          "element": "30",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.47,
+            "outer": 12.47
+          }
+        },
+        {
+          "id": "S59",
+          "R_x": -182.118,
+          "R_y": null,
+          "d": 1.037,
+          "medium": "PV_STIH6",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": 12.45,
+            "Y": null,
+            "X": null
+          },
+          "element": "31",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.45,
+            "outer": 12.47
+          }
+        },
+        {
+          "id": "S60",
+          "R_x": 261.747,
+          "R_y": null,
+          "d": 35.754,
+          "medium": "air",
+          "shape": "X Cylinder",
+          "patent_heights": {
+            "radial": null,
+            "Y": 8.4,
+            "X": 11.8
+          },
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.47,
+            "outer": 12.47,
+            "semi_y": 8.4,
+            "semi_x": 11.8
+          }
+        }
+      ]
+    }
+  ],
+  "image_distance_mm": 35.754,
+  "anamorphic": {
+    "desqueeze": 1.35,
+    "type": "rear",
+    "note": "专利：把 2.40:1 物方画面垂直拉伸到 16:9 像面（正文称压缩比约 1.34）。真实追迹：画面边缘物方张角比 2.401，整幅解挤压比 1.350；压缩比从中心 1.304 增到边缘 1.351（水平畸变），所以中心物体解挤压后略宽约 3.5%"
+  },
+  "look": {
+    "reference": "Panavision 2004 年后置变形组（专利实施例）；无公开的成品镜头规格",
+    "f_number": 3.66,
+    "min_focus_mm": 1000.0,
+    "coating_nm": 100.0,
+    "flare_color": "PHYSICAL",
+    "flare_gain": 0.6
+  },
+  "focus": {
+    "mechanism": "整体移动（近似）：原变焦镜的对焦组在 US 6,122,111 中，未转录；这里整支镜头一起移动，只解垂直截面",
+    "groups": [
+      {
+        "ids": [
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6",
+          "S7",
+          "S8",
+          "S9",
+          "S11",
+          "S12",
+          "S13",
+          "S14",
+          "S15",
+          "S16",
+          "S17",
+          "S18",
+          "S19",
+          "S20",
+          "S21",
+          "S22",
+          "S24",
+          "S25",
+          "S26",
+          "S27",
+          "S28",
+          "S29",
+          "S30",
+          "S31",
+          "S32",
+          "S33",
+          "S34",
+          "S35",
+          "S36",
+          "S37",
+          "S38",
+          "S39",
+          "S41",
+          "S42",
+          "S43",
+          "S44",
+          "S45",
+          "S46",
+          "S47",
+          "S48",
+          "S49",
+          "S50",
+          "S51",
+          "S52",
+          "S53",
+          "S54",
+          "S55",
+          "S56",
+          "S57",
+          "S58",
+          "S59",
+          "S60"
+        ],
+        "moves": [
+          1,
+          0
+        ]
+      }
+    ],
+    "solve": [
+      "Ry"
+    ],
+    "min_distance_mm": 1000.0
+  },
+  "sensor": {
+    "format": "16:9（3 齿孔 35 mm 或同尺寸数字传感器），像高半径 13.60 mm",
+    "width": 23.71,
+    "height": 13.34
+  }
+}

@@ -8,20 +8,24 @@ try:
 except ImportError:
     import optics as O
 
-def exit_pupil(rx, S=None):
-    """近轴出瞳（垂直截面，光阑后只有球面主镜）：返回 (z_exp, r_exp, z_stop, r_stop)，均在无穷远合焦布局下。"""
-    S = S or O.layout(rx)
-    z_stop, r_stop = O.stop_geometry(rx, S)
+def _exit_pupil_axis(S, z_stop, r_stop, axis):
     k = min(i for i, sf in enumerate(S) if sf["z"] < z_stop)          # 光阑后第一面
     sub = S[k:]
     u0 = 1e-3
     y = u0 * (z_stop - sub[0]["z"])
-    y, nu, n = O._paraxial_core(sub, "Ry", y, u0)
+    y, nu, n = O._paraxial_core(sub, axis, y, u0)
     u = nu / n
     t = -y / u                                                        # 从最后一面沿 −Z 到出瞳（负 = 虚出瞳在其前方）
-    z_exp = sub[-1]["z"] - t
-    r_exp = r_stop * abs(u0 / u)
-    return z_exp, r_exp, z_stop, r_stop
+    return sub[-1]["z"] - t, r_stop * abs(u0 / u)
+
+def exit_pupil(rx, S=None):
+    """近轴出瞳：返回 (z_exp, r_exp, z_stop, r_stop)。光阑后有柱面时两截面出瞳不同 → 采样盘放在垂直截面出瞳平面，
+    半径取能同时罩住水平截面出瞳（按传感器中心视锥换算到该平面）的较大值。"""
+    S = S or O.layout(rx)
+    z_stop, r_stop = O.stop_geometry(rx, S)
+    zy, ry = _exit_pupil_axis(S, z_stop, r_stop, "Ry")
+    zx, rx_ = _exit_pupil_axis(S, z_stop, r_stop, "Rx")
+    return zy, max(ry, rx_ * zy / zx), z_stop, r_stop
 
 def _arr(name, vals, fmt="{:.9g}", typ="float"):
     return f"  {typ} {name}[{len(vals)}] = {{ " + ", ".join(fmt.format(v) for v in vals) + " };\n"
@@ -32,8 +36,6 @@ def generate(rx, name="blenderlens_camera"):
         if sf["ap"] is None:
             raise ValueError(f"{sf['id']} 没有口径：先运行 tools/rebuild_apertures.py")
     z_exp, r_exp, z_stop, r_stop = exit_pupil(rx, S)
-    f = rx.get("focus", {})
-    unit, front = set(f.get("unit", [])), set(f.get("front_member", []))
     NS = len(S)
     Z = [sf["z"] for sf in S]
     CX = [O.curv(sf["Rx"]) for sf in S]
@@ -41,23 +43,26 @@ def generate(rx, name="blenderlens_camera"):
     KX = [sf["kx"] for sf in S]
     KY = [sf["ky"] for sf in S]
     A_, B_ = zip(*[O.cauchy(sf["glass"]["nd"], sf["glass"].get("vd")) for sf in S])   # 该面之后的介质
-    SH = [1 if sf["ap"]["shape"] == "rect" else 2 for sf in S]
-    P1 = [sf["ap"]["semi_x"] if sf["ap"]["shape"] == "rect" else sf["ap"]["clear"] for sf in S]
-    P2 = [sf["ap"]["semi_y"] if sf["ap"]["shape"] == "rect" else sf["ap"]["clear"] for sf in S]
-    GR = [1 if sf["id"] in unit else (2 if sf["id"] in front else 0) for sf in S]
+    lim = [O.ap_limits(sf["ap"]) for sf in S]
+    CLR = [l[0] for l in lim]; MSX = [l[1] for l in lim]; MSY = [l[2] for l in lim]
+    AS = [[(sf.get("asph") or []) [m] if m < len(sf.get("asph") or []) else 0.0 for sf in S] for m in range(5)]
+    G1 = [float(sf["move"][0]) for sf in S]; G2 = [float(sf["move"][1]) for sf in S]
     before = [1.0] + [sf["glass"]["nd"] for sf in S[:-1]]
     CO = [1 if (before[k] == 1.0) != (sf["glass"]["nd"] == 1.0) else 0 for k, sf in enumerate(S)]   # 空气-玻璃面（镀膜）
     AG = [k for k in range(NS) if CO[k]]                                                             # 鬼影反射候选面
     NPAIRS = len(AG) * (len(AG) - 1) // 2
-    stop_moves = 1 if rx["groups"][-1]["surfaces"][0]["id"] in unit else 0
+    st_id = O.stop_group(rx)["stop"]["after_surface"]
+    SG1, SG2 = next(sf["move"] for sf in S if sf["id"] == st_id)            # 光阑随它前面那一面所在的组移动
     W, H = rx["sensor"]["width"], rx["sensor"]["height"]
-    N0 = next(g for g in rx["groups"] if g["id"] == "prime").get("f_number", 2.0)
+    N0 = O.nominal_f_number(rx)
+    sources = ", ".join(g["source"]["patent"].split(" — ")[0] for g in rx["groups"] if "source" in g)
 
     src = f"""// 自动生成：{rx['meta']['name']}
-// 来源处方：{', '.join(g['source']['patent'].split(' — ')[0] for g in rx['groups'])}
+// 来源处方：{sources}
 // 不要手改本文件——改 prescription JSON 后重新生成。
 
 float sag_grad(float x, float y, float cx, float cy, float kx, float ky,
+               float a4, float a6, float a8, float a10, float a12,
                output float gx, output float gy, output int ok)
 {{
   float N = cx * x * x + cy * y * y;
@@ -70,7 +75,14 @@ float sag_grad(float x, float y, float cx, float cy, float kx, float ky,
   float dSy = -(1.0 + ky) * cy * cy * y / Sq;
   gx = (2.0 * cx * x * den - N * dSx) / (den * den);
   gy = (2.0 * cy * y * den - N * dSy) / (den * den);
-  return N / den;
+  float s = N / den;
+  float r2 = x * x + y * y;
+  // 转动对称高次项：Σ A_{{2m}} r^{{2m}}，梯度 Σ 2m A_{{2m}} r^{{2m−2}} (x, y)
+  float r4 = r2 * r2, r6 = r4 * r2, r8 = r6 * r2, r10 = r8 * r2;
+  s += a4 * r4 + a6 * r6 + a8 * r8 + a10 * r10 + a12 * r10 * r2;
+  float g = 4.0 * a4 * r2 + 6.0 * a6 * r4 + 8.0 * a8 * r6 + 10.0 * a10 * r8 + 12.0 * a12 * r10;
+  gx += g * x; gy += g * y;
+  return s;
 }}
 
 float fresnel_plain(float n1, float n2, float ci)
@@ -125,7 +137,7 @@ shader {name}(
   output vector direction = vector(0.0, 0.0, 1.0),
   output color throughput = 1.0)
 {{
-{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("SH", SH, "{:d}", "int")}{_arr("P1", P1)}{_arr("P2", P2)}{_arr("GR", GR, "{:d}", "int")}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}
+{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}
   float SENSOR_W = {W:.6g}, SENSOR_H = {H:.6g};
   float Z_STOP = {z_stop:.9g}, R_STOP = {r_stop:.9g}, Z_EXP = {z_exp:.9g}, R_EXP = {r_exp:.9g};
   float N0 = {N0:.6g};
@@ -145,7 +157,7 @@ shader {name}(
   else {{ rr = b; th = M_PI / 2.0 - M_PI / 4.0 * (a / b); }}
   float k_stop = N0 / f_number;
   float r_samp = R_EXP * k_stop * pupil_margin;
-  float zexp = Z_EXP + delta_unit * {stop_moves};
+  float zexp = Z_EXP + {SG1} * delta_unit + {SG2} * delta_front;
   point p = point(sx, sy, 0.0);
   vector d = normalize(point(rr * cos(th) * r_samp, rr * sin(th) * r_samp, zexp) - p);
 
@@ -172,7 +184,7 @@ shader {name}(
   float il2 = 1.0 / (lam * lam);
 
   float r_stop = R_STOP * k_stop;
-  float z_stop = Z_STOP + delta_unit * {stop_moves};
+  float z_stop = Z_STOP + {SG1} * delta_unit + {SG2} * delta_front;
   float ca = cos(radians(blade_rotation)), sa = sin(radians(blade_rotation));
 
   // 鬼影：以 ghost_fraction 的概率在空气-玻璃面里均匀选一对 (ga < gb)，权重做无偏补偿
@@ -197,7 +209,7 @@ shader {name}(
   int i = NS - 1, dirn = 1, state = 0;      // dirn = 1：沿 +Z（面序号递减）；−1：沿 −Z
   for (int step = 0; step < 3 * NS + 4; ++step) {{
     if (i < 0 || i >= NS) break;
-    float zi = Z[i] + (GR[i] > 0 ? delta_unit : 0.0) + (GR[i] == 2 ? delta_front : 0.0);
+    float zi = Z[i] + G1[i] * delta_unit + G2[i] * delta_front;
 
     // 光阑：本段若穿过光阑平面则检查
     float ts = (z_stop - p[2]) / d[2], tz = (zi - p[2]) / d[2];
@@ -218,7 +230,7 @@ shader {name}(
     int ok = 1;
     for (int it = 0; it < 12; ++it) {{
       float x = p[0] + t * d[0], y = p[1] + t * d[1];
-      float sg = sag_grad(x, y, CX[i], CY[i], KX[i], KY[i], gx, gy, ok);
+      float sg = sag_grad(x, y, CX[i], CY[i], KX[i], KY[i], AA4[i], AA6[i], AA8[i], AA10[i], AA12[i], gx, gy, ok);
       if (!ok) {{ throughput = color(0.0); return; }}
       float g = p[2] + t * d[2] - zi + sg;
       float dg = d[2] + gx * d[0] + gy * d[1];
@@ -228,13 +240,13 @@ shader {name}(
     }}
     if (t <= 1e-6) {{ throughput = color(0.0); return; }}
     p = p + t * d;
-    sag_grad(p[0], p[1], CX[i], CY[i], KX[i], KY[i], gx, gy, ok);
+    sag_grad(p[0], p[1], CX[i], CY[i], KX[i], KY[i], AA4[i], AA6[i], AA8[i], AA10[i], AA12[i], gx, gy, ok);
     if (!ok) {{ throughput = color(0.0); return; }}
 
-    // 口径（矩形 / 圆形通光区；平台与镜筒都按挡光处理）
-    if (SH[i] == 1) {{
-      if (fabs(p[0]) > P1[i] || fabs(p[1]) > P2[i]) {{ throughput = color(0.0); return; }}
-    }} else if (p[0] * p[0] + p[1] * p[1] > P1[i] * P1[i]) {{ throughput = color(0.0); return; }}
+    // 口径：圆形通光区 + x/y 遮罩（矩形镜片、切边、矩形视场光阑）；平台与镜筒都按挡光处理
+    if (p[0] * p[0] + p[1] * p[1] > CLR[i] * CLR[i] || fabs(p[0]) > MSX[i] || fabs(p[1]) > MSY[i]) {{
+      throughput = color(0.0); return;
+    }}
 
     // 两侧介质：沿 +Z 从「面后」到「面前」，沿 −Z 反之
     float na_ = NA[i] + NB[i] * il2;

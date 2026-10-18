@@ -1,9 +1,8 @@
 # 在 Blender 里由处方搭镜头：OSL 相机 + 界面法镜片网格 + 镜框/镜筒 + 对焦分组。
 # 层级：BL_Camera（相机，传感器中心）
 #        └ BL_Rig（绕 Y 转 180°：镜头坐标 +Z 物方 → 相机视线方向）
-#            ├ BL_Unit   （整体单元：主镜 + 变形器后组，对焦移动 Δ1）
-#            ├ BL_Front  （变形器前组，移动 Δ1 + Δ2）
-#            └ 镜筒、后盖（固定）
+#            ├ BL_Move_c1_c2（对焦分组：该组镜片移动 c1·Δ1 + c2·Δ2，系数来自处方 focus.groups）
+#            └ 固定的镜片、镜筒、后盖
 import json, math
 import bpy
 
@@ -92,7 +91,7 @@ def store_prescription(rx):
 
 def read_prescription():
     t = bpy.data.texts.get(TEXT_RX)
-    return json.loads(t.as_string()) if t else O.load()
+    return O.normalize(json.loads(t.as_string())) if t else O.load()
 
 
 # ───────────────────────── 搭建 ─────────────────────────
@@ -103,9 +102,10 @@ def setup_scene_units(scene):
     us.scale_length = 0.001
     us.length_unit = 'MILLIMETERS'
 
-def desqueezed_resolution(rx, height, desqueeze=2.0):
+def desqueezed_resolution(rx, height, desqueeze=None):
+    """输出分辨率：传感器宽高比 × 解挤压比（处方 anamorphic.desqueeze）。"""
     W, H = rx["sensor"]["width"], rx["sensor"]["height"]
-    return int(round(height * W / H * desqueeze)), int(height)
+    return int(round(height * W / H * (desqueeze or O.desqueeze(rx)))), int(height)
 
 def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_Camera"):
     """搭整支镜头。返回相机对象。重复调用会先删除旧的同名镜头。"""
@@ -139,14 +139,14 @@ def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_
     compile_camera(cam)
 
     rig = _empty("BL_Rig", cam_ob, col, rot=(0.0, math.pi, 0.0))
-    unit = _empty("BL_Unit", rig, col)
-    front = _empty("BL_Front", rig, col)
-    rig.hide_viewport = unit.hide_viewport = front.hide_viewport = False
-
     S = O.layout(rx)
-    fset = rx.get("focus", {})
-    parent_of = {i: unit for i in fset.get("unit", [])}
-    parent_of.update({i: front for i in fset.get("front_member", [])})
+    # 对焦分组：每种移动系数 (c1, c2) 一个空物体，位置 z = c1·Δ1 + c2·Δ2（apply_settings 写入）
+    movers = {}
+    for c in sorted({sf["move"] for sf in S if sf["move"] != (0, 0)}):
+        e = _empty(f"BL_Move_{c[0]:g}_{c[1]:g}", rig, col)
+        e["bl_move"] = list(c)
+        movers[c] = e
+    parent_of = {sf["id"]: movers.get(sf["move"], rig) for sf in S}
     nb, na = O.media(S)
     black = _black()
 
@@ -164,8 +164,7 @@ def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_
 
     # 每片镜片：侧壁 + 挡板（挡板外缘贴镜筒，镜片之间不漏光）
     by_id = {sf["id"]: sf for sf in S}
-    R_barrel = max(math.hypot(sf["ap"]["semi_x"], sf["ap"]["semi_y"]) if sf["ap"]["shape"] == "rect"
-                   else sf["ap"]["outer"] for sf in S) + 3.0
+    R_barrel = max(O.ap_limits(sf["ap"])[3] for sf in S) + 3.0
     for ids in O.element_groups(rx):
         a, b = by_id[ids[0]], by_id[ids[-1]]
         par = parent_of.get(ids[0], rig)
@@ -180,10 +179,22 @@ def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_
 
     cam_ob["bl_R_barrel"] = R_barrel
     lens_col.hide_render = True                 # 默认 Analytic 模式不需要镜片几何
-    p = cam.blenderlens
-    p.focus_distance = 0.0                      # 0 = 无穷远
-    apply_settings(cam_ob)
+    apply_look(cam_ob, rx)
     return cam_ob
+
+def apply_look(cam_ob, rx):
+    """把处方的观感参数（光圈、镀膜、炫光、对焦）写到相机设置上；没有 look 时用默认。"""
+    p = cam_ob.data.blenderlens
+    look = rx.get("look", {})
+    p.f_number = max(look.get("f_number", O.nominal_f_number(rx)), O.nominal_f_number(rx))
+    p.coating_nm = look.get("coating_nm", 100.0)
+    p.coated = p.coating_nm > 0
+    p.flare_color = look.get("flare_color", 'PHYSICAL')
+    p.flare_gain = look.get("flare_gain", 1.0)
+    p.focus_distance = 0.0                      # 0 = 无穷远
+    cam_ob["bl_min_focus_mm"] = rx.get("focus", {}).get("min_distance_mm", look.get("min_focus_mm", 0.0))
+    cam_ob["bl_preset"] = rx["meta"].get("short_name", rx["meta"]["name"])
+    apply_settings(cam_ob)
 
 def rx_needs_apertures(rx):
     return any(sf.get("aperture") is None for g in rx["groups"] for sf in g["surfaces"])
@@ -230,15 +241,14 @@ def apply_settings(cam_ob):
     cam = cam_ob.data
     p = cam.blenderlens
     rx = _rx_cached()
-    dist = math.inf if p.focus_distance <= 0 else p.focus_distance
+    dist = math.inf if p.focus_distance <= 0 else max(p.focus_distance, cam_ob.get("bl_min_focus_mm", 0.0))
     d1, d2 = O.solve_focus(rx, dist)
     for ch in cam_ob.children_recursive:
-        if ch.name.startswith("BL_Unit"):
-            ch.location.z = d1
-        elif ch.name.startswith("BL_Front"):
-            ch.location.z = d1 + d2
+        if "bl_move" in ch:
+            c1, c2 = ch["bl_move"]
+            ch.location.z = c1 * d1 + c2 * d2
     cc = cam.cycles_custom
-    vals = dict(mode=1 if p.mode == 'GEOMETRY' else 0, f_number=p.f_number, blades=p.blades,
+    vals = dict(mode=1 if p.mode == 'GEOMETRY' else 0, f_number=max(p.f_number, O.nominal_f_number(rx)), blades=p.blades,
                 blade_rotation=p.blade_rotation, delta_unit=d1, delta_front=d2,
                 dispersion=int(p.dispersion), exposure_compensate=int(p.exposure_compensate),
                 ghosts=int(p.ghosts), ghost_gain=p.ghost_gain, coated=int(p.coated), coating_nm=p.coating_nm)
@@ -260,7 +270,7 @@ def apply_settings(cam_ob):
 def squeeze_info(cam_ob):
     rx = _rx_cached()
     p = cam_ob.data.blenderlens
-    dist = math.inf if p.focus_distance <= 0 else p.focus_distance
+    dist = math.inf if p.focus_distance <= 0 else max(p.focus_distance, cam_ob.get("bl_min_focus_mm", 0.0))
     return O.squeeze_at(rx, dist)
 
 def black_world(world):
@@ -369,7 +379,7 @@ def render_with_flare(scene, filepath, n_grid=260, blur_px=0.8):
     px = np.array(img.pixels[:], dtype=np.float32).reshape(H, W, 4)
     bpy.data.images.remove(img)
     rx = _rx_cached()
-    dist = math.inf if p.focus_distance <= 0 else p.focus_distance
+    dist = math.inf if p.focus_distance <= 0 else max(p.focus_distance, cam_ob.get("bl_min_focus_mm", 0.0))
     layer = np.zeros((H, W, 3))
     used = []
     for ob in flare_sources(scene):

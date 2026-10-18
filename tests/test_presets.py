@@ -1,0 +1,77 @@
+# 预设处方单测（Blender 外运行）：python3 tests/test_presets.py
+#   E/G 风格（Isco US 5,184,880 实施例 3）：凸轮对焦与压缩比变化 vs 专利对焦表
+#   Panavision 后置 1.34×（US 7,085,066）：焦距 vs 专利；非球面梯度
+import math, os, sys
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "blenderlens")); sys.path.insert(0, os.path.join(ROOT, "tools"))
+import optics as O
+import build_presets as BP
+
+def ok(cond, msg):
+    assert cond, msg
+    print("ok ", msg)
+
+P = lambda fn: O.load(os.path.join(O.PRESCRIPTION_DIR, fn))
+
+# ── Isco：对焦表（用专利自己的 f=100 BK7 主镜，距离从焦面量起）──
+import copy
+rx = copy.deepcopy(P("e_series_style.json"))
+rx["glasses"]["BK7"] = {"nd": 1.5168, "vd": 64.17}
+rx["groups"][1] = {"id": "prime", "scale": 1.0, "stop": {"after_surface": "B1", "offset_fraction": 0.5, "f_number": 2.8},
+                   "surfaces": [{"id": "B1", "R_x": 51.68, "R_y": 51.68, "d": 18.9, "medium": "BK7"},
+                                {"id": "B2", "R_x": None, "R_y": None, "d": None, "medium": "air"}]}
+rx["focus"]["groups"][0]["ids"] = ["I10", "I11", "I12", "B1", "B2"]
+S = O.layout(rx)
+fx, fy = O.paraxial_infinity(S, "Rx")[0], O.paraxial_infinity(S, "Ry")[0]
+ok(abs(fx / 62.71 - 1) < 0.005 and abs(fy / 131.00 - 1) < 0.001, f"Isco: Fx {fx:.2f} / Fy {fy:.2f} vs patent 62.71 / 131.00")
+sq_inf = O.squeeze_at(rx, math.inf)
+E3_inf, E9_inf, f_inf = BP.ISCO_FOCUS_TABLE[0][1:]
+worst = (0, 0, 0)
+for dist_m, E3, E9, dpct in BP.ISCO_FOCUS_TABLE[1:]:
+    d1, d2 = O.solve_focus(rx, dist_m * 1000.0)
+    dE3, dE9 = -d2, d2 - d1                    # I4–I9 移动 Δ2、I10 起移动 Δ1
+    pred = sq_inf * (1 + dpct / 100) / (1 + f_inf / 100)
+    errs = (abs(dE3 - (E3 - E3_inf)), abs(dE9 - (E9 - E9_inf)), abs(O.squeeze_at(rx, dist_m * 1000.0) / pred - 1))
+    worst = tuple(max(a, b) for a, b in zip(worst, errs))
+ok(worst[0] < 0.1 and worst[1] < 0.1, f"Isco: cam motion reproduces focus table (11 rows), worst {worst[0]:.3f} / {worst[1]:.3f} mm")
+ok(worst[2] < 0.001, f"Isco: squeeze change reproduces focus table, worst {100 * worst[2]:.3f}%")
+sq = O.squeeze_at(P("e_series_style.json"), 2500.0) / O.squeeze_at(P("e_series_style.json"), math.inf)
+print(f"    info: E 系列风格（Nikon 主镜）2.5 m / ∞ 压缩比 = {sq:.4f}；专利表 = {(1 - 0.0632) / 1.0445:.4f}")
+
+# ── Panavision：焦距 ──
+rx = P("panavision_rear_134.json")
+S = O.layout(rx)
+fx, fy = O.paraxial_infinity(S, "Rx")[0], O.paraxial_infinity(S, "Ry")[0]
+ok(abs(fx / 15.81 - 1) < 0.001 and abs(fy / 20.60 - 1) < 0.002, f"PV: EFL x {fx:.3f} / y {fy:.3f} vs patent 15.81 / 20.60（Ohara 目录值）")
+ok(abs(O.paraxial_infinity(S, "Ry")[1] - 35.754) < 0.1, f"PV: paraxial BFL {O.paraxial_infinity(S, 'Ry')[1]:.3f} vs patent image distance 35.754")
+# 物方半视场：像高 13.60 mm 沿 X（专利 42.34°）；整幅：画面边缘张角比 = 2.40
+zs0, _ = O.stop_geometry(rx, S)
+def obj_tan(pt):
+    d = O.aim_through_stop(S, pt, (0, 0), zs0); p, q = O.trace_reverse(S, (pt[0], pt[1], 0), d, clip=False)
+    return abs(q[0] / q[2]), abs(q[1] / q[2])
+ang = math.degrees(math.atan(obj_tan((13.6, 0))[0]))
+ok(abs(ang - 42.34) < 0.5, f"PV: object half-field at 13.6 mm image height {ang:.2f}° vs patent 42.34°")
+asp = obj_tan((rx["sensor"]["width"] / 2, 0))[0] / obj_tan((0, rx["sensor"]["height"] / 2))[1]
+ok(abs(asp - 2.40) < 0.01, f"PV: frame object-space aspect {asp:.3f} vs patent 2.40:1")
+zoom = [s for s in S if s["group"] == "zoom"]
+fz = O.paraxial_infinity(zoom, "Ry")[0]
+ok(abs(fz / 15.3 - 1) < 0.01, f"PV: zoom alone EFL {fz:.3f} vs patent ≈15.3")
+ok(O.stop_geometry(rx, S)[1] == 10.51, "PV: iris semi-diameter 10.51 at f/3.66")
+
+# ── 非球面梯度（S3）──
+s3 = next(s for s in S if s["id"] == "S3")
+for x, y in ((12.0, 5.0), (25.0, -18.0), (-30.0, 20.0)):
+    s, gx, gy = O.surf_sag(s3, x, y)
+    h = 1e-5
+    nx = (O.surf_sag(s3, x + h, y)[0] - O.surf_sag(s3, x - h, y)[0]) / (2 * h)
+    ny = (O.surf_sag(s3, x, y + h)[0] - O.surf_sag(s3, x, y - h)[0]) / (2 * h)
+    ok(abs(gx - nx) < 1e-6 and abs(gy - ny) < 1e-6, f"PV: asphere S3 gradient @({x},{y})")
+
+# ── 所有预设：边缘不相撞（∞ 与最近对焦）──
+for fn, name, _ in O.list_presets():
+    rx = P(fn)
+    for dist in (math.inf, rx["focus"]["min_distance_mm"]):
+        d1, d2 = O.solve_focus(rx, dist)
+        bad = [e["between"] for e in O.edge_report(rx, d1, d2) if e["min_gap"] < 0]
+        ok(not bad, f"{name} @ {'∞' if math.isinf(dist) else f'{dist / 1000:.2f} m'}: no edge clash")
+print("ALL PRESET TESTS PASSED")

@@ -31,11 +31,10 @@ for ob in bpy.data.collections["BL_LensGeometry"].objects:
 rep["mesh_problems"] = bad
 # 对焦同步
 cam.blenderlens.focus_distance = 1000.0
-unit = next(c for c in cam_ob.children_recursive if c.name.startswith("BL_Unit"))
-front = next(c for c in cam_ob.children_recursive if c.name.startswith("BL_Front"))
+movers = {tuple(c["bl_move"]): c for c in cam_ob.children_recursive if "bl_move" in c}
 d1, d2 = optics.solve_focus(rig.read_prescription(), 1000.0)
-rep["focus_sync"] = dict(unit_z=round(unit.location.z, 4), front_z=round(front.location.z, 4),
-                         expect=(round(d1, 4), round(d1 + d2, 4)),
+rep["focus_sync"] = dict(movers={f"{k}": round(v.location.z, 4) for k, v in movers.items()},
+                         expect={f"{k}": round(k[0] * d1 + k[1] * d2, 4) for k in movers},
                          osl=(round(cam.cycles_custom["delta_unit"], 4), round(cam.cycles_custom["delta_front"], 4)))
 cam.blenderlens.mode = 'GEOMETRY'
 rep["geom_visible"] = not bpy.data.collections["BL_LensGeometry"].hide_render

@@ -8,12 +8,14 @@ import blenderlens
 from blenderlens import rig, optics as O
 
 OUT = os.path.join(ROOT, "renders")
+PRESET = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "c_series_style.json"
+TAG = PRESET.replace(".json", "")
 LT = 3000.0                       # 靶面到像面距离（mm）
 H_PX = 540
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 blenderlens.register()
-bpy.ops.blenderlens.build(height=H_PX)
+bpy.ops.blenderlens.build(preset=PRESET, height=H_PX)
 sc = bpy.context.scene
 cam_ob = sc.camera
 cam = cam_ob.data
@@ -109,7 +111,7 @@ def render_and_measure(mode, samples):
     p.mode = mode
     rig.render_preset(sc, mode)
     sc.cycles.samples = samples
-    path = os.path.join(OUT, f"map_{mode.lower()}.png")
+    path = os.path.join(OUT, f"map_{TAG}_{mode.lower()}.png")
     sc.render.filepath = path
     sc.render.image_settings.file_format = 'PNG'
     bpy.ops.render.render(write_still=True)
@@ -146,4 +148,5 @@ for mode, spp in (('ANALYTIC', 32), ('GEOMETRY', 64)):
                      n_cols=len(cols), n_rows=len(rows),
                      marker_uv_from_topleft=None if marker is None else tuple(round(v, 3) for v in marker),
                      marker_rgb=mrgb)
+rep["preset"] = TAG
 print("MAPPING " + json.dumps(rep, ensure_ascii=False))

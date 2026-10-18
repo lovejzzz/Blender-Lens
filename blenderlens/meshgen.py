@@ -3,12 +3,12 @@
 # 光学面法线一律朝物方（+Z）—— Cycles 界面法要求；实体镜片的后表面在 solid 模式下翻转。
 import math
 try:
-    from .optics import sag_and_grad, curv, surface_z
+    from .optics import surf_sag, surface_z, ap_limits
 except ImportError:
-    from optics import sag_and_grad, curv, surface_z
+    from optics import surf_sag, surface_z, ap_limits
 
 def _vn(sf, x, y):
-    s, gx, gy = sag_and_grad(x, y, curv(sf["Rx"]), curv(sf["Ry"]), sf["kx"], sf["ky"])
+    s, gx, gy = surf_sag(sf, x, y)
     L = math.sqrt(gx * gx + gy * gy + 1.0)
     return (x, y, sf["z"] - s), (gx / L, gy / L, 1.0 / L)
 
@@ -38,7 +38,9 @@ def _surface_mesh(sf, rings, sectors, nx, ny):
                 F.append((a0, a0 + 1, a0 + 1 + nx, a0 + nx))      # 逆时针（从 +Z 看）→ 面法线 +Z
                 M.append(0)
         return V, F, N, M
-    rc, ro = a["clear"], a["outer"]
+    rc = a.get("clear") or a["outer"]
+    ro = a["outer"]
+    _, msx, msy, _ = ap_limits(a)
     v, n = _vn(sf, 0.0, 0.0)
     V.append(v); N.append(n)
     for i in range(1, rings + 1):
@@ -47,20 +49,25 @@ def _surface_mesh(sf, rings, sectors, nx, ny):
             t = 2 * math.pi * j / sectors
             v, n = _vn(sf, r * math.cos(t), r * math.sin(t))
             V.append(v); N.append(n)
+    def masked(*idx):                                   # 遮罩（切边 / 矩形视场光阑）外的面画黑
+        cx = sum(V[k][0] for k in idx) / len(idx); cy = sum(V[k][1] for k in idx) / len(idx)
+        return 1 if (abs(cx) > msx or abs(cy) > msy) else 0
     for j in range(sectors):
-        F.append((0, 1 + j, 1 + (j + 1) % sectors)); M.append(0)
+        f = (0, 1 + j, 1 + (j + 1) % sectors)
+        F.append(f); M.append(masked(*f))
     for i in range(1, rings):
         b0, b1 = 1 + (i - 1) * sectors, 1 + i * sectors
         for j in range(sectors):
             j2 = (j + 1) % sectors
-            F.append((b0 + j, b1 + j, b1 + j2, b0 + j2)); M.append(0)
-    if ro > rc + 1e-6:                                         # 平台：通光边缘 z 处的平环
-        z_land = _vn(sf, rc, 0.0)[0][2]
+            f = (b0 + j, b1 + j, b1 + j2, b0 + j2)
+            F.append(f); M.append(masked(*f))
+    if ro > rc + 1e-6:                                         # 平台：通光边缘外的环（z 沿各方向取通光边缘的 z）
         base = len(V)
         for r in (rc, ro):
             for j in range(sectors):
                 t = 2 * math.pi * j / sectors
-                V.append((r * math.cos(t), r * math.sin(t), z_land)); N.append((0.0, 0.0, 1.0))
+                x, y = r * math.cos(t), r * math.sin(t)
+                V.append((x, y, surface_z(sf, x, y))); N.append((0.0, 0.0, 1.0))
         for j in range(sectors):
             j2 = (j + 1) % sectors
             F.append((base + j, base + sectors + j, base + sectors + j2, base + j2)); M.append(1)

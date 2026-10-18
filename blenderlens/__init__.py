@@ -1,5 +1,5 @@
 # BlenderLens：由公开专利处方驱动的 2× 前组变形镜头（Cycles OSL 自定义相机 + 真实镜片几何）
-import math
+import math, os
 import bpy
 from bpy.app.handlers import persistent
 from bpy.props import (BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, IntProperty,
@@ -53,15 +53,27 @@ class BLCameraSettings(bpy.types.PropertyGroup):
                               description="炫光强度倍数；1 = 物理正确")
 
 
+def _preset_items(self, context):
+    global _PRESET_CACHE
+    if not _PRESET_CACHE:
+        _PRESET_CACHE = [(fn, name, tag) for fn, name, tag in optics.list_presets()]
+    return _PRESET_CACHE
+
+_PRESET_CACHE = []
+
+
 class BL_OT_build(bpy.types.Operator):
     """由处方 JSON 搭建整支变形镜头与 OSL 相机"""
     bl_idname = "blenderlens.build"
     bl_label = "Build Anamorphic Lens"
     bl_options = {'REGISTER', 'UNDO'}
 
-    filepath: StringProperty(name="Prescription", subtype='FILE_PATH',
-                             description="处方 JSON；留空 = 插件自带的 US2944464 + US4234242")
-    coated: BoolProperty(name="MgF₂ Coating", default=True)
+    preset: EnumProperty(name="Lens", items=_preset_items,
+                         description="插件自带的处方预设（prescriptions/ 目录下的 JSON）")
+    filepath: StringProperty(name="Custom JSON", subtype='FILE_PATH',
+                             description="自定义处方 JSON；填写时优先于上面的预设")
+    coated: BoolProperty(name="MgF₂ Coating", default=True,
+                         description="Geometry 模式镜片材质的镀膜；之后由相机设置（处方 look 的初值）统一控制")
     film_nm: FloatProperty(name="Coating Thickness (nm)", default=100.0, min=0.0, max=400.0)
     set_render: BoolProperty(name="Set Render Settings", default=True,
                              description="Cycles CPU、解挤压后的输出分辨率、设为场景相机")
@@ -69,10 +81,9 @@ class BL_OT_build(bpy.types.Operator):
 
     def execute(self, context):
         try:
-            rx = optics.load(bpy.path.abspath(self.filepath)) if self.filepath else optics.load()
+            path = bpy.path.abspath(self.filepath) if self.filepath else os.path.join(optics.PRESCRIPTION_DIR, self.preset)
+            rx = optics.load(path)
             cam_ob = rig.build(context, rx, coated=self.coated, film_nm=self.film_nm)
-            cam_ob.data.blenderlens.coated = self.coated
-            cam_ob.data.blenderlens.coating_nm = self.film_nm
         except Exception as e:                        # noqa: BLE001 — 报给用户
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -82,7 +93,7 @@ class BL_OT_build(bpy.types.Operator):
             rig.render_preset(sc)
             sc.render.resolution_x, sc.render.resolution_y = rig.desqueezed_resolution(rig.read_prescription(), self.height)
             sc.render.pixel_aspect_x = sc.render.pixel_aspect_y = 1.0
-        self.report({'INFO'}, f"已搭建 {cam_ob.name}；无穷远压缩比 {rig.squeeze_info(cam_ob):.3f}")
+        self.report({'INFO'}, f"已搭建 {cam_ob.get('bl_preset', cam_ob.name)}；无穷远压缩比 {rig.squeeze_info(cam_ob):.3f}")
         return {'FINISHED'}
 
 
@@ -158,6 +169,8 @@ class BL_OT_export(bpy.types.Operator):
 
 def _draw_settings(layout, cam_ob):
     p = cam_ob.data.blenderlens
+    if cam_ob.get("bl_preset"):
+        layout.label(text=cam_ob["bl_preset"], icon='CAMERA_DATA')
     col = layout.column(align=True)
     col.prop(p, "mode")
     col.prop(p, "focus_distance")
@@ -182,6 +195,8 @@ def _draw_settings(layout, cam_ob):
     if p.flare_color == 'CUSTOM':
         col.prop(p, "flare_tint", text="")
     col.prop(p, "flare_gain", text="Intensity")
+    if cam_ob.get("bl_min_focus_mm"):
+        layout.label(text=f"Min focus: {cam_ob['bl_min_focus_mm'] / 1000:.2f} m")
     try:
         layout.label(text=f"Squeeze at this focus: {rig.squeeze_info(cam_ob):.3f}×")
     except Exception:                                   # noqa: BLE001
@@ -198,7 +213,7 @@ class BL_PT_sidebar(bpy.types.Panel):
 
     def draw(self, context):
         lay = self.layout
-        lay.operator(BL_OT_build.bl_idname, icon='OUTLINER_OB_CAMERA')
+        lay.operator_menu_enum(BL_OT_build.bl_idname, "preset", text="Build Lens", icon='OUTLINER_OB_CAMERA')
         cam_ob = context.scene.camera
         if cam_ob and cam_ob.type == 'CAMERA' and any(c.name.startswith("BL_Rig") for c in cam_ob.children):
             _draw_settings(lay, cam_ob)

@@ -1,0 +1,543 @@
+{
+  "meta": {
+    "name": "E 系列风格 · 前置 2.09× 变形 135 mm（Isco 1990 + Nikon f/2，原尺寸）",
+    "short_name": "E 系列风格 135 mm（1980 年代）",
+    "order": 2,
+    "tagline": "现代双子系统前置变形器（两向分别矫正）、凸轮联动对焦；干净的蓝色水平炫光、少雾化",
+    "note": "Panavision E 系列处方未公开。本选项用同年代的 Isco 公开专利前置变形器（实施例 3，原尺寸）+ 公开的 f/2 双高斯主镜（f=100），垂直焦距 131 mm，观感参数按 Panavision 公布的 E 系列 135 mm 规格设定。",
+    "units": "mm",
+    "conventions": {
+      "origin": "像面（传感器）",
+      "object_side": "+Z",
+      "light_travels": "-Z",
+      "surface_order": "从物方到像方",
+      "radius_sign": "R > 0：曲率中心在像方（-Z 一侧）；R < 0：在物方；null = 平面（无穷大）",
+      "surface_z": "z = z_vertex - sag(x, y)",
+      "d": "该面到下一面的轴上距离（专利原值，使用时乘该组 scale）",
+      "medium": "该面之后（像方一侧）的介质",
+      "cylinder": "柱面镜只在水平主截面（x）有光焦度：R_y = null",
+      "aperture": "每面 aperture 为物理 mm（已缩放，不再乘 scale）：柱面镜片 rect(semi_x, semi_y)；球面镜片 circle(clear 通光半径, outer 外半径，二者之间为黑色平台)"
+    }
+  },
+  "glasses": {
+    "air": {
+      "nd": 1.0,
+      "vd": null
+    },
+    "N_1713_539": {
+      "nd": 1.713,
+      "vd": 53.9,
+      "note": "US 4,234,242 镧冕（≈ LaK8 类）"
+    },
+    "N_1648_338": {
+      "nd": 1.64831,
+      "vd": 33.8,
+      "note": "US 4,234,242 火石（≈ SF2 类）"
+    },
+    "I_LAFN21": {
+      "nd": 1.78831,
+      "vd": 47.49,
+      "note": "LaF N21（Isco 原表 n_d/n_C/n_F）"
+    },
+    "I_SF11": {
+      "nd": 1.78472,
+      "vd": 25.76,
+      "note": "SF 11（Isco 原表 n_d/n_C/n_F）"
+    }
+  },
+  "groups": [
+    {
+      "id": "anamorph",
+      "role": "前置无焦变形器：前组在垂直方向放大 1.31×（伽利略），后组在水平方向缩小到 0.627×（反伽利略），合计约 2.09×",
+      "source": {
+        "patent": "US 5,184,880 — A. Lisziewicz, Anamorphic attachment（Isco Optische Werke），1990 申请 / 1993 授权，实施例 3",
+        "url": "https://patents.google.com/patent/US5184880A/en",
+        "table": "第 11–12 栏主表 + 对焦表（已对照扫描件）；间隔取对焦表 infinite 行",
+        "patent_values": {
+          "Fg": 100.0,
+          "Fx": 62.71,
+          "Fy": 131.0,
+          "anamorphic_factor": 2.089,
+          "entrance_to_focal_plane_mm": 375.012
+        },
+        "focus_table": [
+          [
+            "inf",
+            96.425,
+            57.78,
+            4.45
+          ],
+          [
+            50.0,
+            96.918,
+            56.975,
+            3.91
+          ],
+          [
+            30.0,
+            97.244,
+            56.439,
+            3.55
+          ],
+          [
+            20.0,
+            97.648,
+            55.771,
+            3.1
+          ],
+          [
+            15.0,
+            98.047,
+            55.104,
+            2.65
+          ],
+          [
+            10.0,
+            98.83,
+            53.773,
+            1.75
+          ],
+          [
+            7.5,
+            99.593,
+            52.449,
+            0.84
+          ],
+          [
+            5.0,
+            101.057,
+            49.823,
+            -0.96
+          ],
+          [
+            4.0,
+            102.095,
+            47.876,
+            -2.31
+          ],
+          [
+            3.5,
+            102.803,
+            46.499,
+            -3.27
+          ],
+          [
+            3.0,
+            103.702,
+            44.682,
+            -4.54
+          ],
+          [
+            2.5,
+            104.868,
+            42.179,
+            -6.32
+          ]
+        ],
+        "verified": "以专利自带 f=100 BK7 主镜近轴追迹：Fx 62.55、Fy 131.01、比 2.0946"
+      },
+      "scale": 1.0,
+      "surfaces": [
+        {
+          "id": "I1",
+          "R_x": null,
+          "R_y": 394.285,
+          "d": 15.291,
+          "medium": "I_LAFN21",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 45.25,
+            "semi_y": 49.75
+          }
+        },
+        {
+          "id": "I2",
+          "R_x": null,
+          "R_y": -331.901,
+          "d": 6.116,
+          "medium": "I_SF11",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 45.25,
+            "semi_y": 49.75
+          }
+        },
+        {
+          "id": "I3",
+          "R_x": null,
+          "R_y": null,
+          "d": 96.425,
+          "medium": "air",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 45.25,
+            "semi_y": 49.75
+          }
+        },
+        {
+          "id": "I4",
+          "R_x": null,
+          "R_y": null,
+          "d": 10.92,
+          "medium": "I_SF11",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 24.75,
+            "semi_y": 31.0
+          }
+        },
+        {
+          "id": "I5",
+          "R_x": null,
+          "R_y": -257.733,
+          "d": 4.16,
+          "medium": "I_LAFN21",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 24.75,
+            "semi_y": 31.0
+          }
+        },
+        {
+          "id": "I6",
+          "R_x": null,
+          "R_y": 313.35,
+          "d": 4.6,
+          "medium": "air",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 24.75,
+            "semi_y": 31.0
+          }
+        },
+        {
+          "id": "I7",
+          "R_x": -140.753,
+          "R_y": null,
+          "d": 4.255,
+          "medium": "I_LAFN21",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 22.5,
+            "semi_y": 29.0
+          }
+        },
+        {
+          "id": "I8",
+          "R_x": 60.706,
+          "R_y": null,
+          "d": 10.5,
+          "medium": "I_SF11",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 22.5,
+            "semi_y": 29.0
+          }
+        },
+        {
+          "id": "I9",
+          "R_x": 285.948,
+          "R_y": null,
+          "d": 57.78,
+          "medium": "air",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 22.5,
+            "semi_y": 29.0
+          }
+        },
+        {
+          "id": "I10",
+          "R_x": null,
+          "R_y": null,
+          "d": 3.255,
+          "medium": "I_SF11",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 22.25,
+            "semi_y": 22.25
+          }
+        },
+        {
+          "id": "I11",
+          "R_x": 107.283,
+          "R_y": null,
+          "d": 7.44,
+          "medium": "I_LAFN21",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 22.25,
+            "semi_y": 22.25
+          }
+        },
+        {
+          "id": "I12",
+          "R_x": -145.001,
+          "R_y": null,
+          "d": 49.8,
+          "medium": "air",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 22.25,
+            "semi_y": 22.25
+          }
+        }
+      ]
+    },
+    {
+      "id": "prime",
+      "role": "后组球面主镜：双高斯 6 片 5 组，f/2，2ω = 46°",
+      "source": {
+        "patent": "US 4,234,242 — S. Nakamura, Gauss Type Photographic Lens（Nippon Kogaku），1979-01-30 申请（优先权 1978-02-03）/ 1980-11-18 授权",
+        "url": "https://patents.google.com/patent/US4234242A",
+        "table": "实施例 1（f = 100 归一化）",
+        "patent_values": {
+          "f": 100.0,
+          "f_number": 2.0,
+          "bfl": 74.8,
+          "total_length": 128.3
+        },
+        "verified": "近轴追迹 EFL = 100.000、BFL = 74.84；r2 取说明书 3682.171（权利要求 6682.171 为笔误，代入得 EFL 99.40）；2026-10-18 逐位对照扫描原件（第 5–6 栏 Example 1）无误"
+      },
+      "normalized_f": 100.0,
+      "target_f": 100.0,
+      "scale": 1.0,
+      "f_number": 2.8,
+      "surfaces": [
+        {
+          "id": "P1",
+          "R_x": 88.702,
+          "R_y": 88.702,
+          "d": 6.78,
+          "medium": "N_1713_539",
+          "element": "L1",
+          "aperture": {
+            "shape": "circle",
+            "clear": 19.0,
+            "outer": 19.0
+          }
+        },
+        {
+          "id": "P2",
+          "R_x": 3682.171,
+          "R_y": 3682.171,
+          "d": 0.19,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 18.5,
+            "outer": 19.0
+          }
+        },
+        {
+          "id": "P3",
+          "R_x": 37.399,
+          "R_y": 37.399,
+          "d": 8.72,
+          "medium": "N_1713_539",
+          "element": "L2",
+          "aperture": {
+            "shape": "circle",
+            "clear": 17.75,
+            "outer": 17.75
+          }
+        },
+        {
+          "id": "P4",
+          "R_x": 61.587,
+          "R_y": 61.587,
+          "d": 2.71,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 15.75,
+            "outer": 17.75
+          }
+        },
+        {
+          "id": "P5",
+          "R_x": 188.525,
+          "R_y": 188.525,
+          "d": 1.94,
+          "medium": "N_1648_338",
+          "element": "L3",
+          "aperture": {
+            "shape": "circle",
+            "clear": 15.5,
+            "outer": 15.5
+          }
+        },
+        {
+          "id": "P6",
+          "R_x": 31.585,
+          "R_y": 31.585,
+          "d": 15.7,
+          "medium": "air",
+          "note": "光阑在此空气间隔内，专利未给位置",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.5,
+            "outer": 15.5
+          }
+        },
+        {
+          "id": "P7",
+          "R_x": -35.134,
+          "R_y": -35.134,
+          "d": 1.94,
+          "medium": "N_1648_338",
+          "element": "L4 负（胶合）",
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.75,
+            "outer": 15.0
+          }
+        },
+        {
+          "id": "P8",
+          "R_x": -112.118,
+          "R_y": -112.118,
+          "d": 9.63,
+          "medium": "N_1713_539",
+          "element": "L4 正（胶合）",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.25,
+            "outer": 15.0
+          }
+        },
+        {
+          "id": "P9",
+          "R_x": -39.574,
+          "R_y": -39.574,
+          "d": 0.19,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 15.0,
+            "outer": 15.0
+          }
+        },
+        {
+          "id": "P10",
+          "R_x": 156.498,
+          "R_y": 156.498,
+          "d": 5.62,
+          "medium": "N_1713_539",
+          "element": "L5",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.75,
+            "outer": 14.75
+          }
+        },
+        {
+          "id": "P11",
+          "R_x": -226.066,
+          "R_y": -226.066,
+          "d": null,
+          "medium": "air",
+          "note": "d = BFL，由近轴追迹求出",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.5,
+            "outer": 14.75
+          }
+        }
+      ],
+      "stop": {
+        "after_surface": "P6",
+        "offset_fraction": 0.5,
+        "assumed": true,
+        "note": "暂取间隔中点，待按出瞳/渐晕调整",
+        "f_number": 2.8,
+        "semi_diameter_at_f_number": 13.023,
+        "z_at_infinity": 99.094
+      }
+    }
+  ],
+  "anamorphic": {
+    "desqueeze": 2.09,
+    "type": "front",
+    "note": "Isco 实施例 3 实际压缩比 2.09（专利 Fy/Fx），按此解挤压使无穷远处圆形不变形；按 Panavision 名义 2.0 解挤压会窄 4.5%"
+  },
+  "look": {
+    "reference": "Panavision E Series 135 mm T2.8，最近对焦 114.3 cm（panavision.com）；页面原文：Clean blue horizontal flares without additional artifacts such as veiling glare or edge reflections",
+    "f_number": 2.8,
+    "min_focus_mm": 1143.0,
+    "coating_nm": 125.0,
+    "flare_color": "PHYSICAL",
+    "flare_gain": 0.18,
+    "corner_pupil_fraction": 0.55
+  },
+  "focus": {
+    "mechanism": "按专利：中间两组（I4–I9）一起移动 Δ2；后组 I10–I12 与主镜由凸轮跟随移动 Δ1；前组 I1–I3 相对焦面固定。两截面同时求解",
+    "groups": [
+      {
+        "ids": [
+          "I10",
+          "I11",
+          "I12",
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11"
+        ],
+        "moves": [
+          1,
+          0
+        ]
+      },
+      {
+        "ids": [
+          "I4",
+          "I5",
+          "I6",
+          "I7",
+          "I8",
+          "I9"
+        ],
+        "moves": [
+          0,
+          1
+        ]
+      }
+    ],
+    "solve": [
+      "Ry",
+      "Rx"
+    ],
+    "min_distance_mm": 1143.0
+  },
+  "sensor": {
+    "format": "35 mm 变形光窗（SMPTE 59）",
+    "width": 22.0,
+    "height": 18.6
+  },
+  "aperture_design": {
+    "method": "真实光线追迹：传感器 9 个视场点 × 光阑边缘 48 点 + 中心，追到物方取各面最大高度",
+    "margin": 0.07,
+    "corner_pupil_fraction": 0.55,
+    "round_to_mm": 0.25,
+    "note": "角落视场只放行 55% 光瞳 → 机械渐晕，即边缘猫眼焦外的来源；收光圈后渐晕消失、焦外变圆"
+  }
+}

@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "blenderlens"
-version = "0.1.0"
+version = "0.2.0"
 name = "BlenderLens Anamorphic"
-tagline = "Ray-traced 2x front-anamorphic lens from public patents"
+tagline = "Ray-traced anamorphic lenses from public patents"
 maintainer = "BlenderLens project"
 type = "add-on"
 

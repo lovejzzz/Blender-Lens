@@ -72,7 +72,8 @@ print(f"    info: on-axis full-aperture f/2 transverse SA  x {bx:+.4f} mm, y {by
 # 7. 对焦：1 m 合焦后两截面像点都落在像面
 d1, d2 = O.solve_focus(rx, 1000.0)
 L1 = O.layout(rx, d1, d2)
-close(O._image_z(L1, "Ry", 1000.0), 0.0, 1e-6, "focus 1 m: vertical image at sensor")
-close(O._image_z(L1, "Rx", 1000.0), 0.0, 1e-6, "focus 1 m: horizontal image at sensor")
+L0 = O.layout(rx)
+close(O._image_z(L1, "Ry", 1000.0), O._image_z_inf(L0, "Ry"), 1e-6, "focus 1 m: vertical image back to its ∞ position")
+close(O._image_z(L1, "Rx", 1000.0), O._image_z_inf(L0, "Rx"), 1e-6, "focus 1 m: horizontal image back to its ∞ position")
 print(f"    Δ1 = {d1:.4f} mm, Δ2 = {d2:.4f} mm, squeeze(1 m) = {O.squeeze_at(rx, 1000.0):.4f}, squeeze(∞) = {O.squeeze_at(rx, math.inf):.4f}")
 print("ALL OPTICS TESTS PASSED")

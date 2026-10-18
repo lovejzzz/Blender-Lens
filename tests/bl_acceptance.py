@@ -63,11 +63,19 @@ def save_png(px, path, exposure=1.0):
     img.filepath_raw = path; img.file_format = 'PNG'; img.save()
     bpy.data.images.remove(img)
 
-def blob(px, cx, cy, half, rel=0.15):
-    """窗口内光斑：二阶矩宽高（均匀椭圆 a = 2σ）、阈值面积。"""
+def _smooth(a, r=1):
+    """(2r+1)² 盒式平滑：量面积前压掉单像素噪点。"""
+    out = np.zeros_like(a)
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            out += np.roll(np.roll(a, dy, 0), dx, 1)
+    return out / (2 * r + 1) ** 2
+
+def blob(px, cx, cy, half, rel=0.3):
+    """窗口内光斑：二阶矩宽高（均匀椭圆 a = 2σ）、阈值面积（先平滑，阈值 = 平滑后峰值的 rel）。"""
     y0, y1 = max(0, cy - half), min(px.shape[0], cy + half)
     x0, x1 = max(0, cx - half), min(px.shape[1], cx + half)
-    w = px[y0:y1, x0:x1].sum(axis=2)
+    w = _smooth(px[y0:y1, x0:x1].sum(axis=2))
     w = np.where(w > rel * w.max(), w, 0.0)
     ys, xs = np.mgrid[y0:y1, x0:x1]
     s = w.sum()
@@ -93,37 +101,56 @@ def image_pos(sc, cam_ob, world_xyz):
 
 
 # ───────────────── 1 + 2：焦外形状与猫眼 ─────────────────
+def energy(px, cx, cy, half=26):
+    y0, x0 = max(0, cy - half), max(0, cx - half)
+    return float(px[y0:cy + half + 1, x0:cx + half + 1].sum())
+
 def test_bokeh():
+    """① 竖椭圆焦外：中心光斑解挤压后高宽比 vs 真实追迹。
+    ② 猫眼：机械渐晕 = 角落光瞳被镜框挡掉。用能量指标：(E角/E中)@f/N ÷ (E角/E中)@f/2N，
+       对照真实追迹的光瞳通过率之比——视场相关的光斑大小与 cos⁴ 在比值里相消，只剩渐晕。"""
     H = 480
     sc, cam_ob = fresh(H)
     p = cam_ob.data.blenderlens
+    rx = rig.read_prescription()
+    N0 = rx["look"]["f_number"]
     p.focus_distance = 1200.0
     p.dispersion = False
     Z = -20000.0
-    rx = rig.read_prescription()
     S = O.layout(rx)
     fx = O.paraxial_infinity(S, "Rx")[0]; fy = O.paraxial_infinity(S, "Ry")[0]
     X = rx["sensor"]["width"] / 2 / fx * -Z           # 无穷远时画面半宽对应的物方 x
     Y = rx["sensor"]["height"] / 2 / fy * -Z
-    spots = {"center": (0.0, 0.0), "edge_x": (0.82, 0.0), "edge_y": (0.0, 0.72), "corner": (0.80, 0.70)}
+    spots = {"center": (0.0, 0.0), "edge_x": (0.90, 0.0), "corner": (0.88, 0.80), "far_corner": (-0.93, -0.86)}
     for k, (u, v) in spots.items():
         emitter(f"L_{k}", (u * X, v * Y, Z), 25.0, 4.0e5)
     out = {}
-    for N in (2.0, 4.0):
+    W2, H2 = rx["sensor"]["width"] / 2, rx["sensor"]["height"] / 2
+    shots = {}
+    for N in (N0, 2 * N0):
         p.f_number = N
         rig.render_preset(sc)
-        px = render(sc, f"accept_bokeh_f{N:g}", 192)
+        px = render(sc, f"accept_bokeh_f{N:g}", 512)
         res = {}
         for k, (u, v) in spots.items():
             cx, cy = image_pos(sc, cam_ob, (u * X, v * Y, Z))
-            res[k] = blob(px, cx, cy, 70)
+            b = blob(px, cx, cy, 40)
+            b["energy"] = energy(px, int(round(b["cx"])), int(round(b["cy"])))
+            res[k] = b
         out[f"f{N:g}"] = res
-    c2 = out["f2"]["center"]
+        shots[N] = res
+    c2 = out[f"f{N0:g}"]["center"]
     out["center_aspect_h_over_w_desqueezed"] = round(c2["height"] / c2["width"], 3)
     out["expected_aspect_raytrace"] = round(O.bokeh_aspect(rx, 1200.0, -Z)["aspect_desqueezed"], 3)
     out["squeeze_at_focus"] = round(O.squeeze_at(rx, 1200.0), 3)
-    for N in ("f2", "f4"):
-        out[f"corner_area_over_center_{N}"] = round(out[N]["corner"]["area"] / out[N]["center"]["area"], 3)
+    for k in ("edge_x", "corner", "far_corner"):
+        a, b = shots[N0], shots[2 * N0]
+        render_ratio = (a[k]["energy"] / a["center"]["energy"]) / (b[k]["energy"] / b["center"]["energy"])
+        bb = a[k]
+        field = ((bb["cx"] + 0.5) / sc.render.resolution_x * 2 * W2 - W2, (bb["cy"] + 0.5) / sc.render.resolution_y * 2 * H2 - H2)
+        T = lambda f, N: O.pupil_transmission(rx, f, N, 1200.0, n=31)
+        pred = (T(field, N0) / T((0, 0), N0)) / (T(field, 2 * N0) / T((0, 0), 2 * N0))
+        out[f"vignetting_{k}"] = dict(render=round(render_ratio, 3), raytrace=round(pred, 3))
     REPORT["bokeh"] = out
 
 

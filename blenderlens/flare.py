@@ -12,7 +12,7 @@ except ImportError:
 LAMBDAS = (0.610, 0.550, 0.465)          # R / G / B（μm），与 OSL 相机一致
 
 
-def _sag_grad(x, y, cx, cy, kx, ky):
+def _sag_grad(x, y, cx, cy, kx, ky, asph=()):
     N = cx * x * x + cy * y * y
     Q = 1.0 - (1 + kx) * cx * cx * x * x - (1 + ky) * cy * cy * y * y
     ok = Q > 0.0
@@ -22,7 +22,16 @@ def _sag_grad(x, y, cx, cy, kx, ky):
     dSy = -(1 + ky) * cy * cy * y / Sq
     gx = (2 * cx * x * den - N * dSx) / (den * den)
     gy = (2 * cy * y * den - N * dSy) / (den * den)
-    return N / den, gx, gy, ok
+    s = N / den
+    if asph:
+        r2 = x * x + y * y
+        p = r2
+        for m, a in enumerate(asph, start=2):
+            s = s + a * p * r2
+            g = a * 2 * m * p
+            gx = gx + g * x; gy = gy + g * y
+            p = p * r2
+    return s, gx, gy, ok
 
 def _fresnel_plain(n1, n2, ci):
     st = n1 / n2 * np.sqrt(np.clip(1.0 - ci * ci, 0, None))
@@ -57,7 +66,7 @@ class Lens:
         d1, d2 = O.solve_focus(rx, focus_dist)
         self.S = O.layout(rx, d1, d2)
         z_stop, r_stop = O.stop_geometry(rx, self.S)
-        N0 = next(g for g in rx["groups"] if g["id"] == "prime").get("f_number", 2.0)
+        N0 = O.nominal_f_number(rx)
         self.z_stop = z_stop
         self.r_stop = r_stop * (N0 / (f_number or N0))
         self.sensor = (rx["sensor"]["width"], rx["sensor"]["height"])
@@ -90,7 +99,7 @@ class Lens:
             with np.errstate(all="ignore"):
                 for _ in range(8):
                     x = P[:, 0] + t * D[:, 0]; y = P[:, 1] + t * D[:, 1]
-                    s, gx, gy, ok = _sag_grad(x, y, cx, cy, sf["kx"], sf["ky"])
+                    s, gx, gy, ok = _sag_grad(x, y, cx, cy, sf["kx"], sf["ky"], sf.get("asph") or ())
                     g = P[:, 2] + t * D[:, 2] - sf["z"] + s
                     dg = D[:, 2] + gx * D[:, 0] + gy * D[:, 1]
                     t = t - g / np.where(np.abs(dg) < 1e-12, 1e-12, dg)
@@ -101,14 +110,12 @@ class Lens:
                 qx = P[:, 0] + ts * D[:, 0]; qy = P[:, 1] + ts * D[:, 1]
                 keep &= ~cross | (qx * qx + qy * qy <= self.r_stop ** 2)
                 a = sf["ap"]
-                if a["shape"] == "rect":
-                    keep &= (np.abs(Pn[:, 0]) <= a["semi_x"]) & (np.abs(Pn[:, 1]) <= a["semi_y"])
-                else:
-                    keep &= Pn[:, 0] ** 2 + Pn[:, 1] ** 2 <= a["clear"] ** 2
+                clr, msx, msy, _ = O.ap_limits(a)
+                keep &= (Pn[:, 0] ** 2 + Pn[:, 1] ** 2 <= clr * clr) & (np.abs(Pn[:, 0]) <= msx) & (np.abs(Pn[:, 1]) <= msy)
             P, D, w, idx = Pn[keep], D[keep], w[keep], idx[keep]
             if P.shape[0] == 0:
                 break
-            s, gx, gy, ok = _sag_grad(P[:, 0], P[:, 1], cx, cy, sf["kx"], sf["ky"])
+            s, gx, gy, ok = _sag_grad(P[:, 0], P[:, 1], cx, cy, sf["kx"], sf["ky"], sf.get("asph") or ())
             L = np.sqrt(gx * gx + gy * gy + 1.0)
             Nrm = np.stack([gx / L, gy / L, 1.0 / L], axis=1)
             c = -(Nrm * D).sum(axis=1)
@@ -152,7 +159,7 @@ class Lens:
 def _source_rays(lens, src, n_grid):
     """从光源点（镜头坐标）射向前片矩形口径的均匀网格。返回 P, D, 每条光线的相对权重。"""
     a = lens.S[0]["ap"]
-    sx, sy = (a["semi_x"], a["semi_y"]) if a["shape"] == "rect" else (a["outer"], a["outer"])
+    sx, sy = O._outer_extent(lens.S[0])
     u = (np.arange(n_grid) + 0.5) / n_grid * 2 - 1
     gx, gy = np.meshgrid(u * sx * 1.02, u * sy * 1.02)
     z0 = lens.S[0]["z"] + 5.0
