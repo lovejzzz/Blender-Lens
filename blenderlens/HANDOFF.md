@@ -258,9 +258,9 @@ blender -b shot.blend --python-expr "import blenderlens.api as bl; bl.enable_gpu
 - 曝光基准：开 Compensate Exposure 时，轴上、只受光阑限光的像点 = 场景亮度（相当于按 T 值对齐，各预设可以直接比较）。最大光圈下其他镜片的切光照常保留，例如 C 系列在 f/2.0 时轴上暗 16%。0.4 起 Panavision 两个预设比 0.3 亮 0.39 档（修正了椭圆出瞳的估计）。
 - 每个 .blend 只能有一支 BlenderLens 镜头。
 - Cycles 的 OSL 相机只有两维随机数（实测第三维恒为 0），色散的波长只能用随机数与像素位置的哈希。
-- 炫光只算两次反射的序列鬼影，不含衍射星芒和镜筒杂散光。
+- 炫光：两次反射的序列鬼影 + 衍射星芒 + 杂光（0.6）；不含镜筒内壁杂散光。
 - 光阑轴向位置（尼康主镜）专利未给，取间隔中点；C 系列风格的变形器到主镜间隔 5 mm 为我方取值。
-- 色散（0.6）：有目录数据的玻璃（Panavision、Neil 预设的 Ohara 玻璃）用 Ohara 目录公式的四项拟合，400–700 nm 误差 ≤ 2.6e-5，旧的两项 Cauchy 在重火石的紫端误差达 8.7e-3。老专利只给 nd / Vd 的玻璃（Rosin、Nikon、Isco）仍用两项 Cauchy。Geometry 模式为单一 d 线折射率。
+- 色散（0.6）：有目录数据的玻璃（Panavision、Neil 预设的 Ohara 玻璃）用 Ohara 目录公式的四项拟合，400–700 nm 误差 ≤ 2.6e-5，旧的两项 Cauchy 在重火石的紫端误差达 8.7e-3。老专利只给 nd / Vd 的玻璃（Rosin、Nikon）仍用两项 Cauchy；Isco 0.7 起用 Schott 目录曲线并通过专利谱线。Geometry 模式为单一 d 线折射率。
 - Neil 2× 预设的像面在专利里是弯曲的（模拟弯曲物面），这里是平面传感器：画面边缘的最佳聚焦在传感器前 0.1–0.2 mm（有像散），f/3 时 4K 角落约 6–12 px 弥散，属于该设计本身的软角（research/RESEARCH.md §6.8）。
 - Isco（E/G）玻璃 0.7 起用 Schott 目录曲线并精确通过专利的 d / C / F 三条谱线。
 - Isco「低发腮」：同放大率下压缩比变化 −9.9%（Rosin −12.9%），没有专利正文说的那么低。

@@ -193,7 +193,9 @@ O.bokeh_aspect(rx, 1200.0, 20000.0)      # 焦外高宽比（解挤压后）
 3. 在 Blender 里 **Build**，或 **Recompute Apertures**。网格、OSL 相机、对焦表都由 JSON 重新生成，不要手改网格或 OSL。
 
 研究资料随扩展分发在 `blenderlens/research/`：
-- `RESEARCH.md`：查过的专利、各预设的数据来源与逐位核对、我方假设、修正记录、未完成的方向；
+- `RESEARCH.md`：查过的专利、各预设的数据来源与逐位核对、我方假设、修正记录；
+- `ROADMAP.md`：下一步计划（0.8 准确性与采样、0.9 新镜头、1.0 管线），每项有做法和验收标准；
+- 候选专利原件（未打包进扩展）在仓库根目录 `research_candidates/patents/`；
 - 专利扫描件与全文、玻璃色散数据；
 - 处方生成器与全部测试。
 
