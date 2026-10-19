@@ -108,7 +108,7 @@ def generate_header(rx, settings=None):
     h.append("#define BLENDERLENS_GPU_CAMERA 1\n")
     h.append(f"#define BL_NS {NS}\n")
     for nm, key in (("BL_Z", "Z"), ("BL_CX", "CX"), ("BL_CY", "CY"), ("BL_KX", "KX"), ("BL_KY", "KY"), ("BL_NA", "A_"),
-                    ("BL_NB", "B_"), ("BL_CLR", "CLR"), ("BL_MSX", "MSX"), ("BL_MSY", "MSY"), ("BL_G1", "G1"), ("BL_G2", "G2")):
+                    ("BL_NB", "B_"), ("BL_NC", "C_"), ("BL_NE", "E_"), ("BL_ND", "ND"), ("BL_CLR", "CLR"), ("BL_MSX", "MSX"), ("BL_MSY", "MSY"), ("BL_G1", "G1"), ("BL_G2", "G2")):
         h.append(_carr(nm, D[key]))
     h.append(_carr("BL_AT", D["AT"], "int"))
     for nm, key in (("BL_AC", "AC"), ("BL_AMX", "AMX"), ("BL_AMY", "AMY")):
@@ -120,7 +120,9 @@ def generate_header(rx, settings=None):
     h.append(_carr("BL_SPC", sp["cdf"]))
     for c, nm in enumerate(("BL_SPR", "BL_SPG", "BL_SPB")):
         h.append(_carr(nm, sp["w"][c]))
-    consts = dict(BL_SENSOR_W=D["W"], BL_SENSOR_H=D["H"], BL_Z_STOP=D["z_stop"], BL_R_STOP=D["r_stop"],
+    S0 = D["S"]
+    efl_x = abs(O.paraxial_infinity(S0, "Rx")[0]); efl_y = abs(O.paraxial_infinity(S0, "Ry")[0])
+    consts = dict(BL_EFL_X=efl_x, BL_EFL_Y=efl_y, BL_SENSOR_W=D["W"], BL_SENSOR_H=D["H"], BL_Z_STOP=D["z_stop"], BL_R_STOP=D["r_stop"],
                   BL_Z_EXP=D["z_exp"], BL_R_EXP=D["r_exp"], BL_N0=D["N0"], BL_EXPOSURE_NORM=1.0 / D["T0"],
                   BL_SG1=float(D["SG1"]), BL_SG2=float(D["SG2"]), BL_SP_L0=sp["l0"], BL_SP_DL=sp["dl"],
                   BL_LAMBDA_D=O.LAMBDA_D, BL_UNIT_SCALE=st["unit_scale"], BL_BLADE_ROT=st["blade_rotation"],
@@ -256,8 +258,7 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
     lam = BL_SP_L0 + (j + fr) * BL_SP_DL;
     chan = make_float3(BL_SPR[j], BL_SPG[j], BL_SPB[j]);
   }
-  const float il2d = 1.0f / (BL_LAMBDA_D * BL_LAMBDA_D);
-  const float il2 = il2d + BL_DISP_STRENGTH * (1.0f / (lam * lam) - il2d);
+  const float il2 = 1.0f / (lam * lam);       /* n(λ) = A + B/λ² + C/λ⁴ + E/λ⁶，按强度在 n_d 与之间插值 */
 
   const float r_stop = BL_R_STOP * k_stop;
   const float z_stop = BL_Z_STOP + BL_SG1 * delta_unit + BL_SG2 * delta_front;
@@ -330,8 +331,8 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
     }
 
     /* 折射：沿 +Z 从面后介质进入面前介质 */
-    const float n1 = BL_NA[i] + BL_NB[i] * il2;
-    const float n2 = (i > 0) ? BL_NA[i - 1] + BL_NB[i - 1] * il2 : 1.0f;
+    const float n1 = BL_ND[i] + BL_DISP_STRENGTH * (BL_NA[i] + il2 * (BL_NB[i] + il2 * (BL_NC[i] + il2 * BL_NE[i])) - BL_ND[i]);
+    const float n2 = (i > 0) ? BL_ND[i - 1] + BL_DISP_STRENGTH * (BL_NA[i - 1] + il2 * (BL_NB[i - 1] + il2 * (BL_NC[i - 1] + il2 * BL_NE[i - 1])) - BL_ND[i - 1]) : 1.0f;
     float3 nrm = normalize(make_float3(gx, gy, 1.0f));
     float c = -dot(nrm, d);
     if (c < 0.0f) {
@@ -348,6 +349,9 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
 
   const float3 P = make_float3(-p.x, p.y, p.z) * BL_UNIT_SCALE;
   const float3 Dout = make_float3(-d.x, d.y, d.z);
+  /* 光线微分（纹理过滤用）：相邻像素的方向差 ≈ 像素尺寸 / 焦距（两向分别；OSL 版由自动微分得到） */
+  const float3 Dx = normalize(Dout + make_float3(BL_SENSOR_W / cam->width / BL_EFL_X, 0.0f, 0.0f));
+  const float3 Dy = normalize(Dout + make_float3(0.0f, BL_SENSOR_H / cam->height / BL_EFL_Y, 0.0f));
   camera_sample_to_ray(cam,
                        cam_motion,
                        P,
@@ -356,9 +360,9 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
                        P,
                        Dout,
                        P,
-                       Dout,
+                       Dx,
                        P,
-                       Dout,
+                       Dy,
 #  endif
                        ray);
   return make_float3(w * chan.x, w * chan.y, w * chan.z);

@@ -22,6 +22,10 @@ PLINTH_H = 1120.0     # 底座高度（胸像底部高度）
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 blenderlens.register()
+GPU = os.environ.get("BL_GPU") == "1"                 # BL_GPU=1：用 BlenderLens GPU 路径（Metal）渲染
+if GPU:
+    import blenderlens.api as _bl
+    print("GPU", _bl.enable_gpu(use_gpu=False))
 bpy.ops.blenderlens.build(preset=PRESET, height=HEIGHT, focal_mm=FOCAL)
 sc = bpy.context.scene
 cam_ob = sc.camera
@@ -216,6 +220,12 @@ p.dispersion = True
 p.ghosts = False
 rig.render_preset(sc)
 sc.cycles.samples = SAMPLES
+if GPU:
+    _pr = bpy.context.preferences.addons["cycles"].preferences
+    _pr.compute_device_type = 'METAL'; _pr.get_devices()
+    for _d in _pr.devices:
+        _d.use = _d.type == 'METAL'
+    sc.cycles.device = 'GPU'
 sc.cycles.use_denoising = True
 sc.cycles.denoiser = 'OPENIMAGEDENOISE'
 sc.cycles.denoising_prefilter = 'ACCURATE'

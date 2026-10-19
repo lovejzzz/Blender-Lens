@@ -54,9 +54,84 @@ def cauchy(nd, vd):
     B = (nd - 1.0) / (vd * (LAMBDA_F ** -2 - LAMBDA_C ** -2))
     return nd - B / LAMBDA_D ** 2, B
 
+# ── 目录色散：有目录数据的玻璃（Ohara，refractiveindex.info CC0 数据，见 glass/ohara.json）用目录公式，
+#    拟合成 n(λ) = A + B/λ² + C/λ⁴ + E/λ⁶（400–700 nm，预设所用 35 种玻璃误差 ≤ 2.6e-5），并锚定 n(λd) = 处方 nd；
+#    其他玻璃（老专利只给 nd / Vd）用两项 Cauchy。OSL / GPU / 炫光 / 出瞳表 / 横向色差都用同一组系数。
+_CATALOG = None
+_COEFF_CACHE = {}
+
+def _catalog():
+    global _CATALOG
+    if _CATALOG is None:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glass", "ohara.json")
+        _CATALOG = json.load(open(p, encoding="utf-8"))["glasses"] if os.path.exists(p) else {}
+    return _CATALOG
+
+def catalog_entry(glass):
+    """处方玻璃 → 目录记录（无则 None）。认 glass["catalog"]（如 "OHARA:S-TIH53"）或 glass["name"]（老牌号，或省略连字符的 S 系列）。"""
+    cat = _catalog()
+    key = (glass.get("catalog") or "").split(":")[-1] or glass.get("name")
+    if not key:
+        return None, None
+    for k in (key, "S-" + key[1:] if key.startswith("S") and not key.startswith("S-") else None):
+        if k and k in cat:
+            return k, cat[k]
+    return None, None
+
+def catalog_index(rec, lam_um):
+    c, l2 = rec["c"], lam_um * lam_um
+    if rec["formula"] == 2:
+        return math.sqrt(1.0 + sum(c[k] * l2 / (l2 - c[k + 1]) for k in range(1, len(c) - 1, 2)))
+    if rec["formula"] == 3:
+        return math.sqrt(c[0] + sum(c[k] * lam_um ** c[k + 1] for k in range(1, len(c) - 1, 2)))
+    raise ValueError(rec["formula"])
+
+def dispersion_coeffs(glass):
+    """(A, B, C, E)：n(λ) = A + B/λ² + C/λ⁴ + E/λ⁶（λ 单位 μm）。"""
+    nd, vd = glass["nd"], glass.get("vd")
+    if vd is None or nd == 1.0:
+        return nd, 0.0, 0.0, 0.0
+    key, rec = catalog_entry(glass)
+    ck = (nd, vd, key)
+    if ck in _COEFF_CACHE:
+        return _COEFF_CACHE[ck]
+    if rec is None:
+        A, B = cauchy(nd, vd)
+        out = (A, B, 0.0, 0.0)
+    else:
+        lams = [0.40 + 0.005 * i for i in range(61)]                # 400–700 nm（渲染用到的波段）
+        rows = [(1.0, l ** -2, l ** -4, l ** -6) for l in lams]
+        ys = [catalog_index(rec, l) for l in lams]
+        ld = LAMBDA_D                                                # n(λd) = nd 作为大权重的一行
+        rows.append(tuple(1e4 * v for v in (1.0, ld ** -2, ld ** -4, ld ** -6))); ys.append(1e4 * nd)
+        M = [[sum(r[i] * r[j] for r in rows) for j in range(4)] for i in range(4)]
+        v = [sum(r[i] * y for r, y in zip(rows, ys)) for i in range(4)]
+        out = tuple(_solve(M, v))
+    _COEFF_CACHE[ck] = out
+    return out
+
+def _solve(M, v):
+    """小型线性方程组（列主元高斯消去）。"""
+    import copy as _c
+    n = len(v)
+    a = _c.deepcopy(M); b = list(v)
+    for i in range(n):
+        p = max(range(i, n), key=lambda r: abs(a[r][i]))
+        a[i], a[p] = a[p], a[i]; b[i], b[p] = b[p], b[i]
+        for r in range(i + 1, n):
+            f = a[r][i] / a[i][i]
+            for c in range(i, n):
+                a[r][c] -= f * a[i][c]
+            b[r] -= f * b[i]
+    x = [0.0] * n
+    for i in range(n - 1, -1, -1):
+        x[i] = (b[i] - sum(a[i][c] * x[c] for c in range(i + 1, n))) / a[i][i]
+    return x
+
 def index_at(glass, lam_um=LAMBDA_D):
-    A, B = cauchy(glass["nd"], glass.get("vd"))
-    return A + B / (lam_um * lam_um)
+    A, B, C, E = dispersion_coeffs(glass)
+    il2 = 1.0 / (lam_um * lam_um)
+    return A + il2 * (B + il2 * (C + il2 * E))
 
 def flatten(rx):
     """整支镜头的面列表（R、d、非球面已按各组 scale 缩放；aperture 为物理 mm）。"""

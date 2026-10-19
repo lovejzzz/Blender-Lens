@@ -77,3 +77,22 @@ close(O._image_z(L1, "Ry", 1000.0), O._image_z_inf(L0, "Ry"), 1e-6, "focus 1 m: 
 close(O._image_z(L1, "Rx", 1000.0), O._image_z_inf(L0, "Rx"), 1e-6, "focus 1 m: horizontal image back to its ∞ position")
 print(f"    Δ1 = {d1:.4f} mm, Δ2 = {d2:.4f} mm, squeeze(1 m) = {O.squeeze_at(rx, 1000.0):.4f}, squeeze(∞) = {O.squeeze_at(rx, math.inf):.4f}")
 print("ALL OPTICS TESTS PASSED")
+
+# ── 目录色散（0.6）：有目录数据的玻璃用 Ohara 公式的四项拟合，nd 精确，400–700 nm 误差 ≤ 3e-5 ──
+import glob as _glob, json as _json
+_worst, _n = 0.0, 0
+for _f in _glob.glob(os.path.join(O.PRESCRIPTION_DIR, "*.json")):
+    for _g in _json.load(open(_f, encoding="utf-8"))["glasses"].values():
+        _k, _rec = O.catalog_entry(_g)
+        if _rec is None:
+            continue
+        _n += 1
+        assert abs(O.index_at(_g) - _g["nd"]) < 1e-9, (_k, "nd 未锚定")
+        _worst = max(_worst, max(abs(O.index_at(_g, l / 1000) - O.catalog_index(_rec, l / 1000)) for l in range(400, 701, 5)))
+assert _n >= 20 and _worst < 3e-5, (_n, _worst)
+print(f"ok  catalog dispersion: {_n} preset glasses match Ohara formulas, worst {_worst:.1e} over 400–700 nm")
+_g = {"nd": 1.5168, "vd": 64.17}                         # 无目录：仍是两项 Cauchy
+_A, _B = O.cauchy(1.5168, 64.17)
+assert abs(O.index_at(_g, 0.45) - (_A + _B / 0.45 ** 2)) < 1e-12
+print("ok  non-catalog glass keeps 2-term Cauchy")
+print("ALL CATALOG DISPERSION TESTS PASSED")

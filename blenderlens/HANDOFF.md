@@ -1,6 +1,6 @@
-# BlenderLens 0.5.1 交接说明（给接手的 AI）
+# BlenderLens 0.6.0 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.5.1**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.6.0**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -16,11 +16,11 @@ Panavision 的 C/E/G/T/Primo 量产处方从未公开。除「Panavision 后置�
 
 要求：Blender **5.0 及以上**（开发和测试都在 macOS / Apple M2 Max / Blender 5.3 beta 上完成；Windows、Linux、5.0–5.2 未实测）。不依赖第三方 Python 包。
 
-- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.5.1.zip`。
+- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.6.0.zip`。
 - 命令行：
 
 ```bash
-blender --command extension install-file -r user_default -e blenderlens-0.5.1.zip
+blender --command extension install-file -r user_default -e blenderlens-0.6.0.zip
 ```
 
 装好后的 Python 模块路径是 `bl_ext.user_default.blenderlens`（仓库名 `user_default` 取决于安装到哪个仓库）。启用后插件会把自己同时登记为 `blenderlens`，脚本里直接写 `import blenderlens.api as bl` 即可，不用管仓库名。
@@ -50,9 +50,14 @@ blender --command extension install-file -r user_default -e blenderlens-0.5.1.zi
 | `g_series_style.json` | G 系列风格（2007） | 同 E，整体缩放 0.763 | 100 mm · f/3 · 0.914 m | 同上 · 2.09 |
 | `panavision_rear_134.json` | Panavision 后置 1.34×（真实处方） | US 7,085,066（Iain Neil / Panavision），变焦镜短焦端 Z1 + 8 片后置变形组 | 20.6 mm · f/3.66 · 0.476 m | 16:9 23.71×13.34 · 1.35 |
 | `panavision_rear_134_tele.json` | 同上，长焦端 | 同上，变焦镜 Z4（间隔取自 US 6,122,111） | 66.4 mm · f/4.1 · 0.476 m | 同上 |
+| `neil_2x_50.json` / `neil_2x_65.json` / `neil_2x_85.json` | Neil 2× 现代变形（真实处方，0.6） | CN 111562632 B（Iain Neil / 思锐 Sirui，2019）：同一前变形部分 + 三个可换后组 | 50 / 65 / 85 mm · f/3 · 1.08 m | 21.30×17.82 · 2.06 |
 
 - 光圈数值取自 Panavision 公布的 **T 值**，模型里当作几何 f 值使用（真实镜头约亮 0.2 档）。
 - 长焦端的变焦镜口径用 US 6,122,111 给出的各面最大通光直径（镜片实物尺寸）。0.3 误用 Z1 的光束高度，轴上光束被切掉一半以上，0.4 已修正。
+- Neil 2× 三个预设（0.6）：
+  - 不是 Panavision 镜头，是 Panavision 后置变形组的同一位设计者 Iain Neil 为思锐做的现代 2× 前置变形。
+  - G1b 两片整体移动对焦，一个自由度同时对准两向；压缩比 2.06 → 1.93（发腮 −6.6%，比 C/E/G 温和得多）。
+  - 数据必须用中国授权本 CN 111562632 B；美国本 US 11,287,618 的表格印刷错误很多（详见 research/RESEARCH.md §3.6、§5 第 12 条）。
 - Panavision 后置两个预设：对焦按原变焦镜专利（US 6,122,111）的内对焦，前两组按 1 : 0.909 移动，所以两向同时合焦、没有发腮；最近对焦 0.48 m 取自该专利 F3（物面到第一面 133 mm），行程与专利表吻合到 0.01%（F3）/ 1%（F2）。
 
 **统一焦段**：Build 时设 `focal_mm`，可把任意预设按比例缩放到同一垂直焦距（变形镜头按垂直方向命名焦距）。几个预设能同时物理成立的共同焦段是 **100 mm**：E/G 用的 Isco 附加镜是长焦设计，低于约 100 mm 会超出设计视场。Panavision 短焦端缩到 100 mm 要放大 4.85 倍，是假想的超大镜头；比较时优先用长焦端（放大 1.51 倍）。
@@ -82,6 +87,8 @@ blender --command extension install-file -r user_default -e blenderlens-0.5.1.zi
 | Compensate Exposure | 收光圈时补偿曝光；关闭则按物理变暗 |
 | Ghosts / Flare | 相机端随机鬼影（只适合大面积亮源） |
 | MgF₂ Coating / Coating (nm) | 镀膜开关与膜厚：100 nm 为标准（残余反射蓝紫），125–140 nm 为风格化（更蓝） |
+| Starburst / Intensity（0.6） | 衍射星芒：光圈多边形的夫琅禾费衍射，按 R/G/B 与两向数值孔径计算，叶片数 6 → 6 芒，变形镜头的星芒会被拉伸；叶片数 0 时只有 Airy 光环。只加在 Render with Flare / API 输出里，只对标记的炫光光源 |
+| Veiling Glare（0.6） | 杂光 / 雾化比例（保能量的长尾散射）。搭建时取预设值（ISO 9358 杂光指数典型范围：C 2.5%、Panavision 1.2%、E / Neil 0.8%、G 0.5%），0 = 关。只加在 Render with Flare / API 输出里 |
 | Flare Color / Tint / Intensity | Render with Flare 的着色：Physical（镀膜算出的颜色）/ Light Color（灯光本色）/ Amber（琥珀）/ Custom；Intensity 为倍数，1 = 物理正确。非 Physical 模式只换颜色，亮度不变 |
 
 3. **Mark Flare Source**：把选中的发光物体标记为炫光光源。光源最好是一个**小的独立发光物体**（例如灯泡位置放一个发光小球），因为炫光通道用物体的原点作光源位置、最大尺寸的一半作半径。没有任何标记时，自动选取发光强度 ≥ 2×10⁴ 的物体。
@@ -247,7 +254,8 @@ blender -b shot.blend --python-expr "import blenderlens.api as bl; bl.enable_gpu
 - Cycles 的 OSL 相机只有两维随机数（实测第三维恒为 0），色散的波长只能用随机数与像素位置的哈希。
 - 炫光只算两次反射的序列鬼影，不含衍射星芒和镜筒杂散光。
 - 光阑轴向位置（尼康主镜）专利未给，取间隔中点；C 系列风格的变形器到主镜间隔 5 mm 为我方取值。
-- 色散用 Cauchy 近似（Isco 用专利给的 n_d / n_C / n_F）；Geometry 模式为单一 d 线折射率。
+- 色散（0.6）：有目录数据的玻璃（Panavision、Neil 预设的 Ohara 玻璃）用 Ohara 目录公式的四项拟合，400–700 nm 误差 ≤ 2.6e-5，旧的两项 Cauchy 在重火石的紫端误差达 8.7e-3。老专利只给 nd / Vd 的玻璃（Rosin、Nikon、Isco）仍用两项 Cauchy。Geometry 模式为单一 d 线折射率。
+- Neil 2× 预设的像面在专利里是弯曲的（模拟弯曲物面），这里是平面传感器，边缘带该设计本身的场曲。
 - Isco「低发腮」：同放大率下压缩比变化 −9.9%（Rosin −12.9%），没有专利正文说的那么低。
 
 ## 11. 出问题时先查

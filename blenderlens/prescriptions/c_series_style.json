@@ -430,6 +430,8 @@
     "coating_nm": 135.0,
     "flare_color": "PHYSICAL",
     "flare_gain": 1.5,
-    "corner_pupil_fraction": 0.4
+    "corner_pupil_fraction": 0.4,
+    "veiling_glare": 0.025,
+    "veiling_glare_note": "1960 年代单层镀膜：ISO 9358 杂光指数典型 2–3%；E 0.8%、G 0.5%（官方「极佳抗眩光」）、Panavision 后置 1.2%（多片变焦）、Neil 0.8%（现代多层膜）"
   }
 }

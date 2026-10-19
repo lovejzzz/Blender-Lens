@@ -58,6 +58,14 @@ class BLCameraSettings(bpy.types.PropertyGroup):
                                     default=(0.25, 0.55, 1.0))
     flare_gain: FloatProperty(name="Flare Intensity", default=1.0, min=0.0, soft_max=10.0,
                               description="炫光强度倍数；1 = 物理正确")
+    starburst: BoolProperty(name="Diffraction Starburst", default=True,
+                            description="光圈多边形的衍射星芒（夫琅禾费，按 R/G/B 与两向数值孔径计算）；只在 Render with Flare / API 输出里加，"
+                                        "叶片数 0 时只有 Airy 光环")
+    starburst_gain: FloatProperty(name="Starburst Intensity", default=1.0, min=0.0, soft_max=10.0,
+                                  description="星芒强度倍数；1 = 物理正确")
+    veiling_glare: FloatProperty(name="Veiling Glare", default=0.0, min=0.0, max=0.2, precision=3,
+                                 description="杂光 / 雾化比例（保能量的长尾散射）；按预设观感取 ISO 9358 杂光指数的典型值，0 = 关。"
+                                             "只在 Render with Flare / API 输出里加")
 
 
 def _preset_items(self, context):
@@ -261,6 +269,11 @@ def _draw_settings(layout, cam_ob):
     if p.flare_color == 'CUSTOM':
         col.prop(p, "flare_tint", text="")
     col.prop(p, "flare_gain", text="Intensity")
+    row = col.row(align=True)
+    row.prop(p, "starburst", text="Starburst")
+    sub = row.row(align=True); sub.active = p.starburst
+    sub.prop(p, "starburst_gain", text="")
+    col.prop(p, "veiling_glare")
     if cam_ob.get("bl_min_focus_mm"):
         layout.label(text=f"Min focus: {cam_ob['bl_min_focus_mm'] / 1000:.2f} m")
     try:

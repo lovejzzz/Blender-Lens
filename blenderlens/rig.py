@@ -233,6 +233,7 @@ def apply_look(cam_ob, rx):
     p.coated = p.coating_nm > 0
     p.flare_color = look.get("flare_color", 'PHYSICAL')
     p.flare_gain = look.get("flare_gain", 1.0)
+    p.veiling_glare = look.get("veiling_glare", 0.0)
     p.focus_distance = 0.0                      # 0 = 无穷远
     cam_ob["bl_min_focus_mm"] = rx.get("focus", {}).get("min_distance_mm", look.get("min_focus_mm", 0.0))
     cam_ob["bl_preset"] = rx["meta"].get("short_name", rx["meta"]["name"])
@@ -529,8 +530,14 @@ def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_lay
         lay, info = FL.flare_layer(rx, src, strength, radius, W, H, focus_dist=dist, f_number=p.f_number,
                                    coated=p.coated, coating_nm=p.coating_nm, n_grid=n_grid, blur_px=blur_px)
         layer += recolor(lay, color, p.flare_color, tuple(p.flare_tint)) * p.flare_gain
+        if p.starburst and p.starburst_gain > 0:                 # 衍射星芒：光源本色（不受炫光着色影响）
+            sb, _ = FL.starburst_layer(rx, src, strength, radius, W, H, focus_dist=dist, f_number=p.f_number,
+                                       blades=p.blades, blade_rotation_deg=p.blade_rotation, gain=p.starburst_gain)
+            layer += sb * np.asarray(color)[None, None, :]
         used.append(ob.name)
     px[:, :, :3] += layer[::-1].astype(np.float32)     # 图像行 0 = 底部
+    if flare and p.veiling_glare > 0:                  # 杂光：对整幅（含炫光）做保能量的长尾散射
+        px[:, :, :3] = FL.veiling_glare(px[:, :, :3].astype(np.float64), p.veiling_glare).astype(np.float32)
     if flare_layer_path:
         fl = bpy.data.images.new("BL Flare Layer", W, H, float_buffer=True)
         a = np.ones((H, W, 4), np.float32); a[:, :, :3] = layer[::-1]

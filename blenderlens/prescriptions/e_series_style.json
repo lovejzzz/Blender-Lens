@@ -480,7 +480,8 @@
     "coating_nm": 125.0,
     "flare_color": "PHYSICAL",
     "flare_gain": 0.18,
-    "corner_pupil_fraction": 0.55
+    "corner_pupil_fraction": 0.55,
+    "veiling_glare": 0.008
   },
   "focus": {
     "mechanism": "按专利：中间两组（I4–I9）一起移动 Δ2；后组 I10–I12 与主镜由凸轮跟随移动 Δ1；前组 I1–I3 相对焦面固定。两截面同时求解",

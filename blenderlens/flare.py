@@ -73,11 +73,12 @@ class Lens:
         nb = [1.0] + [sf["glass"]["nd"] for sf in self.S[:-1]]
         self.coatable = [(nb[k] == 1.0) != (sf["glass"]["nd"] == 1.0) for k, sf in enumerate(self.S)]
         self.AG = [k for k, c in enumerate(self.coatable) if c]
-        self.cauchy = [O.cauchy(sf["glass"]["nd"], sf["glass"].get("vd")) for sf in self.S]
+        self.cauchy = [O.dispersion_coeffs(sf["glass"]) for sf in self.S]
 
     def n_after(self, k, lam):
-        A, B = self.cauchy[k]
-        return A + B / (lam * lam)
+        A, B, C, E = self.cauchy[k]
+        il2 = 1.0 / (lam * lam)
+        return A + il2 * (B + il2 * (C + il2 * E))
 
     def n_before(self, k, lam):
         return 1.0 if k == 0 else self.n_after(k - 1, lam)
@@ -282,3 +283,122 @@ def flare_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f_num
     ghost *= scale[None, None, :]
     return _blur(ghost, blur_px), dict(direct_energy=direct_E.tolist(), E_cycles=E_cycles,
                                        ghost_energy=ghost.sum(axis=(0, 1)).tolist())
+
+
+# ───────────────────────── 衍射星芒（0.6）─────────────────────────
+# 光圈多边形的夫琅禾费衍射：PSF = |FFT(光瞳)|²，按 R/G/B 波长缩放；变形镜头出瞳是光阑的仿射像，
+# 所以像方两向的数值孔径不同（由追迹的光束张角量出），星芒在 X/Y 上按各自的 λ/NA 拉伸。
+# 能量：PSF 归一化为 1，乘该光源在 Cycles 里的直射像总能量（与鬼影同一基准）；去掉 Airy 主斑（渲染里已有），
+# 只加主斑以外的衍射能量。强离焦光源（焦外光斑大）以焦外为主，星芒按光斑半径淡出。
+
+def _aperture_mask(n, L, blades, rot_rad):
+    """[-L, L]² 网格上的单位光瞳（半径 1）：圆，或 blades 边形（外接圆半径 1，与 OSL 相机同一判据）。
+    边缘按到边界的有符号距离做抗锯齿（覆盖率），否则阶梯状边缘会衍射出平行的假星芒。"""
+    u = (np.arange(n) + 0.5) / n * 2 * L - L
+    X, Y = np.meshgrid(u, u)
+    du = 2 * L / n
+    if blades < 3:
+        dist = np.hypot(X, Y) - 1.0
+    else:
+        ca, sa = math.cos(rot_rad), math.sin(rot_rad)
+        bx, by = ca * X + sa * Y, -sa * X + ca * Y
+        seg = 2 * math.pi / blades
+        ang = np.arctan2(by, bx)
+        m = ang - seg * np.floor(ang / seg) - 0.5 * seg
+        dist = np.hypot(bx, by) * np.cos(m) - math.cos(0.5 * seg)     # 到最近一条边的有符号距离
+    return np.clip(0.5 - dist / du, 0.0, 1.0)
+
+_PSF_CACHE = {}
+
+def _psf(blades, rot_rad, n=2048, L=2.0):
+    """归一化的衍射 PSF（总和 1），频率步长 1/(2L)。按光圈形状缓存（与波长、f 值无关，像面上再按 λ/NA 缩放）。"""
+    key = (int(blades), round(rot_rad, 6), n, L)
+    if key not in _PSF_CACHE:
+        if len(_PSF_CACHE) > 6:
+            _PSF_CACHE.clear()
+        A = _aperture_mask(n, L, blades, rot_rad)
+        I = np.abs(np.fft.fftshift(np.fft.fft2(A))) ** 2
+        _PSF_CACHE[key] = I / I.sum()
+    return _PSF_CACHE[key]
+
+def starburst_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f_number=None, blades=0,
+                    blade_rotation_deg=0.0, n_rays=120, gain=1.0, fade_px=12.0):
+    """一个光源的衍射层（H×W×3，行 0 = 顶部，与 flare_layer 同一坐标）。返回 (layer, info)。"""
+    lens = Lens(rx, focus_dist, f_number)
+    P, D, wt = _source_rays(lens, src_lens, n_rays)
+    idx, X, Y, w, Dout = lens.trace(P, D, Lens.seq_direct(len(lens.S)), O.LAMBDA_D, True, 0.0, 1.38)
+    if len(idx) < 8:
+        return np.zeros((H, W, 3)), dict(skipped="no direct image")
+    ww = wt[idx]
+    cx, cy = float((X * ww).sum() / ww.sum()), float((Y * ww).sum() / ww.sum())
+    SW, SH = lens.sensor
+    if abs(cx) > SW * 0.75 or abs(cy) > SH * 0.75:
+        return np.zeros((H, W, 3)), dict(skipped="off frame")
+    # 像方数值孔径（两向）：光束方向相对平均方向的最大张角
+    tx, ty = Dout[:, 0] / -Dout[:, 2], Dout[:, 1] / -Dout[:, 2]
+    NAx = float(np.percentile(np.abs(tx - np.average(tx, weights=ww)), 99))
+    NAy = float(np.percentile(np.abs(ty - np.average(ty, weights=ww)), 99))
+    if NAx <= 0 or NAy <= 0:
+        return np.zeros((H, W, 3)), dict(skipped="degenerate pupil")
+    # 离焦：几何光斑半径（像素），大于 fade_px 时星芒淡出
+    px_w, px_h = SW / W, SH / H
+    blur_px = 0.5 * max(np.ptp(X) / px_w, np.ptp(Y) / px_h)
+    fade = 1.0 / (1.0 + (blur_px / fade_px) ** 2)
+    # 直射像总能量（与 flare_layer 相同的 Cycles 基准）
+    Sf = O.layout(rx, *O.solve_focus(rx, focus_dist))
+    fx = O.paraxial_infinity(Sf, "Rx")[0]; fy = O.paraxial_infinity(Sf, "Ry")[0]
+    dist = float(np.linalg.norm(src_lens))
+    E = radiance * (math.pi * radius * radius / (dist * dist)) / ((SW / W / fx) * (SH / H / fy))
+    n, L = 2048, 2.0
+    psf = _psf(blades, math.radians(blade_rotation_deg), n, L)
+    out = np.zeros((H, W, 3))
+    # 图像像素中心 → 传感器 mm（画面向右 = 传感器 +x，向上 = 传感器 −y，与 OSL 一致）
+    u0 = (cx / SW + 0.5) * W - 0.5
+    v0 = (0.5 + cy / SH) * H - 0.5
+    for ch, lam in enumerate(LAMBDAS):
+        lam_mm = lam * 1e-3
+        dxm, dym = lam_mm / (2 * L * NAx), lam_mm / (2 * L * NAy)     # FFT 单元在像面上的尺寸（mm）
+        hw = int(min(W, n / 2 * dxm / px_w)); hh = int(min(H, n / 2 * dym / px_h))
+        i0, i1 = max(0, int(u0) - hw), min(W, int(u0) + hw + 1)
+        j0, j1 = max(0, int(v0) - hh), min(H, int(v0) + hh + 1)
+        if i1 <= i0 or j1 <= j0:
+            continue
+        uu, vv = np.meshgrid(np.arange(i0, i1), np.arange(j0, j1))
+        sx_mm, sy_mm = (uu - u0) * px_w, (vv - v0) * px_h
+        fi, fj = sx_mm / dxm + n / 2, sy_mm / dym + n / 2              # PSF 下标（浮点）
+        ok = (fi >= 0) & (fi < n - 1) & (fj >= 0) & (fj < n - 1)
+        a, b = np.floor(fi).astype(int), np.floor(fj).astype(int)
+        ta, tb = fi - a, fj - b
+        a, b = np.clip(a, 0, n - 2), np.clip(b, 0, n - 2)
+        val = ((psf[b, a] * (1 - ta) + psf[b, a + 1] * ta) * (1 - tb) + (psf[b + 1, a] * (1 - ta) + psf[b + 1, a + 1] * ta) * tb)
+        val = np.where(ok, val, 0.0) * (px_w * px_h) / (dxm * dym)   # 单元概率 → 像素能量
+        rr = np.hypot((fi - n / 2) / (n / 2), (fj - n / 2) / (n / 2))
+        val *= np.where(rr < 0.55, 1.0, np.cos(np.clip((rr - 0.55) / 0.4, 0.0, 1.0) * math.pi / 2) ** 2)   # 径向平滑衰减
+        # 去掉 Airy 主斑（半径 1.22 λ/(2NA)·1.5，椭圆）
+        core = (sx_mm / (1.83 * lam_mm / (2 * NAx))) ** 2 + (sy_mm / (1.83 * lam_mm / (2 * NAy))) ** 2 <= 1.0
+        val[core] = 0.0
+        out[j0:j1, i0:i1, ch] += val * E * gain * fade
+    return out, dict(centre_px=(u0, v0), NA=(NAx, NAy), blur_px=blur_px, fade=fade, energy=E)
+
+
+# ───────────────────────── 杂光 / 雾化（veiling glare，0.6）─────────────────────────
+# 镜片表面散射、镜筒内壁和多次反射造成的大范围低对比度光晕。经验模型：保能量的长尾卷积
+#   out = (1 − g)·img + g·(img ⊗ k)，k(r) ∝ 1 / (1 + (r / r0)²)^(p/2)，在画面对角线尺度上归一化。
+# g 是每个预设的观感参数（look.veiling_glare），按 ISO 9358 杂光指数（VGI）的典型范围取值：
+# 现代多层膜 0.5–1.5%，单层 MgF₂ 2–3%，无镀膜 5–10%。只由表面反射率推算会严重高估无镀膜、低估散射，所以不推算。
+
+def veiling_glare(img, g, r0_frac=0.004, p=2.6):
+    """img：H×W×3 线性图像；g：杂光比例（0–0.2）。FFT 卷积，保能量（核积分为 1）。"""
+    if g <= 0:
+        return img
+    H, W = img.shape[:2]
+    r0 = max(r0_frac * math.hypot(W, H), 0.5)
+    fy = np.fft.fftfreq(H)[:, None] * H; fx = np.fft.fftfreq(W)[None, :] * W     # 环绕距离（像素）
+    yy = np.minimum(np.abs(fy), H - np.abs(fy)); xx = np.minimum(np.abs(fx), W - np.abs(fx))
+    k = (1.0 + (xx * xx + yy * yy) / (r0 * r0)) ** (-p / 2.0)
+    k /= k.sum()
+    K = np.fft.rfft2(k)
+    out = np.empty_like(img)
+    for c in range(img.shape[2]):
+        out[:, :, c] = np.fft.irfft2(np.fft.rfft2(img[:, :, c]) * K, s=(H, W))
+    return (1.0 - g) * img + g * np.clip(out, 0, None)

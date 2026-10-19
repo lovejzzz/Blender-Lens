@@ -7,36 +7,51 @@
 
 > **English summary.** BlenderLens is a Blender 5.x extension that renders anamorphic cinema lenses by ray-tracing real, published lens prescriptions (patents) surface by surface. The five presets cover:
 > - three "Panavision-style" front anamorphics built from period patents;
-> - the only public Panavision anamorphic prescription, US 7,085,066, at both zoom ends.
+> - the only public Panavision anamorphic prescription, US 7,085,066, at both zoom ends;
+> - a modern 2× anamorphic by Iain Neil (Sirui patent CN 111562632 B) at 50 / 65 / 85 mm.
 >
 > Features:
-> - Cycles OSL custom camera (CPU / OptiX);
+> - Cycles OSL custom camera (CPU / OptiX), with catalog-accurate glass dispersion;
 > - a GPU path for Apple Metal, about 57× faster than 0.4 on CPU in our benchmark;
-> - a deterministic forward-traced flare pass;
+> - a deterministic forward-traced flare pass, diffraction starbursts and veiling glare;
 > - metre-scale scenes, native 16:9 gates, a Python API with multi-machine frame rendering.
 >
-> Install `dist/blenderlens-0.5.1.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
+> Install `dist/blenderlens-0.6.0.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
 
 | C 系列风格 · 100 mm · f/2.3 | E 系列风格 · 100 mm · f/2.8 | G 系列风格 · 100 mm · f/3 |
 |---|---|---|
 | ![C](docs/images/real_c_100mm.jpg) | ![E](docs/images/real_e_100mm.jpg) | ![G](docs/images/real_g_100mm.jpg) |
 
-同一个真实 3D 场景（Poly Haven CC0 模型与 HDRI）、同一焦段、同一机位，768 spp + OIDN，带正向追迹炫光。
+| Neil 2× 现代变形 · 100 mm · f/3（0.6） | Panavision 后置 1.34× 长焦端 · 100 mm · f/4.1 |
+|---|---|
+| ![Neil](docs/images/real_neil_2x_85_100mm.jpg) | ![Panavision](docs/images/real_panavision_rear_134_tele_100mm.jpg) |
+
+同一个真实 3D 场景（Poly Haven CC0 模型与 HDRI）、同一焦段、同一机位，768 spp + OIDN，带正向追迹炫光。后两张用 GPU 路径渲染（M2 Max，720p 每张约 3–5 分钟）。
 
 > Panavision 的 C / E / G / T / Primo 变形系列量产处方从未公开。C / E / G 三个选项是「同年代、同结构的公开专利 + 按 Panavision 公布的规格设定观感参数」，**不是复刻**。唯一公开的真 Panavision 处方是 US 7,085,066（后置 1.34× 变形组），原样收录为两个预设。
 
 ---
 
+## 0.6 新增
+
+- **Neil 2× 现代变形三个预设**：
+  - 中国授权本表格逐位读出；近轴焦距 49.998 / 65.028 / 85.012 mm（专利 50 / 65 / 85），后焦与印刷值相差 ≤ 0.1 mm。
+  - G1b 内对焦，一个自由度同时对准两向。
+- **目录色散**：Panavision 与 Neil 预设的 Ohara 玻璃改用目录公式（refractiveindex.info，CC0），400–700 nm 误差 ≤ 2.6×10⁻⁵。旧的两项近似在重火石紫端偏差达 8.7×10⁻³，紫边位置因此不准。
+- **衍射星芒**：光圈多边形的夫琅禾费衍射，按 R/G/B 与两向数值孔径计算，变形镜头的星芒会被拉伸。
+- **杂光（veiling glare）**：保能量的长尾散射，按镜头年代 / 镀膜取 ISO 9358 杂光指数典型值。
+- **GPU 光线微分**：纹理过滤与 CPU / OSL 版一致。
+
 ## 1. 安装
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.5.1.zip`](dist/blenderlens-0.5.1.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.6.0.zip`](dist/blenderlens-0.6.0.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.5.1.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.6.0.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。
@@ -145,6 +160,7 @@ O.bokeh_aspect(rx, 1200.0, 20000.0)      # 焦外高宽比（解挤压后）
 | **E 系列风格 135 mm（1980 年代）** | 前置 2.09×：[US 5,184,880](https://patents.google.com/patent/US5184880A/en) 实施例 3（Isco 1990，两向分别矫正、凸轮对焦）+ 同一主镜 | 垂直 131 mm · f/2.8 · 1.14 m | 2.094 → 1.632（−22%） | E Series 135 mm T2.8、最近对焦 114.3 cm、「干净的蓝色水平炫光、无雾化」 |
 | **G 系列风格 100 mm（2007）** | 同 E 系列风格光学，整体缩放 0.763 | 垂直 100 mm · f/3 · 0.91 m | 2.094 → 1.652（−21%） | G Series 100 mm T3、最近对焦 91.4 cm、「极佳的抗眩光」 |
 | **Panavision 后置 1.34×（真实处方）** | [US 7,085,066](https://patents.google.com/patent/US7085066B2/en)（Iain A. Neil / Panavision 2004）原样：变焦镜短焦端 + 8 片后置变形组（3 片 Y 向柱面 + 5 片 X 向柱面），2 个非球面 | 水平 15.8 / 垂直 20.7 mm · f/3.66 · 0.48 m | 1.304 → 1.304（无发腮） | 专利实施例：16:9 画幅解挤压到 2.40:1 |
+| **Neil 2× 现代变形 50 / 65 / 85 mm（真实处方，0.6）** | [CN 111562632 B](https://patents.google.com/patent/CN111562632B/en)（Iain A. Neil / 广东思锐光学 Sirui，2019）原样：同一前变形部分（X 柱面 3 片、Y 柱面 3 片，G1b 两片内对焦）+ 三个可换后组。**美国同族 US 11,287,618 的表格印刷错误多，不能用**（见 `blenderlens/research/RESEARCH.md`） | 垂直 50 / 65 / 85 mm · f/3 · 1.08 m | 2.06 → 1.93（−6.6%） | 专利实施例（不是 Panavision 镜头；设计者与 Panavision 后置组相同） |
 | **Panavision 后置 1.34× 长焦端（真实处方）** | 同上，变焦镜取长焦端 Z4（变焦间隔取自 [US 6,122,111](https://patents.google.com/patent/US6122111A/en) TABLE 1，叠加到已核实的 Z1 表上） | 水平 50.9 / 垂直 66.4 mm · f/4.1（垂直）· 0.48 m | 1.305 → 1.305（无发腮） | 变焦镜单独 49.22 mm（专利 49.2） |
 
 - **统一焦段**：Build 时填「Vertical Focal Length」，可把任意预设按比例缩放到同一垂直焦距（压缩比、f 值、像差形态不变；估算口径的预设按新视场重算口径）。Isco 附加镜（E/G）低于约 100 mm 会超出设计视场，所以几个预设能同时物理成立的共同焦段是 100 mm。

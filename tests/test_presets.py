@@ -81,6 +81,21 @@ rz = _c.deepcopy(tele); rz["groups"] = [rz["groups"][0]]; rz.pop("image_distance
 fz = O.paraxial_infinity(O.layout(rz), "Ry")[0]
 ok(abs(fz / 49.2 - 1) < 0.005, f"PV tele: zoom alone at Z4 EFL {fz:.2f} vs patent 49.2")
 
+# ── Neil / Sirui 2×（CN 111562632 B 表 1–3）：焦距、像距、对焦行程、单自由度两向合焦 ──
+for fl, bfl in ((50, 47.576), (65, 43.071), (85, 42.000)):
+    r = P(f"neil_2x_{fl}.json")
+    S = O.layout(r)
+    fy, by = O.paraxial_infinity(S, "Ry")[:2]; fx, bx = O.paraxial_infinity(S, "Rx")[:2]
+    ok(abs(fy / fl - 1) < 0.001, f"Neil {fl}: FLY {fy:.3f} vs patent {fl}")
+    ok(abs(fx / (fl / 2) - 1) < 0.04, f"Neil {fl}: FLX {fx:.3f} vs patent ≈{fl / 2}")
+    ok(abs(by - bfl) < 0.15 and abs(bx - bfl) < 0.15, f"Neil {fl}: paraxial BFL y/x {by:.3f}/{bx:.3f} vs printed {bfl}")
+    z1 = S[0]["z"]
+    d_fd1 = O.solve_focus(r, 1000002.0 + z1)[0]
+    for od, pat in ((1843.0, 3.172), (868.0, 6.391)):
+        t = O.solve_focus(r, od + z1)[0] - d_fd1
+        ry, rxx = O.focus_residual(r, od + z1)
+        ok(abs(t / pat - 1) < 0.05 and abs(rxx) < 0.1, f"Neil {fl}: G1b travel to {od:.0f} mm {t:.3f} vs patent {pat} (X residual {rxx:+.3f})")
+
 # ── 非球面梯度（S3）──
 s3 = next(s for s in S if s["id"] == "S3")
 for x, y in ((12.0, 5.0), (25.0, -18.0), (-30.0, 20.0)):

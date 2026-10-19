@@ -22,8 +22,9 @@ def _passes(S, z_stop, r_stop, P, D, lam):
     """从传感器出发（沿 +Z）逐面追迹，返回能到达物方的布尔掩码。与 OSL 相机的 Analytic 直射光路同一判据。"""
     n = P.shape[0]
     alive = np.ones(n, bool)
-    cauchy = [O.cauchy(sf["glass"]["nd"], sf["glass"].get("vd")) for sf in S]
-    nidx = lambda k: 1.0 if k < 0 else cauchy[k][0] + cauchy[k][1] / (lam * lam)
+    co = [O.dispersion_coeffs(sf["glass"]) for sf in S]
+    il2 = 1.0 / (lam * lam)
+    nidx = lambda k: 1.0 if k < 0 else co[k][0] + il2 * (co[k][1] + il2 * (co[k][2] + il2 * co[k][3]))
     P = P.copy(); D = D.copy()
     for i in range(len(S) - 1, -1, -1):
         sf = S[i]

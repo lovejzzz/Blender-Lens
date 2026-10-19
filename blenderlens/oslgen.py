@@ -67,7 +67,7 @@ def pupil_table(rx):
 
 _DATA_KEYS = ("S", "z_exp", "r_exp", "z_stop", "r_stop", "NS", "Z", "CX", "CY", "KX", "KY", "A_", "B_", "CLR", "MSX", "MSY",
               "AS", "G1", "G2", "CO", "AG", "NPAIRS", "SG1", "SG2", "W", "H", "N0", "sources", "SPEC", "T0", "PNX", "PNY", "PB",
-              "AT", "AC", "AMX", "AMY")
+              "AT", "AC", "AMX", "AMY", "C_", "E_", "ND")
 
 def lens_data(rx, importance=True):
     """OSL 相机与 GPU 内核（gpugen）共用的处方数据：同一份数组，两边结果才能逐像素对得上。"""
@@ -82,7 +82,8 @@ def lens_data(rx, importance=True):
     CY = [O.curv(sf["Ry"]) for sf in S]
     KX = [sf["kx"] for sf in S]
     KY = [sf["ky"] for sf in S]
-    A_, B_ = zip(*[O.cauchy(sf["glass"]["nd"], sf["glass"].get("vd")) for sf in S])   # 该面之后的介质
+    A_, B_, C_, E_ = zip(*[O.dispersion_coeffs(sf["glass"]) for sf in S])   # 该面之后的介质：n = A + B/λ² + C/λ⁴ + E/λ⁶
+    ND = [O.index_at(sf["glass"]) for sf in S]
     lim = [O.ap_limits(sf["ap"]) for sf in S]
     CLR = [l[0] for l in lim]; MSX = [l[1] for l in lim]; MSY = [l[2] for l in lim]
     AS = [[(sf.get("asph") or []) [m] if m < len(sf.get("asph") or []) else 0.0 for sf in S] for m in range(5)]
@@ -127,7 +128,7 @@ def lens_data(rx, importance=True):
 def generate(rx, name="blenderlens_camera", importance=True):
     D = lens_data(rx, importance)
     (S, z_exp, r_exp, z_stop, r_stop, NS, Z, CX, CY, KX, KY, A_, B_, CLR, MSX, MSY, AS, G1, G2, CO, AG, NPAIRS,
-     SG1, SG2, W, H, N0, sources, SPEC, T0, PNX, PNY, PB, AT, AC, AMX, AMY) = (D[k] for k in _DATA_KEYS)
+     SG1, SG2, W, H, N0, sources, SPEC, T0, PNX, PNY, PB, AT, AC, AMX, AMY, C_, E_, ND) = (D[k] for k in _DATA_KEYS)
 
     src = f"""// 自动生成：{rx['meta']['name']}
 // 来源处方：{sources}
@@ -214,7 +215,7 @@ shader {name}(
   output vector direction = vector(0.0, 0.0, 1.0),
   output color throughput = 1.0)
 {{
-{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}{_arr("PX0", PB[0])}{_arr("PX1", PB[1])}{_arr("PY0", PB[2])}{_arr("PY1", PB[3])}{_arr("AT", AT, "{:d}", "int")}{_arr("AC", AC)}{_arr("AMX", AMX)}{_arr("AMY", AMY)}{_arr("SPC", SPEC["cdf"])}{_arr("SPR", SPEC["w"][0])}{_arr("SPG", SPEC["w"][1])}{_arr("SPB", SPEC["w"][2])}
+{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("NC", C_)}{_arr("NE", E_)}{_arr("ND", ND)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}{_arr("PX0", PB[0])}{_arr("PX1", PB[1])}{_arr("PY0", PB[2])}{_arr("PY1", PB[3])}{_arr("AT", AT, "{:d}", "int")}{_arr("AC", AC)}{_arr("AMX", AMX)}{_arr("AMY", AMY)}{_arr("SPC", SPEC["cdf"])}{_arr("SPR", SPEC["w"][0])}{_arr("SPG", SPEC["w"][1])}{_arr("SPB", SPEC["w"][2])}
   float SENSOR_W = {W:.6g}, SENSOR_H = {H:.6g};
   float Z_STOP = {z_stop:.9g}, R_STOP = {r_stop:.9g}, Z_EXP = {z_exp:.9g}, R_EXP = {r_exp:.9g};
   float N0 = {N0:.6g};
@@ -295,8 +296,7 @@ shader {name}(
     lam = SP_L0 + (j + fr) * SP_DL;
     chan = color(SPR[j], SPG[j], SPB[j]);
   }}
-  float il2d = 1.0 / ({O.LAMBDA_D:.7f} * {O.LAMBDA_D:.7f});
-  float il2 = il2d + dispersion_strength * (1.0 / (lam * lam) - il2d);   // n(λ) 在 n_d 与真实值之间插值
+  float il2 = 1.0 / (lam * lam);              // n(λ) = A + B/λ² + C/λ⁴ + E/λ⁶（目录色散拟合），按强度在 n_d 与之间插值
 
   float r_stop = R_STOP * k_stop;
   float z_stop = Z_STOP + {SG1} * delta_unit + {SG2} * delta_front;
@@ -376,8 +376,8 @@ shader {name}(
     }}
 
     // 两侧介质：沿 +Z 从「面后」到「面前」，沿 −Z 反之
-    float na_ = NA[i] + NB[i] * il2;
-    float nb_ = (i > 0) ? NA[i - 1] + NB[i - 1] * il2 : 1.0;
+    float na_ = ND[i] + dispersion_strength * (NA[i] + il2 * (NB[i] + il2 * (NC[i] + il2 * NE[i])) - ND[i]);
+    float nb_ = (i > 0) ? ND[i - 1] + dispersion_strength * (NA[i - 1] + il2 * (NB[i - 1] + il2 * (NC[i - 1] + il2 * NE[i - 1])) - ND[i - 1]) : 1.0;
     float n1 = dirn == 1 ? na_ : nb_;
     float n2 = dirn == 1 ? nb_ : na_;
     vector nrm = normalize(vector(gx, gy, 1.0));
@@ -387,10 +387,12 @@ shader {name}(
     color R = color(0.0);
     if (ghosts) {{
       if (CO[i] && coated) {{
-        float n1R = dirn == 1 ? NA[i] + NB[i] / (LR * LR) : ((i > 0) ? NA[i - 1] + NB[i - 1] / (LR * LR) : 1.0);
-        float n2R = dirn == 1 ? ((i > 0) ? NA[i - 1] + NB[i - 1] / (LR * LR) : 1.0) : NA[i] + NB[i] / (LR * LR);
-        float n1B = dirn == 1 ? NA[i] + NB[i] / (LB * LB) : ((i > 0) ? NA[i - 1] + NB[i - 1] / (LB * LB) : 1.0);
-        float n2B = dirn == 1 ? ((i > 0) ? NA[i - 1] + NB[i - 1] / (LB * LB) : 1.0) : NA[i] + NB[i] / (LB * LB);
+        float iR = 1.0 / (LR * LR), iB = 1.0 / (LB * LB);
+        float naR = NA[i] + iR * (NB[i] + iR * (NC[i] + iR * NE[i])), naB = NA[i] + iB * (NB[i] + iB * (NC[i] + iB * NE[i]));
+        float nbR = (i > 0) ? NA[i - 1] + iR * (NB[i - 1] + iR * (NC[i - 1] + iR * NE[i - 1])) : 1.0;
+        float nbB = (i > 0) ? NA[i - 1] + iB * (NB[i - 1] + iB * (NC[i - 1] + iB * NE[i - 1])) : 1.0;
+        float n1R = dirn == 1 ? naR : nbR, n2R = dirn == 1 ? nbR : naR;
+        float n1B = dirn == 1 ? naB : nbB, n2B = dirn == 1 ? nbB : naB;
         R = color(fresnel_film(n1R, coating_ior, n2R, c, coating_nm, LR),
                   fresnel_film(n1, coating_ior, n2, c, coating_nm, LG),
                   fresnel_film(n1B, coating_ior, n2B, c, coating_nm, LB));

@@ -25,8 +25,9 @@ LAMBDAS_NM = (400, 430, 460, 490, 520, 550, 580, 610, 640, 670, 700)
 def _trace_out(S, z_stop, r_stop, P, D, lam):
     """与 pupil._passes 相同的逐面追迹，但返回物方的点和方向（不检查口径 / 光阑：主光线附近的细光束）。"""
     P = P.copy(); D = D.copy()
-    cauchy = [O.cauchy(sf["glass"]["nd"], sf["glass"].get("vd")) for sf in S]
-    nidx = lambda k: 1.0 if k < 0 else cauchy[k][0] + cauchy[k][1] / (lam * lam)
+    co = [O.dispersion_coeffs(sf["glass"]) for sf in S]
+    il2 = 1.0 / (lam * lam)
+    nidx = lambda k: 1.0 if k < 0 else co[k][0] + il2 * (co[k][1] + il2 * (co[k][2] + il2 * co[k][3]))
     for i in range(len(S) - 1, -1, -1):
         sf = S[i]
         cx, cy = O.curv(sf["Rx"]), O.curv(sf["Ry"])

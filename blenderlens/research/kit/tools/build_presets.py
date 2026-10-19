@@ -292,7 +292,8 @@ def panavision_rear(zoom_pos="Z1"):
           "anamorphic": {"desqueeze": 1.35, "type": "rear",
                          "note": "专利：把 2.40:1 物方画面垂直拉伸到 16:9 像面（正文称压缩比约 1.34）。真实追迹：画面边缘物方张角比 2.401，整幅解挤压比 1.350；压缩比从中心 1.304 增到边缘 1.351（水平畸变），所以中心物体解挤压后略宽约 3.5%"},
           "look": {"reference": "Panavision 2004 年后置变形组（专利实施例）；无公开的成品镜头规格。最近对焦取变焦镜专利 F3：物面到 S1 133 mm = 距像面 476 mm",
-                   "f_number": 3.66 if zoom_pos == "Z1" else 4.10, "min_focus_mm": 476.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.6},
+                   "f_number": 3.66 if zoom_pos == "Z1" else 4.10, "min_focus_mm": 476.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.6,
+                   "veiling_glare": 0.012},
           "focus": {"mechanism": "按 US 6,122,111 的内对焦：前组（第 1–2 片，S2–S5）移动 Δ，第二组（第 3–4 片，S6–S9）移动 0.909·Δ"
                                  "（专利 TABLE 1：F2 时 S5/S9 间隔 +1.022/+10.077、F3 时 +1.960/+19.724 → 两组位移比 0.908/0.910）；变焦组与后置变形组不动。"
                                  "中间像位置不变 → 两向同时合焦、无发腮。专利物距从物面量到 S1（第一面前 1 mm 的虚面，随前组移动）；按此定义，前组行程模型/专利：F2（330 mm）11.221 / 11.099 mm，F3（133 mm）21.686 / 21.684 mm",
@@ -301,6 +302,123 @@ def panavision_rear(zoom_pos="Z1"):
                     "solve": ["Ry"], "min_distance_mm": 476.0},
           "sensor": {"format": "16:9（3 齿孔 35 mm 或同尺寸数字传感器），像高半径 13.60 mm", "width": 23.71, "height": 13.34}}
     O.save(rx, os.path.join(PDIR, "panavision_rear_134_tele.json" if tele else "panavision_rear_134.json"))
+    return rx
+
+
+# ───────── US 11,287,618 B2 / CN 111562632 B（Iain A. Neil，广东思锐光学 Sirui，优先权 2019-02-14）─────────
+# 一个前变形部分（G1，2.06×）+ 可换的后非变形部分（G2）→ 垂直焦距 50 / 65 / 85 mm，全开 f/3（像方）。
+# 数据取自中国授权本 CN 111562632 B 第 28–30 页的表 1–3（逐位核对）。美国本 US 11,287,618 B2 的表格印刷有大量
+# 错误（玻璃代码 / 名称不存在、表 2 后组间隔照抄表 1、S10 / S24 半径错、S8 FD3 5.677 应为 8.677 等），不可用；
+# 核对过程与证据见 research/RESEARCH.md 与 research/analysis/。
+NEIL_GLASS = {   # 牌号: 中国本印的玻璃代码（均与 Ohara 目录一致）
+    "S-TIH53": "847238", "S-FPL51": "497816", "S-LAH65": "804466", "S-PHM52": "618634", "S-BAM4": "606437",
+    "S-TIH6": "805254", "S-LAH55V": "835427", "S-YGH51": "755523", "S-TIM8": "596392", "S-LAM66": "801350",
+    "S-TIH10": "728285", "S-TIM28": "689311", "S-TIL1": "548458", "S-TIH4": "755275", "S-LAM7": "750353",
+}
+# 前变形部分（三张表相同）：(面, 形状, R_x, R_y, 间隔 FD1, 玻璃, 孔径半直径)；FD2/FD3 间隔见 NEIL_FOCUS
+NEIL_FRONT = [
+    ("S1", "Sph", 700.502, 700.502, 4.429, "S-TIH53", 32.82), ("S2", "Sph", -1525.000, -1525.000, 5.519, None, 31.92),
+    ("S3", "XCyl", -101.043, None, 4.000, "S-FPL51", 29.72), ("S4", "XCyl", 76.315, None, 15.511, None, 27.33),
+    ("S5", "Sph", -422.634, -422.634, 3.000, "S-FPL51", 23.73), ("S6", "Sph", 108.119, 108.119, 5.446, None, 22.52),
+    ("S7", "YCyl", None, -139.340, 3.200, "S-LAH65", 22.09), ("S8", "YCyl", None, 258.136, 2.285, None, 21.77),
+    ("S9", "YCyl", None, 243.346, 10.640, "S-PHM52", 21.17), ("S10", "YCyl", None, -51.827, 0.883, None, 21.06),
+    ("S11", "YCyl", None, -49.911, 7.056, "S-TIH53", 20.88), ("S12", "YCyl", None, -73.368, 10.402, None, 21.11),
+    ("S13", "Sph", None, None, 3.000, "S-BAM4", 19.57), ("S14", "XCyl", 79.055, None, 2.000, None, 19.40),
+    ("S15", "Sph", 70.533, 70.533, 18.750, "S-TIH6", 19.14), ("S16", "Sph", 67.370, 67.370, 7.528, None, 16.35),
+    ("S17", "XCyl", 87.532, None, 8.843, "S-FPL51", 16.01), ("S18", "XCyl", -65.833, None, 2.000, None, 15.71),
+    ("S19", "Sph", 50.719, 50.719, 4.582, "S-LAH55V", 14.97), ("S20", "Sph", 337.165, 337.165, 0.976, None, 14.41),
+    ("S21", "Sph", 4393.823, 4393.823, 2.450, "S-BAM4", 14.16), ("S22", "Sph", 43.481, 43.481, None, None, 13.17),
+]
+# 对焦：G1b（L3–L4，S5–S8）整体移动；S4 / S8 后的间隔，FD1 ∞（1000 m）、FD2 1843 mm、FD3 868 mm（物面到 S1）
+NEIL_FOCUS = {"FD1": (15.511, 2.285), "FD2": (12.339, 5.458), "FD3": (9.120, 8.677)}
+# 后非变形部分：(S22 后间隔, 后组面 [(面, R, 间隔, 玻璃, 半径)]，光阑在 S28 后的间隔与半径, 像距, FLY)
+NEIL_REAR = {
+    50: (4.700, [("S23", 84.664, 2.744, "S-YGH51", 7.14), ("S24", -105.007, 6.401, None, 7.06), ("S25", -22.376, 1.500, "S-TIM8", 6.39),
+                 ("S26", 18.038, 2.794, None, 6.54), ("S27", 1028.618, 3.116, "S-LAM66", 7.07), ("S28", -31.995, 2.250, None, 7.46),
+                 ("STOP", None, 3.844, None, 7.85), ("S30", 84.857, 7.500, "S-FPL51", 8.38), ("S31", -18.917, 0.500, None, 8.62),
+                 ("S32", 24.942, 2.686, "S-YGH51", 7.88), ("S33", 34.085, 0.589, None, 7.32), ("S34", 36.878, 1.500, "S-TIH10", 7.18),
+                 ("S35", 18.525, 47.576, None, 6.68)]),
+    65: (12.789, [("S23", 38.182, 2.940, "S-YGH51", 9.30), ("S24", 198.850, 0.400, None, 9.08), ("S25", 18.392, 3.613, "S-PHM52", 8.71),
+                  ("S26", 57.246, 1.176, None, 8.12), ("S27", 74.274, 1.500, "S-TIM8", 7.72), ("S28", 14.668, 3.990, None, 6.93),
+                  ("STOP", None, 2.584, None, 6.62), ("S30", -59.736, 1.500, "S-TIM28", 6.31), ("S31", 29.355, 2.795, None, 6.21),
+                  ("S32", 46.904, 11.342, "S-LAH55V", 6.44), ("S33", -46.999, 43.071, None, 6.28)]),
+    85: (4.720, [("S23", 21.990, 5.511, "S-FPL51", 12.13), ("S24", 501.664, 0.400, None, 11.71), ("S25", 20.222, 3.889, "S-FPL51", 10.68),
+                 ("S26", 42.462, 2.091, None, 9.87), ("S27", 600.875, 1.600, "S-TIL1", 9.37), ("S28", 14.606, 4.723, None, 8.13),
+                 ("STOP", None, 16.315, None, 7.84), ("S30", -15.123, 1.500, "S-TIH4", 5.89), ("S31", -24.929, 2.335, None, 6.11),
+                 ("S32", -191.227, 2.617, "S-LAM7", 6.17), ("S33", -28.256, 42.000, None, 6.30)]),
+}
+
+
+def neil_sirui(fl):
+    cat = json.load(open(os.path.join(ROOT, "blenderlens", "glass", "ohara.json"), encoding="utf-8"))["glasses"]
+    glasses = {"air": {"nd": 1.0, "vd": None}}
+    def glass(name):
+        key = "OH_" + name.replace("-", "")
+        r = cat[name]
+        assert r.get("code", NEIL_GLASS[name]) == NEIL_GLASS[name], (name, r.get("code"))
+        glasses[key] = {"nd": round(r["nd"], 6), "vd": round(r["vd"], 3), "code": NEIL_GLASS[name], "name": name,
+                        "catalog": "OHARA:" + name, "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"}
+        return key
+    s22, rear = NEIL_REAR[fl]
+    def surf(sid, rx_, ry, d, g, ap, shape):
+        return {"id": sid, "R_x": rx_, "R_y": ry, "d": d, "medium": glass(g) if g else "air", "shape": shape,
+                "patent_semi": ap}
+    front = [surf(sid, rx_, ry, s22 if d is None else d, g, ap, shape) for sid, shape, rx_, ry, d, g, ap in NEIL_FRONT]
+    back, stop = [], None
+    for sid, R, d, g, ap in rear:
+        if sid == "STOP":
+            stop = {"after_surface": back[-1]["id"], "offset_mm": back[-1]["d"], "semi_diameter": ap, "f_number": 3.0,
+                    "note": f"光阑 S29（专利：全开 f/3 时孔径半直径 {ap}）"}
+            back[-1]["d"] = round(back[-1]["d"] + d, 4)
+            continue
+        back.append(surf(sid, R, R, d, g, ap, "Sph"))
+    image_distance = back[-1]["d"]
+    # 口径：专利给的圆形孔径半直径；镜片外径取该片两面的较大值
+    for grp in (front, back):
+        els, cur = [], []
+        for sf in grp:
+            cur.append(sf)
+            if sf["medium"] == "air":
+                els.append(cur); cur = []
+        for el in els:
+            outer = max(s["patent_semi"] for s in el)
+            for s in el:
+                s["aperture"] = {"shape": "circle", "clear": s["patent_semi"], "outer": outer}
+    for sf in front + back:
+        sf.pop("patent_semi")
+    src = {"patent": "CN 111562632 B / US 11,287,618 B2 — I. A. Neil, Anamorphic objective lens system（广东思锐光学 Sirui），2019 优先权",
+           "url": "https://patents.google.com/patent/CN111562632B/en",
+           "url_us": "https://patents.google.com/patent/US11287618B2/en",
+           "table": f"中国授权本表 {[50, 65, 85].index(fl) + 1}（第 {28 + [50, 65, 85].index(fl)} 页，逐位核对）；美国本同号表格印刷错误多，不采用",
+           "patent_values": {"fly": float(fl), "flx_approx": fl / 2, "f_number": 3.0, "image_half_x": 10.65, "image_half_y": 8.91}}
+    meta = {"name": f"Neil 2× 现代前置变形 {fl} mm（Sirui 专利 CN 111562632 B，f/3）",
+            "short_name": f"Neil 2× 现代变形 {fl} mm（真实处方）",
+            "order": 6 + [50, 65, 85].index(fl),
+            "tagline": "Iain Neil（Panavision 后置变形组的设计者）为思锐设计的现代 2× 前置变形：同一前组配三个可换后组；内对焦、无呼吸式凸轮",
+            "note": "专利实施例原样收录（不是 Panavision 镜头）。前变形部分 G1：X 柱面 3 片、Y 柱面 3 片加球面；G1b 两片整体移动对焦。"
+                    "像面在专利里取 X/Y 柱面以模拟弯曲物面，这里用平面传感器，所以边缘有该设计本身的场曲。",
+            "units": "mm", "conventions": json.load(open(os.path.join(PDIR, "c_series_style.json"), encoding="utf-8"))["meta"]["conventions"]}
+    rx = {"meta": meta, "glasses": glasses,
+          "groups": [{"id": "front", "role": "前变形部分 G1（2.06×）：G1a / G1b（对焦）/ G1c", "scale": 1.0, "aperture_source": "patent",
+                      "surfaces": front, "source": src},
+                     {"id": "rear", "role": f"后非变形部分 G2（{fl} mm 版），含可调光阑", "scale": 1.0, "aperture_source": "patent",
+                      "f_number": 3.0, "stop": stop, "surfaces": back}],
+          "image_distance_mm": image_distance,
+          "anamorphic": {"desqueeze": 2.06, "type": "front",
+                         "note": "专利称约 2×；近轴压缩比 FLY/FLX = 2.06（三个焦段相同，由前变形部分决定），按光学实际值解挤压（与 E/G 一致）"},
+          "look": {"reference": "思锐专利实施例；成品镜头规格未公开。最近对焦取专利 FD3：物面到第一面 868 mm",
+                   "f_number": 3.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 1.0, "veiling_glare": 0.008},
+          "focus": {"mechanism": "G1b（L3–L4，S5–S8）整体移动：S4 后间隔减小、S8 后间隔增大同样多（专利 FD1/FD2/FD3：15.511/12.339/9.120 与 2.285/5.458/8.677）。"
+                                 "一个自由度同时对准两向（X 残差 ≤ 0.07 mm）。近轴求解的行程比专利多 2–4%（FD2 3.31 vs 3.17、FD3 6.54 vs 6.39 mm），"
+                                 "三个后组相同，来自前组：专利按弯曲像面上的最佳聚焦定位，像方相差约 0.05 mm，在 f/3 景深以内",
+                    "groups": [{"ids": ["S5", "S6", "S7", "S8"], "moves": [1, 0]}],
+                    "solve": ["Ry"], "min_distance_mm": None},
+          "sensor": {"format": "专利像面：X ±10.65、Y ±8.91 mm", "width": 21.30, "height": 17.82}}
+    # 最近对焦：物面到 S1 868 mm → 从像面量起
+    z1 = O.layout(rx)[0]["z"]
+    rx["focus"]["min_distance_mm"] = round(868.0 + z1, 1)
+    rx["look"]["min_focus_mm"] = rx["focus"]["min_distance_mm"]
+    O.save(rx, os.path.join(PDIR, f"neil_2x_{fl}.json"))
     return rx
 
 
@@ -314,7 +432,8 @@ if __name__ == "__main__":
                  "note": "Panavision E 系列处方未公开。本选项用同年代的 Isco 公开专利前置变形器（实施例 3，原尺寸）+ 公开的 f/2 双高斯主镜（f=100），垂直焦距 131 mm，观感参数按 Panavision 公布的 E 系列 135 mm 规格设定。",
                  "units": "mm", "conventions": conv},
                 {"reference": "Panavision E Series 135 mm T2.8，最近对焦 114.3 cm（panavision.com）；页面原文：Clean blue horizontal flares without additional artifacts such as veiling glare or edge reflections",
-                 "f_number": 2.8, "min_focus_mm": 1143.0, "coating_nm": 125.0, "flare_color": "PHYSICAL", "flare_gain": 0.18, "corner_pupil_fraction": 0.55},
+                 "f_number": 2.8, "min_focus_mm": 1143.0, "coating_nm": 125.0, "flare_color": "PHYSICAL", "flare_gain": 0.18, "corner_pupil_fraction": 0.55,
+                 "veiling_glare": 0.008},
                 prime_scale=1.0, att_scale=1.0)
     isco_preset("g_series_style.json",
                 {"name": "G 系列风格 · 前置 2.09× 变形 100 mm（Isco 光学缩放 0.763 + Nikon f/2）", "short_name": "G 系列风格 100 mm（2007）",
@@ -322,11 +441,15 @@ if __name__ == "__main__":
                  "note": "Panavision G 系列处方未公开。光学结构与 E 系列风格相同，整体缩放到垂直焦距 100 mm（视场比原设计大约 30%）；按 Panavision 公布的 G 系列 100 mm 规格设定光圈与最近对焦，并按其「excellent glare resistance」把炫光调弱。",
                  "units": "mm", "conventions": conv},
                 {"reference": "Panavision G Series 100 mm T3，最近对焦 91.4 cm（panavision.com）；页面描述：excellent glare resistance、minimal breathing",
-                 "f_number": 3.0, "min_focus_mm": 914.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.15, "corner_pupil_fraction": 0.75},
+                 "f_number": 3.0, "min_focus_mm": 914.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.15, "corner_pupil_fraction": 0.75,
+                 "veiling_glare": 0.005},
                 prime_scale=0.763, att_scale=0.763)
     panavision_rear("Z1")
     panavision_rear("Z4")
-    for fn in ("e_series_style.json", "panavision_rear_134.json", "panavision_rear_134_tele.json"):
+    for fl in (50, 65, 85):
+        neil_sirui(fl)
+    for fn in ("e_series_style.json", "panavision_rear_134.json", "panavision_rear_134_tele.json",
+               "neil_2x_50.json", "neil_2x_65.json", "neil_2x_85.json"):
         rx = O.load(os.path.join(PDIR, fn))
         S = O.layout(rx)
         fx = O.paraxial_infinity(S, "Rx")[0]; fy = O.paraxial_infinity(S, "Ry")[0]
