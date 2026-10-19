@@ -25,6 +25,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `bl.diagnose()` | 场景问题清单：`level`（error / warning / info）、`code`、`message`、`fix`（可执行的修法） |
 | `bl.preview(path, quality='draft')` | 低清快速渲染 + 图像统计；渲完恢复分辨率与采样 |
 | `bl.contact_sheet(path, [ {...}, {...} ])` | 多组设置并排成一张图（A/B），渲完恢复原设置 |
+| `bl.temporal_check(mode="moving")` / `bl.temporal_denoise(in_dir, out_dir, frames)` / `bl.render_shot(source_camera, frames, out_dir, ...)` | 0.8.4：运镜闪烁 / 时间降噪 / 渲一个镜头（HANDOFF §6.8） |
 | `bl.build / set_focus / set_stop / set_mumps_correction / lens_info / render_still / render_frames / follow_camera / enable_gpu` | 原有稳定接口，见 `blenderlens/HANDOFF.md` §6 |
 
 距离一律用米（`focus_m`）；镜头内部毫米；场景单位任意。GPU（Metal）必须在本进程第一次 GPU 渲染之前 `bl.enable_gpu()`。
@@ -42,7 +43,8 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `blenderlens/lenspack.py` | 后期横向色差、ST 图、渐晕图 | 否 |
 | `blenderlens/meshgen.py` | Geometry 模式的镜片 / 光圈 / 镜筒网格 | 否 |
 | `blenderlens/rig.py` | 在场景里搭镜头、每帧同步（`apply_settings`）、渲染后期、多层 EXR（`render_frame_multilayer`、`bl_vector`） | 是 |
-| `blenderlens/passes.py` / `focus.py` / `temporal.py` | 多层 EXR 读写与分类 / 对焦助手与景深 / 闪烁检查（0.8.3） | 部分 |
+| `blenderlens/passes.py` / `focus.py` / `temporal.py` | 多层 EXR 读写（0.8.4：流式、half / DWAB、`temporal` 预设）/ 对焦助手与景深 / 闪烁检查（locked / moving） | 部分 |
+| `blenderlens/motion.py` / `denoise.py` / `shot.py` | 运动补偿工具（纯 numpy）/ 时间降噪 / 一条命令渲一个镜头（0.8.4） | 否 / 否 / 是 |
 | `blenderlens/agent.py` / `api.py` / `ui.py` | AI 接口 / 稳定脚本接口 / 面板与属性 | 是 |
 | `tools/build_presets.py` | 从专利转录数据生成 E/G/Panavision/Neil 处方，并给 C/E/G 加补偿板 | 否 |
 | `tools/build_pupil_tables.py` | 预设出瞳表（改了处方的光学部分或 `pupil.py` 后必须重跑） | 否 |
@@ -70,6 +72,9 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 - Blender 5.x 多层 EXR 是多部分文件：读要遍历 `parts`（`blenderlens/passes.py`）；Cryptomatte 通道是小写 r g b a。
 - Cycles 的 Depth / Position 只在第 0 个采样写，真实镜头会留洞（已在后期补）；Cycles 的 Vector 对自定义相机无效 → 用 `BL_Vector`。
 - 4K 后期注意内存：不要缓存整幅的 float64 映射（`lenspack.LazyMaps`）；dict 子类做「惰性容器」时要实现 `__bool__`，否则 `x or default` 会把它当空。
+- Cryptomatte 像素里的 float 是哈希按规范转换过的（指数位 0 / 255 时翻第 23 位），比对清单前要先转换（`passes.crypto_object_ids`）。
+- 星芒 / 任何亚像素小的东西：按像素面积积分，别在像素中心点采样或硬挖（视频里会闪，RESEARCH §5 第 17 条）。改炫光后跑 `bl_flare_stability`。
+- 正向炫光每个光源每帧要几秒（与分辨率无关）；多线程追迹反而更慢（GIL），省时间靠复用共同的前半段光路。
 - 跑长任务（Blender 测试、整套测试）放后台；Geometry 模式 CPU 渲染很慢。
 
 ## 看图

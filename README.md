@@ -29,6 +29,15 @@ Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same cam
 
 ---
 
+## What's new in 0.8.4: moving shots and temporal stability (MessyRoom's feedback after the Day 4 film)
+
+- **Smaller, lighter multilayer output**: `passes="temporal"` writes only what temporal denoising needs (Combined, Noisy, Volume, denoising albedo / specular / normal / roughness / depth, Depth, plus the BL layers); colour layers half + DWAB, data layers float32 + ZIP (`exr_codec`, `half_color`). Unrequested passes are switched off during the render, and post-processing streams layer by layer. 4K test frame: 555 MB → 97 MB.
+- **Flicker under real camera motion**: `bl.temporal_check(..., mode="moving")` renders the real move, aligns t−1 to t with `BL_Vector`, and reports the residual plus a speed histogram and flicker per speed band.
+- **Vector confidence**: a new `BL_VectorConfidence` layer (occlusion / disocclusion, depth edges, emitter halos, mirrors, speed); sky / environment pixels now get rotation vectors; fixed a Cryptomatte hash bug that left ~1 in 128 objects without object motion.
+- **Temporal denoising**: `bl.temporal_denoise(in_dir, out_dir, frames)` — motion-compensated averaging weighted by vector confidence and a forward–backward check, with flare and veil added back untouched; writes a stable `BL_Final` and a frames-used map.
+- **One call per shot**: `bl.render_shot(source_camera, frames, out_dir, preset, passes, spp)` / `blcli.py shot` — follows the source camera (focus and f-stop too), resumes, waits when memory is low, and logs time and memory per frame.
+- **Flare is now stable in video**: the diffraction starburst was point-sampled and jumped ±25% in energy with sub-pixel motion; it is now integrated per pixel (0.3%). Forward ghost tracing is 5–6× faster.
+
 ## What's new in 0.8.3: production output (requests from the MessyRoom film)
 
 - **Multilayer EXR with every pass** (`bl.render_still(path, passes="all")`, `bl.render_frames(..., passes="all")`): all view-layer passes are kept; Lateral in Post is applied identically to every colour pass (light groups still sum to Combined), data passes are untouched; the flare and veiling glare are separate layers (`BL_Flare`, `BL_Veil`, `BL_Final`).
@@ -86,12 +95,12 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.8.3.zip`](dist/blenderlens-0.8.3.zip) from this repository.
+1. Download [`dist/blenderlens-0.8.4.zip`](dist/blenderlens-0.8.4.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.3.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.4.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.

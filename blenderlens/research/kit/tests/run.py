@@ -60,6 +60,12 @@ TESTS = [
     ("bl_colorspace", "standard", "bl", ["tests/bl_colorspace.py"], "COLORSPACE", None),
     ("bl_layers", "standard", "bl", ["tests/bl_layers.py"], "LAYERS", None),
     ("bl_focus_temporal", "standard", "bl", ["tests/bl_focus_temporal.py"], "FOCUSTEMP", None),
+    ("bl_passes_r4", "standard", "bl", ["tests/bl_passes_r4.py"], "PASSES_R4", None),
+    ("bl_temporal_moving", "standard", "bl", ["tests/bl_temporal_moving.py"], "TMOVING", None),
+    ("bl_vector_conf", "standard", "bl", ["tests/bl_vector_conf.py"], "VCONF", None),
+    ("bl_render_shot", "standard", "bl", ["tests/bl_render_shot.py"], "SHOT", None),
+    ("bl_flare_stability", "standard", "bl", ["tests/bl_flare_stability.py"], "FLARESTAB", None),
+    ("bl_temporal_denoise", "full", "bl", ["tests/bl_temporal_denoise.py"], "TDENOISE", None),
     ("bl_ghosts_broadband", "full", "bl", ["tests/bl_gpu_ghosts.py", "--", "BROADBAND"], "GHOSTS", None),
     ("bl_mumps_e", "full", "bl", ["tests/bl_mumps.py", "--", "e_series_style.json"], "MUMPS", None),
     ("bl_sampling", "full", "bl", ["tests/bl_sampling.py"], "SAMPLING", None),
@@ -77,7 +83,7 @@ TESTS = [
     ("package_install", "full", "sh", ["tests/package_install.sh"], "INSTALLED_GPU", None),
 ]
 
-SKIP_METRIC = re.compile(r"(second|time|speedup|\bt_(on|off)$|\.t_(on|off)$|_s$|path|file|seed|resolution|px\b)", re.I)
+SKIP_METRIC = re.compile(r"(second|time|timing|rss|_kb$|speedup|\bt_(on|off)$|\.t_(on|off)$|_s$|path|file|seed|resolution|px\b)", re.I)
 
 
 def flatten(d, prefix=""):

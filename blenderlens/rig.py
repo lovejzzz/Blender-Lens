@@ -670,7 +670,7 @@ def _flare_layers(scene, cam_ob, W, H, region, n_grid, blur_px):
     rx = _rx_cached()
     dist = focus_mm(cam_ob)
     Wf, Hf = (region[2], region[3]) if region else (W, H)
-    layer = np.zeros((Hf, Wf, 3))
+    layer = np.zeros((Hf, Wf, 3), np.float32)
     used = []
     for ob in flare_sources(scene):
         strength, color = _emission_of(ob)
@@ -696,7 +696,10 @@ def _flare_layers(scene, cam_ob, W, H, region, n_grid, blur_px):
 
 # ───────────────────────── 多层 EXR（0.8.3）─────────────────────────
 
-def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8, passes="all", vectors=True):
+LAST_TIMING = {}                                         # 上一次 render_frame_multilayer 各步用时（秒），render_shot 写日志用
+
+def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8, passes="all", vectors=True,
+                            exr_codec=None, half_color=None):
     """渲染当前帧，写多层（多部分）EXR，保留视图层打开的所有渲染层：
       · 颜色层（Combined、各光组 Combined_<名>、Emit、Diffuse/Glossy/Transmission/Volume…、AO、颜色 AOV、Noisy Image、
         Denoising Albedo）做与 Combined 相同的横向色差（LATERAL_POST 时）→ 各层相加仍约等于 Combined；
@@ -706,15 +709,45 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
       · BL_Vector：按本镜头的真实成像（主光线、当前对焦）算的运动矢量，像素单位、y 向上，约定与 Cycles 的 Vector 相同：
         X,Y = 上一帧位置 − 当前位置，Z,W = 当前位置 − 下一帧位置。相机运动 + 刚体物体运动（按 Cryptomatte 识别物体）；
         形变（骨骼、形状键）不计。Cycles 自己的 Vector 层对自定义相机不对（源码 TODO：退回相机坐标），原样保留但不要用。
-    passes："all" 或要保留的渲染层名列表（如 ["Combined", "Depth", "Combined_lamps"]）；插件层总是写入。
+    passes："all"、预设 "temporal"（时间降噪需要的层，会临时打开 Depth / 去噪数据 / 体积层）、或渲染层名列表
+      （可混用预设名与 "lightgroups"，如 ["temporal", "lightgroups"]）；插件层总是写入。
+    exr_codec / half_color（0.8.4）：输出压缩与颜色层精度。颜色层 half + 压缩，数据层（Depth、Position、BL_Vector…）恒为
+      float32，遇有损压缩时改用 ZIP。默认：用了预设 → "DWAB" + half；否则沿用场景的输出设置（EXR 压缩、色深）。
     为了 BL_Vector，会临时打开 Position 与 Cryptomatte Object 层（用户没开的不写进输出）。渲染时临时关闭合成（输出原始渲染层）。
     返回 (BL_Final 的 Image 数据块, 炫光光源名单, 炫光层 H×W×3（行 0 = 底部，与旧接口一致）)。"""
-    import os, tempfile
+    import os, tempfile, time
     from . import flare as FL, passes as PS
+    T = {}; t0 = time.perf_counter()
+    M = {}
+    def _mem(stage):
+        import resource, sys
+        M[stage] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1e9 if sys.platform == "darwin" else 1e6), 2)
     cam_ob = scene.camera
     p = cam_ob.data.blenderlens
     vl = bpy.context.view_layer if bpy.context.view_layer in scene.view_layers[:] else scene.view_layers[0]
+    keep_pass, flags, preset, wanted_names = PS.expand(passes)
+    ims0 = scene.render.image_settings
+    if exr_codec is None:
+        exr_codec = "DWAB" if preset else getattr(ims0, "exr_codec", None)
+    if half_color is None:
+        half_color = True if preset else ims0.color_depth == '16'
+    if exr_codec is not None and exr_codec not in PS.CODECS:      # 渲染之前就检查（别白渲一帧）
+        raise ValueError(f"exr_codec 必须是 {PS.CODECS} 之一，收到 {exr_codec!r}")
     added = []
+    flag_undo = []
+    for path_, attr in flags:                             # 预设需要的渲染层：临时打开，渲完恢复（不在输出里额外多出层）
+        owner = getattr(vl, path_) if path_ else vl
+        if hasattr(owner, attr) and not getattr(owner, attr):
+            setattr(owner, attr, True); flag_undo.append((owner, attr, False))
+    if passes != "all":                                   # 没人要的渲染层：渲染期间关掉（Cycles 少算、少占内存）
+        need = {("", "use_pass_position"), ("", "use_pass_cryptomatte_object")} if vectors else set()   # 补洞 / 矢量要用
+        for (path_, attr), names in PS.FLAG_PASSES.items():
+            owner = getattr(vl, path_) if path_ else vl
+            if (path_, attr) in need or not hasattr(owner, attr) or not getattr(owner, attr):
+                continue
+            if PS.flag_wanted(keep_pass, wanted_names, names):
+                continue
+            setattr(owner, attr, False); flag_undo.append((owner, attr, True))
     if vectors:
         for attr, pname in (("use_pass_position", "Position"), ("use_pass_cryptomatte_object", "CryptoObject")):
             if hasattr(vl, attr) and not getattr(vl, attr):
@@ -730,7 +763,9 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
         if keep[0] is not None:
             ims.media_type = 'MULTI_LAYER_IMAGE'
         ims.file_format = 'OPEN_EXR_MULTILAYER'
-        ims.color_depth = '32'
+        ims.color_depth = '16' if half_color else '32'       # 半精度时 Blender 自己就把数据层留成 float32
+        if keep[3] is not None:
+            ims.exr_codec = 'NONE'                         # 临时文件：不压缩（省时间）
         r.use_compositing = False
         r.filepath = tmp
         bpy.ops.render.render(write_still=True)
@@ -747,57 +782,103 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
         r.filepath, r.use_compositing = keep[4], keep[5]
         for attr, _ in added:
             setattr(vl, attr, False)
+        for owner, attr, val in reversed(flag_undo):
+            setattr(owner, attr, val)
         p.ghosts = ghosts_was
         apply_settings(cam_ob)
-    parts = PS.read(tmp)
-    if not os.environ.get("BLENDERLENS_KEEP_LAYERS"):          # 调试：保留原始渲染层文件
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-    comb = PS.find(parts, "Combined", vl.name) or PS.find(parts, "Combined")
-    if comb is None:
-        raise RuntimeError("多层 EXR 里没有 Combined 渲染层")
-    H, W = comb["channels"]["R"].shape
-    region = _region(scene, W, H)
-    if p.dispersion_mode == 'LATERAL_POST':
-        from . import lenspack as LP
-        maps = _lateral_maps(cam_ob, W, H, region)
-        color_parts = [part for part in parts if PS.is_color(part)]
-        outs = LP.apply_lateral_ca_many([PS.rgb(part) for part in color_parts], maps)   # 采样位置每个波长只算一次
-        for part, img in zip(color_parts, outs):
-            PS.set_rgb(part, img)
-        del outs
-    beauty = PS.rgb(comb)
-    layer, used = _flare_layers(scene, cam_ob, W, H, region, n_grid, blur_px) if flare else (np.zeros((H, W, 3)), [])
-    veil = np.zeros_like(beauty)
-    if flare and p.veiling_glare > 0:
-        base = beauty + layer
-        veil = FL.veiling_glare(base, p.veiling_glare) - base
-    final = beauty + layer + veil
-    alpha = comb["channels"].get("A", np.ones((H, W), np.float32))
-    new = [PS.new_part(comb, "BL_Flare", dict(R=layer[..., 0], G=layer[..., 1], B=layer[..., 2])),
-           PS.new_part(comb, "BL_Veil", dict(R=veil[..., 0], G=veil[..., 1], B=veil[..., 2])),
-           PS.new_part(comb, "BL_Final", dict(R=final[..., 0], G=final[..., 1], B=final[..., 2], A=alpha))]
-    fill = fill_first_sample_passes(scene, cam_ob, parts, vl.name, W, H, region)
-    comb["header"]["blenderlens/fill"] = json.dumps(fill)
-    if vectors:
-        vec = bl_vector(scene, cam_ob, parts, vl.name, W, H, region)
-        if vec is not None:
-            new.append(PS.new_part(comb, "BL_Vector", dict(X=vec[..., 0], Y=vec[..., 1], Z=vec[..., 2], W=vec[..., 3])))
+    _mem("render"); T["render"] = time.perf_counter() - t0; t1 = time.perf_counter()
     drop = {pn for _, pn in added}
-    keep_parts = []
-    for part in parts:
-        base_name = part["pass_"]
-        if any(base_name.startswith(d) for d in drop):
-            continue
-        if passes != "all" and base_name not in passes:
-            continue
-        keep_parts.append(part)
-    if filepath:
-        out_path = bpy.path.abspath(filepath)
-        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-        PS.write(out_path, keep_parts + new, half_color=(keep[2] == '16'))
+    helpers = ("Position", "CryptoObject00", "Depth", "IndexOB", "IndexMA",       # 补洞 / 矢量 / 置信度要用：先读进内存
+               "Denoising Specular Albedo", "Denoising Roughness")
+    in_mem = lambda ps: ps == "Combined" or ps.startswith(helpers)
+    out_keep = lambda ps: keep_pass(ps) and not any(ps.startswith(d) for d in drop)
+    keep_tmp = bool(os.environ.get("BLENDERLENS_KEEP_LAYERS"))   # 调试：保留原始渲染层文件
+    try:
+        hs = PS.heads(tmp)
+        parts = [PS.read_one(tmp, h) for h in hs if in_mem(h["pass_"])]
+        comb = PS.find(parts, "Combined", vl.name) or PS.find(parts, "Combined")
+        if comb is None:
+            raise RuntimeError("多层 EXR 里没有 Combined 渲染层")
+        H, W = comb["channels"]["R"].shape
+        region = _region(scene, W, H)
+        _mem("read"); T["read"] = time.perf_counter() - t1; t1 = time.perf_counter()
+        maps = _lateral_maps(cam_ob, W, H, region) if p.dispersion_mode == 'LATERAL_POST' else None
+
+        def lateral(*grp):                                 # 颜色层：与 Combined 相同的横向色差（几层一起：采样位置只算一次）
+            from . import lenspack as LP
+            outs = LP.apply_lateral_ca_planes([[q["channels"][c] for c in "RGB"] for q in grp], maps)
+            for q, out in zip(grp, outs):
+                for c, pl in zip("RGB", out):
+                    q["channels"][c] = pl
+        if maps is not None:
+            lateral(comb)
+        T["lateral"] = time.perf_counter() - t1
+        _mem("lateral"); t1 = time.perf_counter()
+        beauty = PS.rgb(comb)
+        layer, used = _flare_layers(scene, cam_ob, W, H, region, n_grid, blur_px) if flare else (np.zeros((H, W, 3), np.float32), [])
+        layer = layer.astype(np.float32, copy=False)
+        veil = np.zeros_like(beauty)
+        if flare and p.veiling_glare > 0:
+            base = beauty + layer
+            veil = (FL.veiling_glare(base, p.veiling_glare) - base).astype(np.float32); del base
+        final = beauty + layer + veil
+        del beauty
+        alpha = comb["channels"].get("A", np.ones((H, W), np.float32))
+        _mem("flare"); T["flare"] = time.perf_counter() - t1; t1 = time.perf_counter()
+        new = [PS.new_part(comb, "BL_Flare", dict(R=layer[..., 0], G=layer[..., 1], B=layer[..., 2])),
+               PS.new_part(comb, "BL_Veil", dict(R=veil[..., 0], G=veil[..., 1], B=veil[..., 2])),
+               PS.new_part(comb, "BL_Final", dict(R=final[..., 0], G=final[..., 1], B=final[..., 2], A=alpha))]
+        del veil
+        fill = fill_first_sample_passes(scene, cam_ob, parts, vl.name, W, H, region)
+        comb["header"]["blenderlens/fill"] = json.dumps(fill)
+        _mem("fill"); T["fill"] = time.perf_counter() - t1; t1 = time.perf_counter()
+        if vectors:
+            res = bl_vector(scene, cam_ob, parts, vl.name, W, H, region, return_valid=True)
+            if res is not None:
+                vec, valid = res
+                new.append(PS.new_part(comb, "BL_Vector", dict(X=vec[..., 0], Y=vec[..., 1], Z=vec[..., 2], W=vec[..., 3])))
+                conf, cstats = vector_confidence(scene, cam_ob, parts, vl.name, vec, valid, W, H, region)
+                new.append(PS.new_part(comb, "BL_VectorConfidence", dict(X=conf)))
+                comb["header"]["blenderlens/vector_confidence"] = json.dumps(cstats)
+                del vec, valid, conf
+        _mem("vector"); T["vector"] = time.perf_counter() - t1; t1 = time.perf_counter()
+        if filepath:                                       # 流式写出：其余渲染层逐个读 → 色差 → 写 → 释放
+            out_path = bpy.path.abspath(filepath)
+            os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+            by_name = {q["name"]: q for q in parts}
+            kept = [h for h in hs if out_keep(h["pass_"])]
+            plan = []
+            for h in kept:
+                q = by_name.get(h["name"])
+                plan.append(dict(name=h["name"], suffixes=h["suffixes"], header=q["header"] if q else h["header"],
+                                 color=PS.is_color(dict(pass_=h["pass_"], channels=dict.fromkeys(h["suffixes"])))))
+            plan += [dict(name=q["name"], suffixes=list(q["channels"]), header={}, color=PS.is_color(q)) for q in new]
+            wr = PS.StreamWriter(out_path, plan, W, H, half_color=half_color, codec=exr_codec or "ZIP")
+            try:
+                t_lat = 0.0
+                for k in range(0, len(kept), 4):          # 每批 4 层：内存里最多 4 层，色差一起做
+                    batch = [by_name.get(h["name"]) or PS.read_one(tmp, h) for h in kept[k:k + 4]]
+                    todo = [q for q, pl in zip(batch, plan[k:k + 4]) if pl["color"] and q["name"] not in by_name]
+                    if maps is not None and todo:
+                        t2 = time.perf_counter(); lateral(*todo); t_lat += time.perf_counter() - t2
+                    for q in batch:
+                        wr.write(q["channels"])
+                    del batch, todo
+                for q in new:
+                    wr.write(q["channels"])
+            finally:
+                wr.close()
+            T["lateral"] += t_lat
+    finally:
+        if not keep_tmp:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    _mem("write"); T["write"] = time.perf_counter() - t1
+    T["total"] = time.perf_counter() - t0
+    LAST_TIMING.clear(); LAST_TIMING.update({k: round(v, 2) for k, v in T.items()})
+    LAST_TIMING["max_rss_gb"] = M                       # 进程到这一步为止的峰值常驻内存
     out = bpy.data.images.get("BL Flare Composite") or bpy.data.images.new("BL Flare Composite", W, H, float_buffer=True)
     if tuple(out.size) != (W, H):
         out.scale(W, H)
@@ -830,7 +911,7 @@ def fill_first_sample_passes(scene, cam_ob, parts, vl_name, W, H, region=None, m
     idx, names = PS.crypto_object_ids(parts, vl_name)
     if pos is None or cov is None or idx is None:
         return dict(skipped=True)
-    P = np.stack([pos["channels"][c] for c in "XYZ"], -1).astype(np.float64)
+    P = np.stack([pos["channels"][c] for c in "XYZ"], -1).astype(np.float32)
     have = np.abs(P).sum(-1) > 0
     obj = (cov > 0) & (idx >= 0)
     missing = obj & ~have
@@ -838,7 +919,7 @@ def fill_first_sample_passes(scene, cam_ob, parts, vl_name, W, H, region=None, m
     for _ in range(6):                                   # 1. 邻域填（同一物体）
         if not missing.any():
             break
-        acc = np.zeros_like(P); cnt = np.zeros(P.shape[:2])
+        acc = np.zeros_like(P); cnt = np.zeros(P.shape[:2], np.float32)
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 if dx == 0 and dy == 0:
@@ -905,15 +986,17 @@ def fill_first_sample_passes(scene, cam_ob, parts, vl_name, W, H, region=None, m
     return dict(missing_before=n0, raycast=n_cast, still_missing=int(missing.sum()), filled=int(filled.sum()))
 
 
-def bl_vector(scene, cam_ob, parts, vl_name, W, H, region=None, project=None):
+def bl_vector(scene, cam_ob, parts, vl_name, W, H, region=None, project=None, far=True, return_valid=False):
     """BL_Vector：H×W×4（行 0 = 顶部），像素单位、y 向上；X,Y = 上一帧 − 当前，Z,W = 当前 − 下一帧（Cycles 约定）。
     需要 Position 层；有 Cryptomatte Object 层时计入刚体物体运动。project：可替换的投影函数（测试用：针孔相机），
-    签名 project(Q_lens_mm N×3, focus_mm, s0) → (sx, sy, valid)。没有 Position 层时返回 None。"""
+    签名 project(Q_lens_mm N×3, focus_mm, s0) → (sx, sy, valid)。没有 Position 层时返回 None。
+    far（0.8.4）：没有几何的像素（天空、环境）当作无穷远，只随相机转动；False = 这些像素矢量为 0（0.8.3 的行为）。
+    return_valid：另返回 H×W bool（矢量算出来了的像素）。"""
     from . import passes as PS, lenspack as LP, oslgen
     pos = PS.find(parts, "Position", vl_name) or PS.find(parts, "Position")
     if pos is None:
         return None
-    P = np.stack([pos["channels"]["X"], pos["channels"]["Y"], pos["channels"]["Z"]], axis=-1).astype(np.float64)
+    P = np.stack([pos["channels"]["X"], pos["channels"]["Y"], pos["channels"]["Z"]], axis=-1).astype(np.float32)   # 4K：float32 省 ~0.5 GB
     idx, names = PS.crypto_object_ids(parts, vl_name)
     cov = _crypto_coverage(parts, vl_name)
     bg = ~(np.abs(P).sum(-1) > 0)                       # 没有位置（背景 / 补不上的像素）
@@ -939,22 +1022,37 @@ def bl_vector(scene, cam_ob, parts, vl_name, W, H, region=None, project=None):
         scene.frame_set(f0, subframe=sub0)
         apply_settings(cam_ob)
     us = mm_per_unit(scene)
-    yy, xx = np.mgrid[0:H, 0:W]
+    yy, xx = np.indices((H, W), dtype=np.float32)
     px_full = xx + x0
     py_up = (Hf - 1 - (yy + y0t))                       # 整幅里的行号，向上为正
     s0x = ((px_full + 0.5) / Wf - 0.5) * SW
     s0y = -((py_up + 0.5) / Hf - 0.5) * SH
     m = ~bg
     Pw = P[m]
-    s0 = (s0x[m], s0y[m])
+    s0 = (s0x[m], s0y[m])                               # 只用作牛顿迭代的初值
     ids = idx[m] if idx is not None else None
+    cache = {}
+
+    def projector(fmm):
+        key = round(fmm, 3) if math.isfinite(fmm) else -1
+        if key not in cache:
+            cache[key] = LP.LensProjector(rx, fmm)
+        return cache[key]
+    if far and bg.any():                               # 0.8.4：背景（天空 / 环境）= 无穷远：沿主光线取很远的点 → 只随相机转动
+        Pb, okb = _far_points(rx, cam_ob, cams[f0], s0x[bg], s0y[bg], us, projector(focus[f0]))
+        mb = bg.copy(); mb[bg] = okb
+        m = m | mb
+        Pw = np.concatenate([Pw, Pb[okb]])
+        s0 = (np.concatenate([s0[0], s0x[mb]]), np.concatenate([s0[1], s0y[mb]]))
+        if ids is not None:
+            ids = np.concatenate([ids, np.full(int(mb.sum()), -1, ids.dtype)])
+        order = np.concatenate([np.flatnonzero((~bg).ravel()), np.flatnonzero(mb.ravel())])   # Pw 的行 → 像素
+    else:
+        order = np.flatnonzero(m.ravel())
+    del yy, xx, px_full, py_up, s0x, s0y, P
     if project is None:
-        cache = {}
         def project(Q, fmm, s0):
-            key = round(fmm, 3) if math.isfinite(fmm) else -1
-            if key not in cache:
-                cache[key] = LP.LensProjector(rx, fmm)
-            return cache[key].project(Q, s0)
+            return projector(fmm).project(Q, s0)
     proj = {}
     for f in frames:
         Pk = Pw.copy()
@@ -972,31 +1070,194 @@ def bl_vector(scene, cam_ob, parts, vl_name, W, H, region=None, project=None):
                     Pk[sel] = v[:, :3]
         Cinv = np.linalg.inv(cams[f])
         sx = np.empty(len(Pk)); sy = np.empty(len(Pk)); ok = np.zeros(len(Pk), bool)
-        CH = 500000                                     # 分块：4K 时一次投影 800 万点的临时数组要好几 GB
-        for a in range(0, len(Pk), CH):
+        CH = 250000                                     # 分块：4K 时一次投影 800 万点的临时数组要好几 GB
+
+        def one(a):
             b = min(a + CH, len(Pk))
             pc = (np.c_[Pk[a:b], np.ones(b - a)] @ Cinv.T)[:, :3]
             Q = np.column_stack([-pc[:, 0], pc[:, 1], -pc[:, 2]]) * us     # 相机本地 → 镜头坐标（mm）
             sx[a:b], sy[a:b], ok[a:b] = project(Q, focus[f], (s0[0][a:b], s0[1][a:b]))
-        pxf = (sx / SW + 0.5) * Wf - 0.5
-        pyf = (-sy / SH + 0.5) * Hf - 0.5
+        if len(Pk):
+            one(0)                                      # 先在主线程建好投影表（缓存），再多线程（numpy 运算释放 GIL）
+            from concurrent.futures import ThreadPoolExecutor
+            import os as _os
+            with ThreadPoolExecutor(max_workers=min(8, _os.cpu_count() or 4)) as ex:
+                list(ex.map(one, range(CH, len(Pk), CH)))
+        pxf = ((sx / SW + 0.5) * Wf - 0.5).astype(np.float32)
+        pyf = ((-sy / SH + 0.5) * Hf - 0.5).astype(np.float32)
+        del sx, sy, Pk
         proj[f] = (pxf, pyf, ok)
     out = np.zeros((H, W, 4), np.float32)
     (ax, ay, aok), (cx, cy, cok), (bx, by, bok) = proj[frames[0]], proj[frames[1]], proj[frames[2]]
     ok = aok & cok & bok
-    vec = np.zeros((len(Pw), 4))
+    vec = np.zeros((len(Pw), 4), np.float32)
     vec[:, 0], vec[:, 1] = ax - cx, ay - cy
     vec[:, 2], vec[:, 3] = cx - bx, cy - by
     vec[~ok] = 0.0
-    out[m] = vec.astype(np.float32)
+    out.reshape(-1, 4)[order] = vec
+    if return_valid:
+        valid = np.zeros(H * W, bool); valid[order] = ok
+        return out, valid.reshape(H, W)
     return out
+
+
+def _shift_stack(a, op):
+    """3×3 邻域（边缘复制）的 op（np.maximum / np.minimum）。"""
+    p = np.pad(a, 1, mode="edge")
+    H, W = a.shape
+    r = a.copy()
+    for dy in (0, 1, 2):
+        for dx in (0, 1, 2):
+            if dy == 1 and dx == 1:
+                continue
+            r = op(r, p[dy:dy + H, dx:dx + W])
+    return r
+
+
+def vector_confidence(scene, cam_ob, parts, vl_name, vec, valid, W, H, region=None):
+    """BL_VectorConfidence（0.8.4，MessyRoom R2）：0–1，各项相乘（都在 1080 行等效像素上定阈值）：
+      · valid：矢量算出来了，且上一帧位置在画面里；
+      · occlusion（遮挡 / 去遮挡）：当前帧各像素按深度（Depth）溅射到上一帧 / 下一帧的位置；自己的位置在那一帧被
+        明显更近的东西占着（近 3% 以上，且超过局部深度变化的 2 倍）→ 0（外扩 1 像素）。只看得到当前帧可见的遮挡物；
+      · edge（深度不连续处的混合像素）：相邻像素矢量差 dv（视差）> 0.5 px 开始降，2 px 为 0（外扩 1 像素）；
+      · emitter：亮光源（Combined 亮度 > 1.5）的边缘与外圈：外圈像素其实是光源的散焦 / 辉光，跟着光源动，
+        矢量却是背景的 → 光源与该像素矢量差 > 0.25 px 开始降，1 px 为 0；外圈宽度 = 光源深度处的散焦直径 / 2 + 2 px；
+      · specular：镜面（Denoising Specular Albedo 高、Roughness 低）：倒影不跟表面走 → 1 − mirror；
+        没有去噪数据层时不评估（记在头里）；
+      · speed：> 16 px/帧开始降，48 px/帧为 0（快速运动时帧内运动模糊、插值误差大）。
+    → (H×W float32, 统计 dict)。"""
+    from . import passes as PS, focus as FC
+    Wf, Hf = (region[2], region[3]) if region else (W, H)
+    x0, y0t = (region[0], region[1]) if region else (0, 0)
+    k1080 = 1080.0 / Hf
+    X, Y = vec[..., 0], vec[..., 1]
+    yy, xx = np.indices((H, W), dtype=np.float32)
+    xp, yp = xx + x0 + X, yy + y0t - Y
+    c_valid = (valid & (xp >= 0) & (xp <= Wf - 1) & (yp >= 0) & (yp <= Hf - 1)).astype(np.float32)
+    del xx, yy, xp, yp
+    # occlusion：把当前帧每个像素按深度溅射到上一帧 / 下一帧的位置（z-buffer）；自己的位置在那一帧被更近的东西
+    # 占着 → 那一帧看不到它（去遮挡 / 将被遮挡）
+    dep = PS.find(parts, "Depth", vl_name) or PS.find(parts, "Depth")
+    c_occ = np.ones((H, W), np.float32)
+    n_occ = 0
+    if dep is not None:
+        Z = dep["channels"]["Z"].astype(np.float32)
+        Z = np.where((Z > 0) & np.isfinite(Z) & (Z < 1e9), Z, np.inf)   # 天空 / 背景 = 无穷远
+        Zf = np.where(np.isfinite(Z), Z, 0.0)
+        dZ = _shift_stack(Zf, np.maximum) - _shift_stack(Zf, np.minimum)   # 局部深度变化（掠射的地面相邻像素就差很多）
+        tol = np.where(np.isfinite(Z), Z - np.maximum(0.03 * Zf, 2.0 * dZ), np.inf)
+        del Zf, dZ
+        yy, xx = np.indices((H, W), dtype=np.float32)
+        occ = np.zeros((H, W), bool)
+        for qx, qy in ((xx + vec[..., 0], yy - vec[..., 1]), (xx - vec[..., 2], yy + vec[..., 3])):
+            zb = np.full(H * W, np.inf, np.float32)
+            fin = valid & np.isfinite(Z)
+            for ox in (0, 1):
+                for oy in (0, 1):
+                    cx = np.floor(qx).astype(np.int32) + ox; cy = np.floor(qy).astype(np.int32) + oy
+                    ok = fin & (cx >= 0) & (cx < W) & (cy >= 0) & (cy < H)
+                    np.minimum.at(zb, (cy[ok] * W + cx[ok]), Z[ok])
+            rx_ = np.clip(np.rint(qx), 0, W - 1).astype(np.int32); ry_ = np.clip(np.rint(qy), 0, H - 1).astype(np.int32)
+            zq = zb[ry_ * W + rx_].reshape(H, W)
+            occ |= valid & (zq < tol)
+        n_occ = int(occ.sum())
+        c_occ = 1.0 - _shift_stack(occ.astype(np.float32), np.maximum)       # 外扩 1 像素（边缘混合像素）
+        del yy, xx, Z, occ, tol
+    # edge：相邻矢量差（两组矢量取大）：边缘像素混着前景与背景，矢量只属于其中一个
+    dv = np.zeros((H, W), np.float32)
+    for a, b in ((0, 1), (2, 3)):
+        va, vb = np.pad(vec[..., a], 1, mode="edge"), np.pad(vec[..., b], 1, mode="edge")
+        for dy in (0, 1, 2):
+            for dx in (0, 1, 2):
+                if dy == 1 and dx == 1:
+                    continue
+                d = np.hypot(va[dy:dy + H, dx:dx + W] - vec[..., a], vb[dy:dy + H, dx:dx + W] - vec[..., b])
+                np.maximum(dv, d, out=dv)
+    dv *= k1080
+    c_edge = np.clip(1.0 - (_shift_stack(dv, np.maximum) - 0.5) / 1.5, 0.0, 1.0)
+    # emitter：把光源像素的矢量往外推 r 圈，比较
+    comb = PS.find(parts, "Combined", vl_name) or PS.find(parts, "Combined")
+    c_emit = np.ones((H, W), np.float32)
+    n_hot = 0
+    if comb is not None:
+        lum = (comb["channels"]["R"].astype(np.float32) + comb["channels"]["G"] + comb["channels"]["B"]) / 3.0
+        hot = lum > 1.5
+        n_hot = int(hot.sum())
+        if n_hot:
+            p = cam_ob.data.blenderlens
+            blur = 0.0
+            if dep is not None:
+                d_mm = float(np.median(dep["channels"]["Z"][hot])) * mm_per_unit(scene)
+                if np.isfinite(d_mm) and d_mm > 0:
+                    blur = FC.DofModel(_rx_cached(), focus_mm(cam_ob), p.f_number, Wf, Hf).blur_px(d_mm)[0]
+            r = int(min(24, math.ceil(0.5 * blur + 2.0 / k1080)))
+            ev = np.where(hot[..., None], vec[..., :2], np.nan).astype(np.float32)
+            reach = hot.copy()
+            for _ in range(r):                             # 每圈：没被覆盖的像素取邻居里光源矢量的平均
+                pe = np.pad(ev, ((1, 1), (1, 1), (0, 0)), constant_values=np.nan)
+                acc = np.zeros((H, W, 2), np.float32); cnt = np.zeros((H, W), np.float32)
+                for dy in (0, 1, 2):
+                    for dx in (0, 1, 2):
+                        q = pe[dy:dy + H, dx:dx + W]
+                        okq = ~np.isnan(q[..., 0])
+                        acc += np.where(okq[..., None], q, 0.0); cnt += okq
+                new = ~reach & (cnt > 0)
+                ev[new] = acc[new] / cnt[new][:, None]
+                reach |= new
+            ring = reach & ~hot
+            dve = np.hypot(vec[..., 0] - ev[..., 0], vec[..., 1] - ev[..., 1]) * k1080
+            c_emit = np.where(ring, np.clip(1.0 - (np.nan_to_num(dve) - 0.25) / 0.75, 0.0, 1.0), 1.0).astype(np.float32)
+    # specular
+    sa = PS.find(parts, "Denoising Specular Albedo", vl_name) or PS.find(parts, "Denoising Specular Albedo")
+    ro = PS.find(parts, "Denoising Roughness", vl_name) or PS.find(parts, "Denoising Roughness")
+    if sa is not None and ro is not None:
+        spec = (sa["channels"]["R"].astype(np.float32) + sa["channels"]["G"] + sa["channels"]["B"]) / 3.0
+        rough = ro["channels"]["X"].astype(np.float32)
+        mirror = np.clip((spec - 0.08) / 0.12, 0, 1) * np.clip((0.35 - rough) / 0.2, 0, 1)
+        c_spec = (1.0 - mirror).astype(np.float32)
+    else:
+        c_spec = None
+    sp = np.hypot(X, Y) * k1080
+    c_speed = np.clip((48.0 - sp) / 32.0, 0.0, 1.0).astype(np.float32)
+    conf = c_valid * c_occ * c_edge * c_emit * c_speed
+    if c_spec is not None:
+        conf *= c_spec
+    terms = dict(valid=c_valid, occlusion=c_occ, edge=c_edge, emitter=c_emit, speed=c_speed)
+    if c_spec is not None:
+        terms["specular"] = c_spec
+    stats = dict(mean=round(float(conf.mean()), 4), below_half=round(float((conf < 0.5).mean()), 4),
+                 terms={k: round(float(v.mean()), 4) for k, v in terms.items()},
+                 specular_assessed=c_spec is not None, hot_pixels=n_hot, occluded_pixels=n_occ)
+    return conf.astype(np.float32), stats
+
+
+FAR_MM = 1.0e8                                          # 「无穷远」：100 km（相机平移几米的视差 < 0.01 px）
+
+def _far_points(rx, cam_ob, mw, sx, sy, us, projector=None):
+    """传感器坐标 (sx, sy)（mm）的主光线出镜头后，在世界里 FAR_MM 处的点 → (N×3 世界坐标, 有效)。
+    0.8.4：用 LensProjector 的表（深度 z 处主光线横向位置 = A(s) + z·B(s)）插值，不再逐像素追迹（4K 天空 15 s → 不到 1 s）。"""
+    from . import lenspack as LP
+    P = projector or LP.LensProjector(rx, focus_mm(cam_ob))
+    sx = np.asarray(sx, np.float64); sy = np.asarray(sy, np.float64)
+    ok = (sx >= P.gx[0]) & (sx <= P.gx[-1]) & (sy >= P.gy[0]) & (sy <= P.gy[-1]) & bool(P.ok)
+    out = np.zeros((len(sx), 3), np.float32)
+    R, t = mw[:3, :3], mw[:3, 3]
+    CH = 1 << 20
+    for a in range(0, len(sx), CH):
+        b = min(a + CH, len(sx))
+        x = P._interp(P.Ax, sx[a:b], sy[a:b])[0] + FAR_MM * P._interp(P.Bx, sx[a:b], sy[a:b])[0]
+        y = P._interp(P.Ay, sx[a:b], sy[a:b])[0] + FAR_MM * P._interp(P.By, sx[a:b], sy[a:b])[0]
+        local = np.column_stack([-x, y, np.full(b - a, -FAR_MM)]) / us     # 镜头坐标（物方 +Z）→ 相机本地（视线 −Z）
+        out[a:b] = (local @ R.T + t).astype(np.float32)
+    return out, ok
 
 
 def render_with_flare(scene, filepath, n_grid=260, blur_px=0.8):
     """渲染 + 正向炫光层合成（旧接口，等同 render_frame(flare=True)）。"""
     return render_frame(scene, filepath, flare=True, n_grid=n_grid, blur_px=blur_px)
 
-def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_layer_path=None, passes=None, vectors=True):
+def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_layer_path=None, passes=None, vectors=True,
+                 exr_codec=None, half_color=None):
     """渲染当前帧并做插件的后期：LATERAL_POST 的横向色差、正向炫光层（flare=True）。
     返回 (合成后的 Image 数据块（线性）, 炫光光源名单, 炫光层 H×W×3)。filepath 按扩展名写出（PNG/TIFF 16 位按场景色彩管理，EXR 线性）。
     flare_layer_path：另存炫光层为线性 EXR（单独调色 / 时域稳定用）。
@@ -1004,7 +1265,8 @@ def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_lay
     import os, tempfile
     from . import flare as FL
     if passes is not None:
-        return render_frame_multilayer(scene, filepath, flare=flare, n_grid=n_grid, blur_px=blur_px, passes=passes, vectors=vectors)
+        return render_frame_multilayer(scene, filepath, flare=flare, n_grid=n_grid, blur_px=blur_px, passes=passes, vectors=vectors,
+                                       exr_codec=exr_codec, half_color=half_color)
     cam_ob = scene.camera
     p = cam_ob.data.blenderlens
     ghosts_was = p.ghosts

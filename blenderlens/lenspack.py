@@ -116,10 +116,10 @@ def _channel_weights(lambdas_nm, M=None):
     w = np.array([[SP.sensor_rgb(nm / 1000.0)[r] for nm in lambdas_nm] for r in range(3)])
     return w / np.maximum(w.sum(axis=1, keepdims=True), 1e-12)
 
-def _upsample(field, nx, ny, W_px, H_px):
-    """粗网格 → 像素中心（双线性）。网格覆盖传感器边到边。"""
-    gx = (np.arange(W_px) + 0.5) / W_px * (nx - 1)
-    gy = (np.arange(H_px) + 0.5) / H_px * (ny - 1)
+def _upsample(field, nx, ny, W_px, H_px, cols=None, rows=None):
+    """粗网格 → 像素中心（双线性）。网格覆盖传感器边到边。cols / rows：只算这些列 / 行（像素下标数组）。"""
+    gx = ((np.arange(W_px) if cols is None else cols) + 0.5) / W_px * (nx - 1)
+    gy = ((np.arange(H_px) if rows is None else rows) + 0.5) / H_px * (ny - 1)
     i0 = np.clip(np.floor(gx).astype(int), 0, nx - 2); tx = gx - i0
     j0 = np.clip(np.floor(gy).astype(int), 0, ny - 2); ty = gy - j0
     f = field
@@ -165,6 +165,18 @@ class LazyMaps(dict):
             return u[y0:y0 + h, x0:x0 + w] - x0, v[y0:y0 + h, x0:x0 + w] - y0
         return u, v
 
+    def rows(self, nm, r0, r1):
+        """只取输出的第 r0…r1−1 行（有裁切时是裁切块里的行）→ (u, v)，各 (r1−r0)×w，float32。多线程分块用。"""
+        W, H = self.L["sensor"]
+        dx, dy = self.L["offsets"][nm]
+        x0, y0, w, _ = self.crop or (0, 0, self.W_px, self.H_px)
+        cols = np.arange(x0, x0 + w); rws = np.arange(y0 + r0, y0 + r1)
+        u = (cols.astype(np.float32)[None, :] - x0
+             + (_upsample(dx[::-1], self.nx, self.ny, self.W_px, self.H_px, cols, rws) / W * self.W_px).astype(np.float32))
+        v = (rws.astype(np.float32)[:, None] - y0
+             - (_upsample(dy[::-1], self.nx, self.ny, self.W_px, self.H_px, cols, rws) / H * self.H_px).astype(np.float32))
+        return u, v
+
     def items(self):
         return ((k, self[k]) for k in self._keys)
 
@@ -190,35 +202,52 @@ def pixel_maps(rx, W_px, H_px, focus_dist=math.inf, lambdas_nm=LAMBDAS_NM, nx=33
         maps[nm] = (base_u + dxp, base_v + dyp)
     return maps
 
-def apply_lateral_ca_many(imgs, maps, lambdas_nm=LAMBDAS_NM, w_min=2e-3):
-    """多张同尺寸图像（H×W×3，行 0 = 顶部）一起加横向色差：每个波长的采样位置与双线性权重只算一次，用于所有图像；
+def apply_lateral_ca_planes(planes, maps, lambdas_nm=LAMBDAS_NM, w_min=2e-3):
+    """多张同尺寸图像一起加横向色差：每个波长的采样位置与双线性权重只算一次，用于所有图像；
     每个通道只取权重 ≥ w_min 的波长（重新归一化，亮度守恒）。0.8.3：4K 七个颜色层从 97 s 降到十几秒。
-    maps：pixel_maps / LazyMaps（键 = 波长 nm，值 = (u, v)）。返回新图像列表（float32）。"""
-    if not imgs:
+    planes：每张图一个 [R, G, B]（各 H×W，行 0 = 顶部，float32 或 float16，不复制）。
+    maps：pixel_maps / LazyMaps（键 = 波长 nm，值 = (u, v)）。返回同结构的新平面（float32）。
+    0.8.4：直接按平面处理，内存峰值 = 输入 + 输出（以前另有拼 / 拆 RGB 的两份拷贝）。"""
+    if not planes:
         return []
-    H, W = imgs[0].shape[:2]
+    H, W = planes[0][0].shape
     wts = _channel_weights(lambdas_nm)
     keep = wts >= w_min
     wts = np.where(keep, wts, 0.0)
     wts = wts / wts.sum(axis=1, keepdims=True)
-    planes = [[np.ascontiguousarray(im[..., c], dtype=np.float32).ravel() for c in range(3)] for im in imgs]
-    outs = [[np.zeros(H * W, np.float32) for _ in range(3)] for _ in imgs]
-    for k, nm in enumerate(lambdas_nm):
-        chans = [c for c in range(3) if keep[c, k]]
-        if not chans:
-            continue
-        u, v = maps[nm]
-        u = np.clip(np.asarray(u, np.float32), 0, W - 1).ravel(); v = np.clip(np.asarray(v, np.float32), 0, H - 1).ravel()
-        i0 = np.minimum(u.astype(np.int32), W - 2); j0 = np.minimum(v.astype(np.int32), H - 2)
-        fu = u - i0; fv = v - j0
-        idx = j0 * W + i0
-        w00 = (1 - fu) * (1 - fv); w01 = fu * (1 - fv); w10 = (1 - fu) * fv; w11 = fu * fv
-        del u, v, i0, j0, fu, fv
-        for pl, out in zip(planes, outs):
-            for c in chans:
-                s = pl[c]
-                out[c] += np.float32(wts[c, k]) * (s[idx] * w00 + s[idx + 1] * w01 + s[idx + W] * w10 + s[idx + W + 1] * w11)
-    return [np.stack([o[c].reshape(H, W) for c in range(3)], axis=-1) for o in outs]
+    from concurrent.futures import ThreadPoolExecutor
+    flat = [[pl.reshape(-1) for pl in img] for img in planes]
+    outs = [[np.zeros(H * W, np.float32) for _ in range(3)] for _ in planes]
+    used = [(k, nm, [c for c in range(3) if keep[c, k]]) for k, nm in enumerate(lambdas_nm)]
+    used = [x for x in used if x[2]]
+
+    def rows(r0, r1):                                    # 一段行：所有波长、所有图像（numpy 取数 / 运算会释放 GIL → 多线程）
+        a0, a1 = r0 * W, r1 * W
+        for k, nm, chans in used:
+            if hasattr(maps, "rows"):
+                u, v = maps.rows(nm, r0, r1)
+            else:
+                u, v = maps[nm]; u, v = u[r0:r1], v[r0:r1]
+            uu = np.clip(np.asarray(u, np.float32).reshape(-1), 0, W - 1); vv = np.clip(np.asarray(v, np.float32).reshape(-1), 0, H - 1)
+            i0 = np.minimum(uu.astype(np.int32), W - 2); j0 = np.minimum(vv.astype(np.int32), H - 2)
+            fu = uu - i0; fv = vv - j0
+            idx = j0 * W + i0
+            w00 = (1 - fu) * (1 - fv); w01 = fu * (1 - fv); w10 = (1 - fu) * fv; w11 = fu * fv
+            for pl, out in zip(flat, outs):
+                for c in chans:
+                    s = pl[c]
+                    out[c][a0:a1] += np.float32(wts[c, k]) * (s[idx] * w00 + s[idx + 1] * w01 + s[idx + W] * w10 + s[idx + W + 1] * w11)
+
+    step = max(16, (1 << 17) // W)
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as ex:
+        list(ex.map(lambda r: rows(r, min(r + step, H)), range(0, H, step)))
+    return [[o.reshape(H, W) for o in out] for out in outs]
+
+
+def apply_lateral_ca_many(imgs, maps, lambdas_nm=LAMBDAS_NM, w_min=2e-3):
+    """同 apply_lateral_ca_planes，输入输出是 H×W×3 图像（float32）。"""
+    planes = [[np.ascontiguousarray(im[..., c], dtype=np.float32) for c in range(3)] for im in imgs]
+    return [np.stack(o, axis=-1) for o in apply_lateral_ca_planes(planes, maps, lambdas_nm, w_min)]
 
 
 def apply_lateral_ca(img, rx, focus_dist=math.inf, lambdas_nm=LAMBDAS_NM, strength=1.0, maps=None):

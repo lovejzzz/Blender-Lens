@@ -32,6 +32,11 @@
 | 8.6 | **Geometry 模式亚像素平移**（旧问题 §7.2） | 单片透镜复现 → 查像素中心约定 | 偏移 < 0.05 px | 小 |
 | 8.7 | **外部数据回归** | 新测试 `test_reference.py`：前置预设的散景高宽比随离焦趋向挤压比；后置 PV 1.34× 散景接近圆（ASC / FDTimes 的定性结论）；呼吸方向以垂直为主（E 系列、Hawk 的描述）；最近对焦距离与 Panavision 公布值比对 | 全部通过或在文档里解释差异 | 小 |
 
+## 0.8.4 —— 运镜与时间稳定性（2026-10-19 完成，MessyRoom Day 4 成片后的 R1–R6，见 RESEARCH.md §6.14、HANDOFF §6.8）
+
+R4 ✅ 颜色层 half + DWAB / 数据层 float32、`passes="temporal"` 预设、没人要的渲染层渲染时关掉、流式读写（4K 体积 555 → 97 MB）。R1 ✅ `temporal_check(mode="moving")`（运动补偿残差、速度直方图、各速度区间闪烁）。R6 ✅ 炫光时间稳定性（修了星芒的点采样混叠：亚像素移动时能量跳 ±25% → 0.3%；正向追迹快 5–6 倍）。R2 ✅ `BL_VectorConfidence`（遮挡溅射、边缘、发光体外圈、镜面、速度）、天空矢量、Cryptomatte 哈希修正。R5 ✅ `render_shot` + `blcli shot`（跟随、续渲、内存守护、逐帧日志）。R3 ✅ `temporal_denoise`（hazefix + 置信度 + 前后一致性，不碰炫光层）。
+最终验收（film.blend 第 40–56、116–144 帧）由 MessyRoom 跑。还没做：镜面运动矢量（主反射虚像）、移动阴影的置信度。
+
 ## 0.8.3 —— 成片输出（2026-10-19 完成，MessyRoom Day 4 的 R1–R4，见 RESEARCH.md §6.13、HANDOFF §6.7）
 
 R1 ✅ 多层 EXR（所有渲染层、颜色层统一色差、BL_Flare / BL_Veil / BL_Final、BL_Vector、补 Depth / Position 的洞）。R2 ✅ 对焦助手 + diagnose。R3 ✅ temporal_check + blcli。R4 ✅ Render Region + Lateral in Post、运动模糊提示、4K 内存基线、0.5.1 → 0.8.3 画面对比。

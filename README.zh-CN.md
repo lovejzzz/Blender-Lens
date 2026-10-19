@@ -21,6 +21,15 @@
 
 ---
 
+## 0.8.4 新增：运镜与时间稳定性（MessyRoom Day 4 成片后的反馈）
+
+- **多层输出更小、更省内存**：`passes="temporal"` 只写时间降噪需要的层（Combined、Noisy、体积、去噪 albedo / 镜面 / 法线 / 粗糙度 / 深度、Depth 和插件层）；颜色层 half + DWAB，数据层 float32 + ZIP（`exr_codec`、`half_color`）。没人要的渲染层渲染时关掉，后期逐层流式处理。4K 测试帧 555 MB → 97 MB。
+- **真实运镜中的闪烁**：`bl.temporal_check(..., mode="moving")` 按真实运动渲染，用 `BL_Vector` 把 t−1 帧对齐到 t 帧测残差，另给速度直方图与各速度区间的闪烁。
+- **矢量可信度**：新层 `BL_VectorConfidence`（遮挡 / 去遮挡、深度边缘、发光体外圈、镜面、速度）；天空 / 环境像素有了随相机转动的矢量；修了 Cryptomatte 哈希转换的错误（约 1/128 的物体没有物体运动）。
+- **时间降噪**：`bl.temporal_denoise(in_dir, out_dir, frames)`——运动补偿平均，按矢量置信度和前后一致性加权，炫光与杂光原样加回；输出稳定版 `BL_Final` 和「每像素用了几帧」的图。
+- **一条命令渲一个镜头**：`bl.render_shot(source_camera, frames, out_dir, preset, passes, spp)` / `blcli.py shot`——跟随源相机（含对焦与光圈）、续渲、内存不够时等待、逐帧记录用时与内存。
+- **炫光在视频里稳定了**：衍射星芒原来按像素中心点采样，亚像素移动时能量跳 ±25%；现在按像素面积积分（0.3%）。正向鬼影追迹快 5–6 倍。
+
 ## 0.8.3 新增：成片输出（MessyRoom 片子里提出的需求）
 
 - **保留所有渲染层的多层 EXR**（`bl.render_still(path, passes="all")`、`bl.render_frames(..., passes="all")`）：视图层打开的渲染层全部保留；Lateral in Post 对每个颜色层做同样的色差（各光组相加仍等于 Combined），数据层不动；炫光与杂光是单独的层（`BL_Flare`、`BL_Veil`、`BL_Final`）。
@@ -78,12 +87,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.8.3.zip`](dist/blenderlens-0.8.3.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.8.4.zip`](dist/blenderlens-0.8.4.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.3.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.4.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。

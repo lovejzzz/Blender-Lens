@@ -11,6 +11,10 @@
 #   python3 tools/blcli.py diagnose --blend my_shot.blend
 #   python3 tools/blcli.py focus --blend film.blend --frame 120 --target Room --near 19 --far 38      # 0.8.3 对焦助手
 #   python3 tools/blcli.py temporal --blend film.blend --frame 120 --n 8 --gpu --variants FILE.json     # 0.8.3 闪烁检查
+#   python3 tools/blcli.py temporal --blend film.blend --frame 40 --n 16 --mode moving --gpu             # 0.8.4 运镜中的闪烁
+#   python3 tools/blcli.py shot --blend film.blend --source CamHeli --frames 40-56 --preset c_series_style \
+#           --passes temporal --spp 256 --gpu --out renders/shots/heli                                     # 0.8.4 渲一个镜头
+#   python3 tools/blcli.py denoise --in renders/shots/heli --frames 40-56 --out renders/shots/heli_stable # 0.8.4 时间降噪
 #   python3 tools/blcli.py test quick                    # = python3 tests/run.py quick
 #
 # Blender 路径：环境变量 BLENDER，默认 /Applications/Blender.app/Contents/MacOS/Blender。
@@ -207,9 +211,48 @@ def cmd_temporal(a):
     if a.gpu:
         s.append("bl.enable_gpu(use_gpu=True)")
     s.append(f"res = bl.temporal_check(frame={a.frame}, n={a.n}, height={a.height}, variants={variants!r}, "
-             f"out_dir={os.path.abspath(a.out)!r})")
+             f"out_dir={os.path.abspath(a.out)!r}, mode={a.mode!r}, flare={bool(a.flare)})")
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=6 * 3600)
+
+
+def _frames(spec):
+    """"40-56" / "40-56:2" / "1,5,9" → 帧号列表。"""
+    out = []
+    for part in spec.split(","):
+        step = 1
+        if ":" in part:
+            part, st = part.split(":"); step = int(st)
+        if "-" in part[1:]:
+            lo, hi = part.split("-", 1) if not part.startswith("-") else part[1:].split("-", 1)
+            out += list(range(int(lo), int(hi) + 1, step))
+        else:
+            out.append(int(part))
+    return out
+
+
+def cmd_shot(a):
+    """渲一个镜头（0.8.4）：跟随源相机、续渲、内存守护、逐帧日志（<out>/<name>_log.json）。"""
+    s = [f"import bpy\nbpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})"]
+    if a.gpu:
+        s.append("bl.enable_gpu(use_gpu=True)")
+    passes = a.passes if a.passes in (None, "all", "temporal") else [x.strip() for x in a.passes.split(",")]
+    s.append(f"res = bl.render_shot(source_camera={a.source!r}, frames={_frames(a.frames)!r}, out_dir={os.path.abspath(a.out)!r}, "
+             f"preset={a.preset!r}, focal_mm={a.focal_mm or 0.0}, gate={a.gate or '16:9_NATIVE'!r}, passes={passes!r}, "
+             f"spp={a.spp!r}, follow={not a.no_follow}, guard={not a.no_guard}, height={a.height!r}, flare={bool(a.flare)}, "
+             f"exposure={a.exposure!r}, guard_min_gb={a.guard_gb}, exr_codec={a.exr_codec!r})")
+    s.append("res = dict(records=res['records'], summary=res.get('summary'), exposure=res.get('exposure'), "
+             "stopped=res.get('stopped'), log=res['out_dir'])")
+    s.append(f"print({MARK!r} + dump(res))")
+    return _blender("\n".join(s) + "\n", timeout=48 * 3600)
+
+
+def cmd_denoise(a):
+    """时间降噪（0.8.4）：读多层 EXR，写 BL_Final 的稳定版 + 每像素用了几帧的图。"""
+    s = [f"res = bl.temporal_denoise({os.path.abspath(a.inp)!r}, {os.path.abspath(a.out)!r}, frames={_frames(a.frames)!r}, "
+         f"strength={a.strength}, radius={a.radius}, name={a.name!r})"]
+    s.append(f"print({MARK!r} + dump(res))")
+    return _blender("\n".join(s) + "\n", timeout=12 * 3600)
 
 
 def cmd_diagnose(a):
@@ -244,6 +287,18 @@ def main():
     p.add_argument("--n", type=int, default=8); p.add_argument("--height", type=int, default=1080)
     p.add_argument("--variants", help="JSON 列表或文件")
     p.add_argument("--gpu", action="store_true"); p.add_argument("--out", default="renders/temporal")
+    p.add_argument("--mode", default="locked", choices=["locked", "moving"]); p.add_argument("--flare", action="store_true")
+    p = sub.add_parser("shot"); p.add_argument("--blend", required=True); p.add_argument("--source")
+    p.add_argument("--frames", required=True, help="40-56、40-56:2 或 1,5,9"); p.add_argument("--out", required=True)
+    p.add_argument("--preset"); p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
+    p.add_argument("--passes", help="all / temporal / 逗号分隔的渲染层名"); p.add_argument("--spp", type=int)
+    p.add_argument("--height", type=int); p.add_argument("--flare", action="store_true")
+    p.add_argument("--exposure", default="keep", choices=["keep", "pinhole"]); p.add_argument("--exr-codec")
+    p.add_argument("--no-follow", action="store_true"); p.add_argument("--no-guard", action="store_true")
+    p.add_argument("--guard-gb", type=float, default=4.0); p.add_argument("--gpu", action="store_true")
+    p = sub.add_parser("denoise"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True)
+    p.add_argument("--frames", required=True); p.add_argument("--strength", type=float, default=1.0)
+    p.add_argument("--radius", type=int, default=3); p.add_argument("--name", default="f")
     p = sub.add_parser("test"); p.add_argument("args", nargs=argparse.REMAINDER)
     argv = sys.argv[1:]
     pretty = "--pretty" in argv and argv[0] != "test"
@@ -252,7 +307,7 @@ def main():
     if a.cmd == "test":
         sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, "tests", "run.py")] + a.args))
     res = dict(presets=cmd_presets, info=cmd_info, describe=cmd_describe, render=cmd_render, diagnose=cmd_diagnose,
-               focus=cmd_focus, temporal=cmd_temporal)[a.cmd](a)
+               focus=cmd_focus, temporal=cmd_temporal, shot=cmd_shot, denoise=cmd_denoise)[a.cmd](a)
     print(json.dumps(res, ensure_ascii=False, indent=1 if a.pretty else None, default=str))
     sys.exit(1 if isinstance(res, dict) and "error" in res else 0)
 

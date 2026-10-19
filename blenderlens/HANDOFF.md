@@ -1,6 +1,6 @@
-# BlenderLens 0.8.3 交接说明（给接手的 AI）
+# BlenderLens 0.8.4 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.8.3**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.8.4**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -293,6 +293,67 @@ bl.temporal_check(scene, frame=120, n=8, height=1080,
 真实场景的几何、纹理、体积另外加上去；内存占用峰值出现在 Cycles 渲染阶段（4K 的每个渲染层都有胶片缓冲）。同时跑两个 4K 全渲染层的 Blender，按 2 × 12.6 GB 加场景本身估算。
 
 **从 0.5.1 换到 0.8.3 的画面变化**（C 风格、16:9 Native、GPU、Lateral in Post、无炫光、对焦 19 m、f/2.8，同场景 512 spp 对比）：曝光 −0.0016 EV（0.1%）；几何整体平移 0.05 px、局部最大 0.18 px（噪点水平）；对焦面锐度 99.75%（不变）；逐像素差 6.7% 是采样噪点。0.8 的发腮补偿在 19 m 处几乎不起作用。
+
+## 6.8 体积 / 内存、运镜闪烁、矢量可信度、时间降噪、一条命令渲一个镜头（0.8.4，MessyRoom Day 4 成片后的需求）
+
+**体积与内存（R4）**：
+```python
+bl.render_still(path, passes="temporal")                 # 预设：Combined、Noisy Image、Volume Direct/Indirect、Denoising Albedo /
+bl.render_frames(..., passes=["temporal", "lightgroups"])  #   Specular Albedo / Normal / Roughness / Depth、Depth + 插件层；可加光组
+bl.render_still(path, passes="all", exr_codec="DWAB", half_color=True)
+```
+- 颜色层 half + 压缩（`exr_codec`），数据层（Depth、Position、BL_Vector、BL_VectorConfidence、去噪法线 / 粗糙度 / 深度）恒为 float32，遇到有损压缩（DWAA / DWAB / B44 / PXR24）自动改 ZIP——与 Blender 自己写多层 EXR 的做法相同。用预设时默认 DWAB + half；否则沿用场景的输出设置。
+- passes 不是 "all" 时，视图层里开着但没人要的渲染层在渲染期间临时关掉（Cycles 少算、少占内存），预设需要的层临时打开，渲完全部恢复。
+- 后期流式处理：Combined 与补洞 / 矢量要用的层先读，其余渲染层每次 4 个「读 → 横向色差 → 写」，用 Blender 自带的 OpenImageIO 逐部分写多部分 EXR。横向色差改为多线程、按行块放大映射。
+- 4K 实测（简单测试场景、3840×2160、GPU、64 spp、Lateral in Post，`/usr/bin/time -l`）；`rig.LAST_TIMING` 有每一步的用时与到该步为止的峰值常驻内存（render_shot 写进日志）：
+
+| 输出 | 用时 | 常驻内存峰值 | 内存占用峰值（含 Metal） | 文件 |
+|---|---|---|---|---|
+| 只出成片 | 14 s | 2.6 GB | 7.0 GB | 28 MB |
+| 0.8.3 `passes="all"` | 41.7 s | 8.9 GB | 12.6 GB | 555 MB |
+| 0.8.4 `passes="all"`（float32） | 29.8 s | 8.4 GB | 12.6 GB | 555 MB |
+| 0.8.4 `passes="temporal"`（half + DWAB） | 27.8 s | 7.6 GB | 11.5 GB | 98 MB |
+
+  内存占用峰值出现在 Cycles 渲染阶段，取决于视图层开了多少渲染层（每层一块 4K 胶片缓冲）；光组也算，`temporal` 预设不会关光组（关不了），不要的光组请在视图层里删掉。
+
+**运镜中的闪烁（R1）**：
+```python
+bl.temporal_check(scene, frame=40, n=16, mode="moving", variants=[{"spp": 1024}, {"flare": True}])
+```
+相机照真实运动走，每帧写多层 EXR，用 BL_Vector 把 t−1 帧对齐到 t 帧再测残差（与 MessyRoom flicker_moving.py 同一定义），另给 `detail`（平均 |拉普拉斯|）与 `motion`：速度直方图（1080 行等效 px/帧，区间 0 / 0.25 / 0.5 / 1 / 2 / 4 / 8 / 16 / 32 / 64）、每个速度区间的平均闪烁、每帧中位速度。残差里也含对齐误差，所以主要用来比较变体与版本。命令行：`blcli.py temporal --mode moving`。
+
+**BL_Vector 的可信度（R2）**：多层输出多了 `BL_VectorConfidence`（单通道 X，0–1），各项相乘：
+- valid：矢量算出来了，上一帧位置在画面里；
+- occlusion：当前帧各像素按 Depth 溅射到上一帧 / 下一帧的位置（z-buffer），自己的位置在那一帧被明显更近的东西占着 → 0（去遮挡 / 将被遮挡）；
+- edge：深度不连续处的混合像素（相邻矢量差 > 0.5 px 开始降，2 px 为 0）；
+- emitter：亮光源（> 1.5）外圈——那里其实是光源的散焦 / 辉光，跟着光源动，矢量却是背景的：光源与该像素矢量差 > 0.25 px 开始降，1 px 为 0；外圈宽度 = 光源深度处的散焦直径 / 2 + 2 px；
+- specular：镜面（Denoising Specular Albedo 高、Roughness 低）倒影不跟表面走 → 1 − mirror（要有去噪数据层，`passes="temporal"` 有；没有时 `specular_assessed=false`）；
+- speed：> 16 px/帧（1080 等效）开始降，48 px/帧为 0。
+统计写在 Combined 头的 `blenderlens/vector_confidence`。另外两处矢量修正：**天空 / 环境**（没有几何的像素）当作无穷远，只随相机转动（0.8.3 是 0）；**Cryptomatte 识别物体**修了哈希 → float 的转换（0.8.3 约 1/128 的物体认不出，矢量里没有物体运动，见 RESEARCH §5 第 16 条）。发光体本身的矢量准（实测 0.1 px）；**移动的阴影**落在静止表面上（矢量是表面的）、主反射的镜面运动矢量目前没有，只在置信度里标低（镜面）或标不出（阴影）。
+
+**时间降噪（R3）**：
+```python
+bl.temporal_denoise("//shots/heli", "//shots/heli_stable", frames=range(40, 57),
+                    strength=1.0, protect=["specular", "emitters"], vfade_px=(2, 8), radius=3)
+```
+在 MessyRoom hazefix 的做法上：对齐的是 **Combined**（BL_Flare、BL_Veil 没有采样噪点，最后原样加回——鬼影绕画面中心反向运动，对不上矢量也不会被抹）；沿 BL_Vector 链式对齐 t−3…t+3（权重 1-2-3-4-3-2-1），样本按当前帧 5×5 邻域 min / max（外扩 25%）钳制；每个样本的权重再乘链上各帧的 BL_VectorConfidence 与前后一致性（t → t−1 的位置用 t−1 帧的 Z,W 走回来，偏差 > 0.5 px 就不用）；protect 与按速度淡出同 hazefix。输出每帧一个多层 EXR：`BL_Final`（稳定版）、`BL_TemporalFrames`（每像素实际用了几帧）、`BL_TemporalWeight`（混合强度）。命令行：`blcli.py denoise --in DIR --frames 40-56 --out DIR2`。
+
+**一条命令渲一个镜头（R5）**：
+```python
+bl.render_shot(source_camera="CamHeli", frames=range(40, 57), out_dir="//shots/heli", preset="c_series_style",
+               passes="temporal", spp=256, follow=True, guard=True, exposure="pinhole")
+```
+搭镜头（或用场景里已有的）→ follow_camera（位置、旋转、对焦、f 值都烘焙成关键帧）→ `exposure="pinhole"` 用 Cycles 胶片曝光（写进 EXR 数据）补偿整幅平均曝光差（按第一帧算，整镜一个常数）→ 逐帧渲染（确定性种子、跳过已有帧、.partial、多机锁）→ 每帧开始前看系统可用内存，低于 `guard_min_gb`（默认 4 GB）就等（每 15 秒看一次，最多 `guard_wait_s`），等不到就停下并写明原因 → `<out_dir>/<name>_log.json` 每帧写一次（用时、各步用时、峰值常驻内存、可用内存、文件大小）。再跑同一条命令就是续渲。命令行：`blcli.py shot --blend film.blend --source CamHeli --frames 40-56 --preset c_series_style --passes temporal --spp 256 --gpu --out renders/shots/heli`。
+
+**炫光的时间稳定性（R6）**：正向鬼影本来就稳；**衍射星芒在 0.8.3 及以前会闪**——按像素中心点采样 PSF、主斑（约 0.15 像素）在像素上硬挖，光源挪半个像素星芒能量就跳 ±25%，相机 0.02°/帧漂移时整个炫光层的能量能跳到 4.7 倍（星芒能量是鬼影的几十倍）。0.8.4 改成按像素面积积分（RESEARCH §5 第 17 条），实测（两盏小灯、C 风格、6 叶光圈，炫光层能量 / 亮度质心的二阶差分，平滑运动下应为 0）：
+
+| 相机运动 | 鬼影 | 星芒 | 合计 | 质心 |
+|---|---|---|---|---|
+| 0.02°/帧（亚像素漂移，最容易看出闪） | 0.28% | 0.27% | 0.19% | 0.15 px |
+| 0.2°/帧（中速横摇） | 1.09% | 0.60% | 0.87% | 1.0 px |
+| 0.8.3 的星芒，0.02°/帧 | — | — | 396% | 157 px |
+
+中速时的二阶差是光源扫过渐晕 / 画面的平滑变化，不是闪。端到端（`temporal_check(mode="moving", variants=[{"flare": True}])`）的 `flare_stability`：能量 0.48%、质心 0.13 px。**结论：0.8.4 起运动镜头可以直接用插件的炫光（flare=True）**；光晕的形状与强度不变；0.8.3 的星芒还在光源那一两个像素上重复叠了约 100 倍于直射像的能量（画面上被高光截掉，但在 BL_Flare 数据里），0.8.4 去掉了。注意鬼影绕画面中心反向运动，BL_Vector 对不上它们 → 开炫光会抬高运动补偿残差，这是运动不是闪，看 `flare_stability`；时间降噪只对 Combined、炫光原样加回。正向炫光的代价：每个光源每帧几秒（与分辨率无关；0.8.4 快了 5–6 倍）。
 
 ## 7. 输出与解挤压
 

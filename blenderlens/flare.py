@@ -1,7 +1,7 @@
 # 炫光通道：从光源正向追迹光线网格穿过镜头，按「两次反射」的所有面对累加到传感器（Hullin 式序列鬼影）。
 # 确定性、无噪点；面形 / 口径 / 光阑 / 薄膜公式与 OSL 相机一致。只依赖 numpy（Blender 自带）。
 # 坐标：镜头坐标（原点像面，物方 +Z）；输出图像与 OSL 相机同一映射（画面向右 = 传感器 +x，向上 = 传感器 −y）。
-import math
+import math, os
 import numpy as np
 
 try:
@@ -88,23 +88,35 @@ class Lens:
         return [(a, b) for i, a in enumerate(self.AG) for b in self.AG[i + 1:]]
 
     # ── 单条路径（向量化）：seq = [(面序号, 'T'|'R'), …]，光沿 −Z 从物方出发 ──
-    def trace(self, P, D, seq, lam, coated, coating_nm, coating_ior, coating_type="SINGLE"):
+    def trace(self, P, D, seq, lam, coated, coating_nm, coating_ior, coating_type="SINGLE", state=None, record=None):
         """返回 (idx, X, Y, w, Dout)：存活光线在输入中的下标、像面落点、权重、最终方向。
-        每过一面就剔除被挡光线，ghost 路径大多很快被挡掉。"""
-        idx = np.arange(P.shape[0])
-        w = np.ones(P.shape[0])
-        dirn = -1                                          # −1：沿 −Z（面序号递增）
+        每过一面就剔除被挡光线，ghost 路径大多很快被挡掉。
+        0.8.4：state = 从某个中间状态 (idx, P, D, w, dirn) 接着追（P、D 不用给）；record = dict，记下每一面之前的状态
+        （直射路径记下来，鬼影路径在第一次反射之前与它完全相同，直接接着追 → 省掉共同的前半段）。"""
+        if state is not None:
+            idx, P, D, w, dirn = state
+        else:
+            idx = np.arange(P.shape[0])
+            w = np.ones(P.shape[0])
+            dirn = -1                                      # −1：沿 −Z（面序号递增）
         for k, act in seq:
+            if record is not None:
+                record[k] = (idx, P, D, w, dirn)
             sf = self.S[k]
             cx, cy = O.curv(sf["Rx"]), O.curv(sf["Ry"])
             t = (sf["z"] - P[:, 2]) / D[:, 2]
             with np.errstate(all="ignore"):
-                for _ in range(8):
+                for it in range(8):
                     x = P[:, 0] + t * D[:, 0]; y = P[:, 1] + t * D[:, 1]
                     s, gx, gy, ok = _sag_grad(x, y, cx, cy, sf["kx"], sf["ky"], sf.get("asph") or ())
                     g = P[:, 2] + t * D[:, 2] - sf["z"] + s
                     dg = D[:, 2] + gx * D[:, 0] + gy * D[:, 1]
-                    t = t - g / np.where(np.abs(dg) < 1e-12, 1e-12, dg)
+                    step = g / np.where(np.abs(dg) < 1e-12, 1e-12, dg)
+                    t = t - step
+                    if it >= 1 and not (np.abs(step) > 1e-10).any():    # 收敛就停（NaN 不算未收敛：那些光线会被剔除）
+                        x = P[:, 0] + t * D[:, 0]; y = P[:, 1] + t * D[:, 1]
+                        s, gx, gy, ok = _sag_grad(x, y, cx, cy, sf["kx"], sf["ky"], sf.get("asph") or ())
+                        break
                 Pn = P + t[:, None] * D
                 keep = ok & (t > 1e-6) & np.isfinite(t)
                 cross = (P[:, 2] - self.z_stop) * (Pn[:, 2] - self.z_stop) < 0
@@ -263,13 +275,27 @@ def flare_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f_num
         t = z_exp / -Dout[:, 2]
         return (X - t * Dout[:, 0]) ** 2 + (Y - t * Dout[:, 1]) ** 2 <= r_samp * r_samp
     for ch, lam in enumerate(LAMBDAS):
-        idx, X, Y, w, Dout = lens.trace(P, D, Lens.seq_direct(NS), lam, coated, coating_nm, coating_ior, coating_type)
+        states = {}
+        idx, X, Y, w, Dout = lens.trace(P, D, Lens.seq_direct(NS), lam, coated, coating_nm, coating_ior, coating_type,
+                                        record=states)
         direct_E[ch] = wt[idx].sum()            # 不计透射损失：与 Analytic 主画面（无菲涅耳损失）同一基准
-        for a, b in lens.pairs():
-            idx, X, Y, w, Dout = lens.trace(P, D, Lens.seq_ghost(NS, a, b), lam, coated, coating_nm, coating_ior, coating_type)
+        back = {}                               # b → 在 b 面反射后往回走、到达各面之前的状态
+        for a, b in lens.pairs():               # 前 b 步（0…b−1 透射）与直射路径相同；b 反射后往回到 a 之前也与同一 b 的
+            if b not in states:                 # 其他鬼影相同 → 两段都只追一次（直射在 b 之前全被挡 → 没有光线）
+                continue
+            if b not in back:
+                back[b] = {}
+                lens.trace(None, None, [(b, 'R')] + [(k, 'T') for k in range(b - 1, -1, -1)], lam, coated, coating_nm,
+                           coating_ior, coating_type, state=states[b], record=back[b])
+            if a not in back[b]:                # 往回走时在 a 之前就全被挡了
+                continue
+            seq = [(a, 'R')] + [(k, 'T') for k in range(a + 1, NS)]
+            idx, X, Y, w, Dout = lens.trace(None, None, seq, lam, coated, coating_nm, coating_ior, coating_type,
+                                            state=back[b][a])
             if len(idx):
                 m = through_exit_disc(X, Y, Dout)
                 _splat_adaptive(buckets, X[m], Y[m], (w * wt[idx])[m], idx[m], n_grid, lens.sensor, ch, (H, W))
+        del states, back
     for kk, buf in buckets.items():
         bx, by = divmod(kk, 8)
         ghost += buf if kk == 0 else _blur_fft(buf, 0.5 * 2.0 ** bx if bx else 0.0, 0.5 * 2.0 ** by if by else 0.0)
@@ -322,6 +348,39 @@ def _psf(blades, rot_rad, n=2048, L=2.0):
         _PSF_CACHE[key] = I / I.sum()
     return _PSF_CACHE[key]
 
+_SAT_CACHE = {}
+
+def _psf_sat(blades, rot_rad, n=2048, L=2.0, rx_cells=None, ry_cells=None):
+    """星芒用的 PSF（去掉 Airy 主斑、外圈平滑衰减）的积分表（(n+1)×(n+1)，S[j, i] = 前 j 行 i 列之和）：
+    任意矩形里的能量 = 四个角相减。主斑与衰减都在 PSF 单元坐标里做：主斑半径 1.22 λ/(2NA)·1.5 在单元里恒为 1.83·L 个单元
+    （单元尺寸 λ/(2L·NA)），与波长、f 值无关 —— 在像素上做的话主斑只有零点几个像素，挖不挖掉取决于亚像素位置（R6 闪烁）。
+    rx_cells / ry_cells：挖掉的椭圆半径（单元），不小于主斑；星芒用它挖掉光源自己那一个像素左右（直射像 Cycles 已经渲了）。"""
+    rcx = max(1.83 * L, rx_cells or 0.0); rcy = max(1.83 * L, ry_cells or 0.0)
+    key = (int(blades), round(rot_rad, 6), n, L, round(rcx, 4), round(rcy, 4))
+    if key not in _SAT_CACHE:
+        if len(_SAT_CACHE) > 12:
+            _SAT_CACHE.clear()
+        c = (np.arange(n) - n / 2)
+        rr = np.hypot(c[None, :], c[:, None])                       # 单元
+        e = np.hypot(c[None, :] / rcx, c[:, None] / rcy)
+        keep = np.clip((e - 1.0) * min(rcx, rcy) + 0.5, 0.0, 1.0)   # 挖掉的椭圆：约 1 个单元宽的平滑边
+        q = rr / (n / 2)
+        keep *= np.where(q < 0.55, 1.0, np.cos(np.clip((q - 0.55) / 0.4, 0.0, 1.0) * math.pi / 2) ** 2)   # 径向平滑衰减
+        S = np.zeros((n + 1, n + 1))
+        S[1:, 1:] = np.cumsum(np.cumsum(_psf(blades, rot_rad, n, L) * keep, axis=0), axis=1)
+        _SAT_CACHE[key] = S
+    return _SAT_CACHE[key]
+
+
+def _sat_at(S, x, y):
+    """积分表在连续坐标 (x, y)（单元边界 = 整数）处的双线性值。"""
+    n = S.shape[0] - 1
+    x = np.clip(x, 0.0, n); y = np.clip(y, 0.0, n)
+    i = np.minimum(np.floor(x).astype(int), n - 1); j = np.minimum(np.floor(y).astype(int), n - 1)
+    tx, ty = x - i, y - j
+    return (S[j, i] * (1 - tx) + S[j, i + 1] * tx) * (1 - ty) + (S[j + 1, i] * (1 - tx) + S[j + 1, i + 1] * tx) * ty
+
+
 def starburst_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f_number=None, blades=0,
                     blade_rotation_deg=0.0, n_rays=120, gain=1.0, fade_px=12.0):
     """一个光源的衍射层（H×W×3，行 0 = 顶部，与 flare_layer 同一坐标）。返回 (layer, info)。"""
@@ -335,15 +394,17 @@ def starburst_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f
     SW, SH = lens.sensor
     if abs(cx) > SW * 0.75 or abs(cy) > SH * 0.75:
         return np.zeros((H, W, 3)), dict(skipped="off frame")
-    # 像方数值孔径（两向）：光束方向相对平均方向的最大张角
+    # 像方数值孔径（两向）：光束方向相对平均方向的张角。0.8.4：用加权标准差 × 2（均匀圆盘的投影：σ = R/2），
+    # 不再取 99% 分位数 —— 分位数只看几条边缘光线，光源一动就跳（星芒随之缩放、能量跳），视频里闪（R6）
     tx, ty = Dout[:, 0] / -Dout[:, 2], Dout[:, 1] / -Dout[:, 2]
-    NAx = float(np.percentile(np.abs(tx - np.average(tx, weights=ww)), 99))
-    NAy = float(np.percentile(np.abs(ty - np.average(ty, weights=ww)), 99))
+    NAx = 2.0 * float(np.sqrt(np.average((tx - np.average(tx, weights=ww)) ** 2, weights=ww)))
+    NAy = 2.0 * float(np.sqrt(np.average((ty - np.average(ty, weights=ww)) ** 2, weights=ww)))
     if NAx <= 0 or NAy <= 0:
         return np.zeros((H, W, 3)), dict(skipped="degenerate pupil")
     # 离焦：几何光斑半径（像素），大于 fade_px 时星芒淡出
     px_w, px_h = SW / W, SH / H
-    blur_px = 0.5 * max(np.ptp(X) / px_w, np.ptp(Y) / px_h)
+    sdx = float(np.sqrt(np.average((X - cx) ** 2, weights=ww))); sdy = float(np.sqrt(np.average((Y - cy) ** 2, weights=ww)))
+    blur_px = 2.0 * max(sdx / px_w, sdy / px_h)                     # 光斑半径（加权，0.8.4 前用 ptp：受个别光线影响会跳）
     fade = 1.0 / (1.0 + (blur_px / fade_px) ** 2)
     # 直射像总能量（与 flare_layer 相同的 Cycles 基准）
     Sf = O.layout(rx, *O.solve_focus(rx, focus_dist))
@@ -351,7 +412,6 @@ def starburst_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f
     dist = float(np.linalg.norm(src_lens))
     E = radiance * (math.pi * radius * radius / (dist * dist)) / ((SW / W / fx) * (SH / H / fy))
     n, L = 2048, 2.0
-    psf = _psf(blades, math.radians(blade_rotation_deg), n, L)
     out = np.zeros((H, W, 3))
     # 图像像素中心 → 传感器 mm（画面向右 = 传感器 +x，向上 = 传感器 −y，与 OSL 一致）
     u0 = (cx / SW + 0.5) * W - 0.5
@@ -359,6 +419,7 @@ def starburst_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f
     for ch, lam in enumerate(LAMBDAS):
         lam_mm = lam * 1e-3
         dxm, dym = lam_mm / (2 * L * NAx), lam_mm / (2 * L * NAy)     # FFT 单元在像面上的尺寸（mm）
+        sat = _psf_sat(blades, math.radians(blade_rotation_deg), n, L, px_w / dxm, px_h / dym)   # 挖掉半径 1 像素
         hw = int(min(W, n / 2 * dxm / px_w)); hh = int(min(H, n / 2 * dym / px_h))
         i0, i1 = max(0, int(u0) - hw), min(W, int(u0) + hw + 1)
         j0, j1 = max(0, int(v0) - hh), min(H, int(v0) + hh + 1)
@@ -366,18 +427,12 @@ def starburst_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f
             continue
         uu, vv = np.meshgrid(np.arange(i0, i1), np.arange(j0, j1))
         sx_mm, sy_mm = (uu - u0) * px_w, (vv - v0) * px_h
-        fi, fj = sx_mm / dxm + n / 2, sy_mm / dym + n / 2              # PSF 下标（浮点）
-        ok = (fi >= 0) & (fi < n - 1) & (fj >= 0) & (fj < n - 1)
-        a, b = np.floor(fi).astype(int), np.floor(fj).astype(int)
-        ta, tb = fi - a, fj - b
-        a, b = np.clip(a, 0, n - 2), np.clip(b, 0, n - 2)
-        val = ((psf[b, a] * (1 - ta) + psf[b, a + 1] * ta) * (1 - tb) + (psf[b + 1, a] * (1 - ta) + psf[b + 1, a + 1] * ta) * tb)
-        val = np.where(ok, val, 0.0) * (px_w * px_h) / (dxm * dym)   # 单元概率 → 像素能量
-        rr = np.hypot((fi - n / 2) / (n / 2), (fj - n / 2) / (n / 2))
-        val *= np.where(rr < 0.55, 1.0, np.cos(np.clip((rr - 0.55) / 0.4, 0.0, 1.0) * math.pi / 2) ** 2)   # 径向平滑衰减
-        # 去掉 Airy 主斑（半径 1.22 λ/(2NA)·1.5，椭圆）
-        core = (sx_mm / (1.83 * lam_mm / (2 * NAx))) ** 2 + (sy_mm / (1.83 * lam_mm / (2 * NAy))) ** 2 <= 1.0
-        val[core] = 0.0
+        fi, fj = sx_mm / dxm + n / 2, sy_mm / dym + n / 2              # PSF 下标（浮点，单元中心 = 整数）
+        # 0.8.4：按像素面积积分 PSF（积分表），不再取像素中心一个点 —— 一个像素盖住 ~25×25 个 PSF 单元，
+        # 点采样会混叠：光源挪半个像素，星芒总能量就跳 ±25%，视频里闪（MessyRoom R6）
+        hx, hy = 0.5 * px_w / dxm, 0.5 * px_h / dym
+        x0, x1 = fi + 0.5 - hx, fi + 0.5 + hx; y0, y1 = fj + 0.5 - hy, fj + 0.5 + hy
+        val = _sat_at(sat, x1, y1) - _sat_at(sat, x0, y1) - _sat_at(sat, x1, y0) + _sat_at(sat, x0, y0)   # 主斑已在 PSF 里去掉
         out[j0:j1, i0:i1, ch] += val * E * gain * fade
     return out, dict(centre_px=(u0, v0), NA=(NAx, NAy), blur_px=blur_px, fade=fade, energy=E)
 
@@ -463,13 +518,17 @@ def veiling_glare(img, vgi, r0_frac=0.004, p=2.6, c=VG_UNIFORM, spot_frac=VG_SPO
     K, g = veiling_glare_strength(vgi, h, w, r0_frac, p, c, spot_frac)
     halo = np.clip(_vg_halo(small, K, h, w, c), 0, None)
     if s > 1:                                                                   # 双线性放大回原分辨率（像素中心对齐）
+        halo = halo.astype(np.float32)                                          # 4K：放大用 float32（float64 临时数组要 1 GB 以上）
         yi = (np.arange(H) + 0.5) / s - 0.5; xi = (np.arange(W) + 0.5) / s - 0.5
         y0 = np.clip(np.floor(yi).astype(int), 0, h - 1); x0 = np.clip(np.floor(xi).astype(int), 0, w - 1)
         y1 = np.minimum(y0 + 1, h - 1); x1 = np.minimum(x0 + 1, w - 1)
-        ty = np.clip(yi - y0, 0, 1)[:, None]; tx = np.clip(xi - x0, 0, 1)[None, :]
+        ty = np.clip(yi - y0, 0, 1).astype(np.float32)[:, None]; tx = np.clip(xi - x0, 0, 1).astype(np.float32)[None, :]
         if img.ndim == 3:
             ty = ty[..., None]; tx = tx[..., None]
-        top = halo[y0][:, x0] * (1 - tx) + halo[y0][:, x1] * tx
-        bot = halo[y1][:, x0] * (1 - tx) + halo[y1][:, x1] * tx
-        halo = top * (1 - ty) + bot * ty
+        hy0, hy1 = halo[y0], halo[y1]
+        top = hy0[:, x0] * (1 - tx); top += hy0[:, x1] * tx
+        bot = hy1[:, x0] * (1 - tx); bot += hy1[:, x1] * tx
+        del hy0, hy1
+        top *= (1 - ty); bot *= ty; top += bot
+        halo = top; del bot
     return (1.0 - g) * img + g * halo
