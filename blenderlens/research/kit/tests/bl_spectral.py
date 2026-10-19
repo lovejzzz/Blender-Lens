@@ -1,7 +1,8 @@
-# 波长分层采样（0.8，GPU 路径）：同一静止场景，不开运动模糊 → 波长取 Sobol 的 time 维（与出瞳联合分层）；
-# 开运动模糊（场景不动，画面相同）→ 波长退回哈希（白噪声）。对照 4096 spp 参考：
-#   1. 色噪（RGB 去掉亮度后的 RMSE）随 spp 的下降，分层应明显更低；
-#   2. 无偏：两种方式的高 spp 平均颜色一致。
+# 波长分层采样（0.8；0.8.2 改版）：GPU 路径的波长取 Sobol 的 time 维（与出瞳联合分层），CPU / OSL 路径用哈希（白噪声），
+# 两边波长表与权重相同。对照 4096 spp 的 GPU 参考：
+#   1. 色噪（RGB 去掉亮度后的 RMSE）：GPU 应明显更低；
+#   2. 无偏：两边高 spp 的平均颜色一致；
+#   3. 记录「波长共用模式」（场景里有 5.3 色散材质时）的色噪代价。
 # 运行：Blender -b --factory-startup --python tests/bl_spectral.py
 import os, sys, json, math
 import bpy
@@ -49,8 +50,8 @@ for d in pr.devices:
     d.use = d.type == 'METAL'
 sc.cycles.device = 'GPU'
 
-def render(tag, spp, seed, motion):
-    sc.render.use_motion_blur = motion
+def render(tag, spp, seed, dev):
+    sc.cycles.device = dev
     sc.cycles.samples = spp; sc.cycles.seed = seed
     sc.render.filepath = os.path.join(OUT, f"{tag}_{spp}_{seed}.exr")
     bpy.ops.render.render(write_still=True)
@@ -59,23 +60,32 @@ def render(tag, spp, seed, motion):
     bpy.data.images.remove(im)
     return a
 
-ref = render("ref", 4096, 7, False)
+ref = render("ref", 4096, 7, 'GPU')
 lit = ref.mean(axis=2) > 0.02 * ref.mean(axis=2).max()
 def chroma(a):
     return a - a.mean(axis=2, keepdims=True)
 cref = chroma(ref)
 rep = {"gpu": gpu_ok, "resolution": [W, H], "lit_px": int(lit.sum())}
 for spp in (16, 64, 256):
-    for tag, motion in (("stratified", False), ("hash", True)):
+    for tag, dev in (("stratified", 'GPU'), ("hash", 'CPU')):
         errs = []
         for seed in (1, 2):
-            a = render(tag, spp, seed, motion)
+            a = render(tag, spp, seed, dev)
             errs.append(float(np.sqrt(((chroma(a) - cref)[lit] ** 2).mean())))
         rep[f"chroma_rmse_{tag}_{spp}"] = round(float(np.mean(errs)), 5)
     rep[f"gain_{spp}"] = round(rep[f"chroma_rmse_hash_{spp}"] / max(rep[f"chroma_rmse_stratified_{spp}"], 1e-12), 2)
-hi_s, hi_h = render("stratified", 2048, 11, False), render("hash", 2048, 11, True)
+hi_s, hi_h = render("stratified", 2048, 11, 'GPU'), render("hash", 2048, 11, 'CPU')
 rep["mean_rgb_stratified"] = hi_s[lit].mean(axis=0).round(4).tolist()
 rep["mean_rgb_hash"] = hi_h[lit].mean(axis=0).round(4).tolist()
 rep["mean_rel_diff"] = round(float(np.abs(hi_s[lit].mean(axis=0) / hi_h[lit].mean(axis=0) - 1).max()), 4)
+# 波长共用模式：画面外放一块有色散的玻璃（不进画面，只让插件切换模式），比较 64 spp 色噪
+gl = bpy.data.materials.new("disp_glass")
+if gl.node_tree is None:
+    gl.use_nodes = True
+gl.node_tree.nodes["Principled BSDF"].inputs["Transmission Dispersion Scale"].default_value = 1.0
+bpy.ops.mesh.primitive_cube_add(size=10, location=(0, 0, 5000)); bpy.context.object.data.materials.append(gl)
+errs = [float(np.sqrt(((chroma(render("shared", 64, s, 'GPU')) - cref)[lit] ** 2).mean())) for s in (1, 2)]
+rep["chroma_rmse_shared_64"] = round(float(np.mean(errs)), 5)
+rep["shared_cost_64"] = round(rep["chroma_rmse_shared_64"] / rep["chroma_rmse_stratified_64"], 2)
 rep["PASS"] = bool(gpu_ok and rep["gain_64"] > 1.5 and rep["mean_rel_diff"] < 0.01)
 print("SPECTRAL", json.dumps(rep))

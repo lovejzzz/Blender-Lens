@@ -363,6 +363,7 @@ def apply_settings(cam_ob):
                 dispersion=int(p.dispersion and p.dispersion_mode == 'FULL'), exposure_compensate=int(p.exposure_compensate),
                 ghosts=int(p.ghosts), ghost_gain=p.ghost_gain, coated=int(p.coated), coating_nm=p.coating_nm,
                 coating_type=1 if p.coating_type == 'BROADBAND' else 0, unit_scale=us)
+    vals.update(_xyz_params())                       # 0.8.2：Rec.709 → 场景工作色彩空间（CPU / OSL 的色散颜色；GPU 用 Cycles 的 rec709_to_rgb）
     keys = cc.keys()
     for k, v in vals.items():
         if k in keys:
@@ -390,6 +391,32 @@ def apply_settings(cam_ob):
     if changed:
         cam.update_tag()
     return d1, d2
+
+def dispersive_materials(sc):
+    """场景里用到的、透射色散不为 0 的材质名（Blender 5.3 Principled BSDF）。有的话 GPU 路径进入「波长共用模式」。"""
+    names, seen = [], set()
+    for ob in sc.objects:
+        for slot in getattr(ob, "material_slots", []):
+            m = slot.material
+            if not m or m.name in seen or not m.node_tree:
+                continue
+            seen.add(m.name)
+            for n in m.node_tree.nodes:
+                s = n.inputs.get("Transmission Dispersion Scale") if hasattr(n, "inputs") else None
+                if s is not None and (s.is_linked or s.default_value > 0.0):
+                    names.append(m.name)
+                    break
+    return names
+
+_XYZ_CACHE = {}
+
+def _xyz_params():
+    from . import spectral as SP
+    name = SP.working_space_name()
+    if name not in _XYZ_CACHE:
+        M = SP.working_space_matrix()
+        _XYZ_CACHE[name] = {f"rec_{c}{j}": float(M[r][j]) for r, c in enumerate("rgb") for j in range(3)}
+    return _XYZ_CACHE[name]
 
 def _update_compensator_mesh(cam_ob, rx, phi):
     """Geometry 模式：补偿板前表面的网格随 φ 改形（顶点 + 自由法线原地改写，拓扑不变）。"""
@@ -475,7 +502,8 @@ def gpu_settings(cam_ob):
                                      blade_rotation_deg=p.blade_rotation, unit_scale=unit_scale(_cam_scene(cam_ob)),
                                      ghosts=p.ghosts, ghost_fraction=get("ghost_fraction", 0.5), ghost_gain=p.ghost_gain,
                                      coated=p.coated, coating_nm=p.coating_nm, coating_ior=get("coating_ior", 1.38),
-                                     coating_type=p.coating_type)
+                                     coating_type=p.coating_type,
+                                     spectral_shared=bool(dispersive_materials(_cam_scene(cam_ob))))
 
 def sync_gpu_lens(cam_ob):
     """把当前镜头写进 GPU 内核头文件（内容不变则不动；变了下一次 GPU 渲染会重编内核，约 10 秒）。"""

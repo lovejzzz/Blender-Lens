@@ -64,7 +64,8 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 - Blender 自定义法线旧接口有 16 位量化；Cycles 顶点法线八面体量化里 0 不可表示 → `rig._set_normals` 已处理。
 - 鬼影 / Geometry 模式必须关自适应采样（否则鬼影低估约 8 倍）。
 - 美国专利公报可能印错（US 11,287,618）：一份对不上先找同族（CN 111562632 B）。
-- Blender 5.3 的 Principled 色散每条路径自己抽一个波长并加权：与我们相机的波长冲突（ROADMAP 0.8.2 B1，未修）。
+- Blender 5.3 的 Principled 色散每条路径一个波长：GPU 路径已与它共用（「共用模式」，见 RESEARCH §6.12）；CPU / OSL 做不到，`diagnose()` 会警告。
+- 改了 `gpukernel.py` 里任何补丁文本：内核拷贝目录名含补丁哈希，会自动重新拷贝；Blender 升级先跑 `tests/test_kernel_patch.py`。
 - 跑长任务（Blender 测试、整套测试）放后台；Geometry 模式 CPU 渲染很慢。
 
 ## 看图

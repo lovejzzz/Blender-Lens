@@ -14,10 +14,18 @@ def ok(cond, msg):
     if not cond:
         raise SystemExit(1)
 
-T = G.spectral_table()
-w = np.array(T["w"]); p = np.diff([0.0] + T["cdf"])
-ok(np.allclose((w * p).sum(axis=1), 1.0, atol=1e-9), f"spectral table: flat spectrum stays white {(w * p).sum(axis=1).round(6)}")
-ok((w >= 0).all(), "spectral table: weights non-negative")
+import blenderlens.spectral as SP
+n = 100000
+acc = np.zeros(3)
+for k in range(n):
+    lam, pr = SP.sample_wavelength((k + 0.5) / n)
+    acc += np.array(SP.rgb_weight(lam, pr)) / n
+ok(np.abs(acc - 1.0).max() < 2e-3, f"spectral shared mode (Cycles wavelength mapping, sensor weights): flat spectrum stays white {acc.round(4)}")
+T = SP.sensor_table()
+w = np.array(T["w"]); pp = np.diff([0.0] + T["cdf"])
+ok(np.allclose((w * pp).sum(axis=1), 1.0, atol=1e-9), f"spectral default table: flat spectrum stays white {(w * pp).sum(axis=1).round(6)}")
+lam_lo, _ = SP.sample_wavelength(0.0); lam_hi, _ = SP.sample_wavelength(0.999999)
+ok(lam_lo >= 0.38 - 1e-9 and lam_hi <= 0.78 + 1e-9, f"wavelength range {lam_lo:.3f}–{lam_hi:.3f} μm inside the pupil-table span")
 
 def box_at(Tb, sx, sy, W, H):
     """与 OSL 相同的插值与镜像。"""
@@ -60,7 +68,7 @@ for fn in [f for f, _, _ in O.list_presets()]:
         P = np.column_stack([sx, sy, np.zeros(n)])
         D = np.column_stack([qx - sx, qy - sy, np.full(n, z_exp0 + shift)])
         D /= np.linalg.norm(D, axis=1)[:, None]
-        lam = rng.uniform(0.40, 0.70)
+        lam = rng.uniform(0.38, 0.78)
         m = PU._passes(S, z_stop0 + shift, r_stop, P, D, lam)
         for i in np.nonzero(m)[0]:
             x0, x1, y0, y1 = box_at(Tb, sx[i], sy[i], W, H)

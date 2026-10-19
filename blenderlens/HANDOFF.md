@@ -1,6 +1,6 @@
-# BlenderLens 0.8.1 交接说明（给接手的 AI）
+# BlenderLens 0.8.2 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.8.1**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.8.2**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -16,11 +16,11 @@ Panavision 的 C/E/G/T/Primo 量产处方从未公开。除「Panavision 后置�
 
 要求：Blender **5.0 及以上**（开发和测试都在 macOS / Apple M2 Max / Blender 5.3 beta 上完成；Windows、Linux、5.0–5.2 未实测）。不依赖第三方 Python 包。
 
-- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.8.1.zip`。
+- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.8.2.zip`。
 - 命令行：
 
 ```bash
-blender --command extension install-file -r user_default -e blenderlens-0.8.1.zip
+blender --command extension install-file -r user_default -e blenderlens-0.8.2.zip
 ```
 
 装好后的 Python 模块路径是 `bl_ext.user_default.blenderlens`（仓库名 `user_default` 取决于安装到哪个仓库）。启用后插件会把自己同时登记为 `blenderlens`，脚本里直接写 `import blenderlens.api as bl` 即可，不用管仓库名。
@@ -279,7 +279,7 @@ blender -b shot.blend --python-expr "import blenderlens.api as bl; bl.enable_gpu
 - 发腮补偿是一阶等效（一块马鞍面补偿板），不含两片分开转动的柱面之间的高阶交叉项；补偿关闭时它是一块平行平板（多两个镀膜反射面）。
 - 曝光基准：开 Compensate Exposure 时，轴上、只受光阑限光的像点 = 场景亮度（相当于按 T 值对齐，各预设可以直接比较）。最大光圈下其他镜片的切光照常保留，例如 C 系列在 f/2.0 时轴上暗 16%。0.4 起 Panavision 两个预设比 0.3 亮 0.39 档（修正了椭圆出瞳的估计）。
 - 每个 .blend 只能有一支 BlenderLens 镜头。
-- Cycles 的 OSL 相机只有两维随机数（实测第三维恒为 0），CPU 路径色散的波长只能用随机数与像素位置的哈希；GPU 路径（0.8）用 Cycles 的 time 维，分层采样（开运动模糊时退回哈希）。
+- Cycles 的 OSL 相机只有两维随机数（实测第三维恒为 0），CPU 路径色散的波长只能用随机数与像素位置的哈希，也无法与 Blender 5.3 的色散材质（Principled 的 Transmission Dispersion）共用路径波长——场景里有这种材质时 CPU 渲染会偏色，`bl.diagnose()` 警告；GPU 路径（0.8.2）分层采样并与它们共用同一个波长。
 - 炫光：两次反射的序列鬼影 + 衍射星芒 + 杂光（0.6；0.8 按 ISO 9358 标定，预设值就是杂光指数，是按年代的估计——公开资料里没有电影变形镜头的实测）；不含镜筒内壁杂散光。
 - 光阑轴向位置（尼康主镜）专利未给，取间隔中点；C 系列风格的变形器到主镜间隔 5 mm 为我方取值。
 - 色散（0.6）：有目录数据的玻璃（Panavision、Neil 预设的 Ohara 玻璃）用 Ohara 目录公式的四项拟合，400–700 nm 误差 ≤ 2.6e-5，旧的两项 Cauchy 在重火石的紫端误差达 8.7e-3。老专利只给 nd / Vd 的玻璃（Rosin、Nikon）仍用两项 Cauchy；Isco 0.7 起用 Schott 目录曲线并通过专利谱线。Geometry 模式为单一 d 线折射率。

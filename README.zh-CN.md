@@ -21,6 +21,12 @@
 
 ---
 
+## 0.8.2 新增：Blender 5.3 兼容
+
+- **与 5.3 色散玻璃共用波长（GPU）**：Blender 5.3 给 Principled BSDF 加了色散（每条路径一个波长）。之前我们的镜头和这种玻璃各抽一个波长、颜色加权两次——透过色散玻璃看白天空会明显偏黄（偏色 14%）。现在 GPU 路径让两者用同一个随机数和映射，共用一个波长（偏色 0.2%）；场景里没有色散材质时仍用 0.8 的低噪采样。CPU / OSL 路径做不到，`bl.diagnose()` 会警告并给出修法。
+- **工作色彩空间**：镜头色散的颜色按场景工作色彩空间（如 ACEScg）换算，GPU 与 CPU 都是。
+- **内核补丁漂移检查**：`tests/test_kernel_patch.py`（quick 级）对照本机 Blender 检查所有 GPU 补丁位置，升级后明确指出哪一处变了。
+
 ## 0.8.1 新增：AI 原生
 
 让 AI（以及脚本）不用看界面就能使用、测试、改进 BlenderLens：
@@ -64,12 +70,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.8.1.zip`](dist/blenderlens-0.8.1.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.8.2.zip`](dist/blenderlens-0.8.2.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.1.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.2.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。
@@ -318,7 +324,7 @@ python3 tests/run.py full
 - Panavision 后置预设没有成品镜头规格；最近对焦取变焦镜专利的 F3（物面到第一面 133 mm，距像面 0.48 m）。内对焦行程与专利 TABLE 1 吻合：F3 21.686 / 21.684 mm，F2 11.221 / 11.099 mm（1%，两组位移比用 F2/F3 平均值 0.9088）。
 - 老专利只给 n_d / V_d 的玻璃（Rosin、Nikon）用两项 Cauchy；Geometry 模式为单一 d 线折射率。
 - 每个 .blend 只能有一支 BlenderLens 镜头。
-- CPU / OSL 路径的波长随机数仍是哈希（OSL 相机只有两维随机数）；GPU 路径不开运动模糊时是分层的。
+- CPU / OSL 路径的波长随机数仍是哈希（OSL 相机只有两维随机数），也无法与 Blender 5.3 的色散材质共用路径波长（`bl.diagnose()` 会警告）；GPU 路径是分层的、并且共用。
 - GPU 路径：Geometry 模式仍走 CPU；只在 Metal 上实测。
 - Lateral in Post 没有纵向色差（焦外彩边）；需要它时用 Full。
 

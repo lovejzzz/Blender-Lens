@@ -30,23 +30,23 @@ def exit_pupil(rx, S=None):
 def _arr(name, vals, fmt="{:.9g}", typ="float"):
     return f"  {typ} {name}[{len(vals)}] = {{ " + ", ".join(fmt.format(v) for v in vals) + " };\n"
 
-# 传感器光谱响应（高斯近似，中心与旧版三波长一致）：用于连续波长色散的颜色权重
-SENSOR_RGB = ((0.610, 0.032), (0.550, 0.032), (0.465, 0.026))   # (中心 μm, σ μm)
+# 光谱：与 Cycles 5.3 的单波长路径同一套约定（见 spectral.py）。0.8.1 及以前是三条高斯「传感器响应」曲线。
+try:
+    from . import spectral as SP
+except ImportError:
+    import spectral as SP
+
 
 def spectral_table(l0=0.400, l1=0.700, dl=0.005):
-    """分段常数的采样表：cdf[j]（第 j 段的累积概率）与每段的 R/G/B 权重 w_c = (S_c / ΣS_c) / p。
-    对等能光谱，每个通道的期望权重 = 1（白光保持白）。"""
-    n = int(round((l1 - l0) / dl))
-    lam = [l0 + (j + 0.5) * dl for j in range(n)]
-    S = [[math.exp(-0.5 * ((x - c) / s) ** 2) for x in lam] for c, s in SENSOR_RGB]
-    Sn = [[v / sum(row) for v in row] for row in S]                 # 每个通道在分段上归一（Σ = 1）
-    p = [sum(Sn[c][j] for c in range(3)) / 3.0 for j in range(n)]   # 采样概率（每段）
-    cdf, acc = [], 0.0
-    for v in p:
-        acc += v; cdf.append(acc)
-    cdf[-1] = 1.0
-    w = [[Sn[c][j] / p[j] if p[j] > 0 else 0.0 for j in range(n)] for c in range(3)]
-    return dict(l0=l0, dl=dl, cdf=cdf, w=w)
+    return SP.sensor_table(l0, l1, dl)
+
+
+def spectral_arrays():
+    d = SP.data()
+    cmf = d["cmf_xyz"]
+    return dict(CMX=[c[0] for c in cmf], CMY=[c[1] for c in cmf], CMZ=[c[2] for c in cmf], D65=d["d65_spd"][:len(cmf)],
+                L0=d["lambda_min_um"], L1=d["lambda_max_um"], DL=d["dlambda_um"], RES=d["resolution"],
+                NORM=d["d65_normalization"], **{"S_" + k: v for k, v in d["sampler"].items() if k != "note"})
 
 _PUPIL_CACHE = {}
 _T0_CACHE = {}
@@ -153,7 +153,8 @@ def lens_data(rx, importance=True):
     W, H = rx["sensor"]["width"], rx["sensor"]["height"]
     N0 = O.nominal_f_number(rx)
     sources = ", ".join(g["source"]["patent"].split(" — ")[0] for g in rx["groups"] if "source" in g)
-    SPEC = spectral_table()
+    SPEC = spectral_arrays()
+    SPEC["table"] = spectral_table()
     try:
         from . import pupil as PU
     except ImportError:
@@ -284,20 +285,29 @@ shader {name}(
                   string help = "出瞳重要性采样：只在各视场真正通光的区域里采样（无偏；鬼影 / Geometry 模式自动关闭）" ]],
   float dispersion_strength = 1.0 [[ float min = 0.0, float max = 1.0,
                   string help = "色散强度：n(λ) 在 n_d 与真实值之间插值（0 = 无色散，1 = 物理）" ]],
+  float rec_r0 = 1.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
+  float rec_r1 = 0.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
+  float rec_r2 = 0.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
+  float rec_g0 = 0.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
+  float rec_g1 = 1.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
+  float rec_g2 = 0.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
+  float rec_b0 = 0.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
+  float rec_b1 = 0.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
+  float rec_b2 = 1.0 [[ string help = "Rec.709 → 工作色彩空间矩阵（插件按场景写入）" ]],
   float unit_scale = 1.0 [[ string help = "场景单位 / mm（米制场景 0.001）：出射光线起点按此缩放、方向不变，镜头内部仍按毫米追迹" ]],
   output point position = 0.0,
   output vector direction = vector(0.0, 0.0, 1.0),
   output color throughput = 1.0)
 {{
-{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("NC", C_)}{_arr("NE", E_)}{_arr("ND", ND)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}{_arr("PX0", PB[0])}{_arr("PX1", PB[1])}{_arr("PY0", PB[2])}{_arr("PY1", PB[3])}{_arr("AT", AT, "{:d}", "int")}{_arr("AC", AC)}{_arr("AMX", AMX)}{_arr("AMY", AMY)}{_arr("KCX", KCX)}{_arr("KCY", KCY)}{_arr("SPC", SPEC["cdf"])}{_arr("SPR", SPEC["w"][0])}{_arr("SPG", SPEC["w"][1])}{_arr("SPB", SPEC["w"][2])}
+{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("NC", C_)}{_arr("NE", E_)}{_arr("ND", ND)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}{_arr("PX0", PB[0])}{_arr("PX1", PB[1])}{_arr("PY0", PB[2])}{_arr("PY1", PB[3])}{_arr("AT", AT, "{:d}", "int")}{_arr("AC", AC)}{_arr("AMX", AMX)}{_arr("AMY", AMY)}{_arr("KCX", KCX)}{_arr("KCY", KCY)}{_arr("SPC", SPEC["table"]["cdf"])}{_arr("SPR", SPEC["table"]["w"][0])}{_arr("SPG", SPEC["table"]["w"][1])}{_arr("SPB", SPEC["table"]["w"][2])}
   float SENSOR_W = {W:.6g}, SENSOR_H = {H:.6g};
   float Z_STOP = {z_stop:.9g}, R_STOP = {r_stop:.9g}, Z_EXP = {z_exp:.9g}, R_EXP = {r_exp:.9g};
   float N0 = {N0:.6g};
   float EXPOSURE_NORM = {1.0 / T0:.6g};   // 1 / 轴上满光瞳透过率（{T0:.4f}）：轴上满光瞳 = 1
   int NS = {NS}, NAG = {len(AG)}, NPAIRS = {NPAIRS};
   int PNX = {PNX}, PNY = {PNY};
-  int SPN = {len(SPEC["cdf"])};
-  float SP_L0 = {SPEC["l0"]:.6g}, SP_DL = {SPEC["dl"]:.6g};
+  int SPN = {len(SPEC["table"]["cdf"])};
+  float SP_L0 = {SPEC["table"]["l0"]:.6g}, SP_DL = {SPEC["table"]["dl"]:.6g};
 
   // 传感器点：镜头成倒像，再经镜头→相机坐标的 x 取反（绕 Y 转 180°），
   // 所以画面向右 = 传感器 +x、画面向上 = 传感器 −y，输出正立且不镜像。
@@ -356,9 +366,10 @@ shader {name}(
     return;
   }}
 
-  // 连续波长色散：λ 按三条传感器光谱响应之和做重要性采样（5 nm 分段的逆 CDF 表），
-  // 每条光线同时贡献给 R/G/B（权重 = 响应 / 采样概率，等能白光仍是白色）。
-  // OSL 相机只有两维随机数（都给了出瞳），第三维用随机数与光栅位置（含亚像素抖动）的哈希。
+  // 连续波长色散：λ 按三条传感器响应之和做重要性采样（5 nm 分段的逆 CDF 表），每条光线同时贡献给 R/G/B
+  // （权重 = 响应 / 采样概率，等能白光仍是白色）；0.8.2 起再按插件写入的矩阵从 Rec.709 换到场景工作色彩空间。
+  // OSL 相机只有两维随机数（都给了出瞳），第三维用随机数与光栅位置（含亚像素抖动）的哈希；
+  // 也拿不到 Cycles 的路径波长 —— 场景里有 5.3 色散材质时 CPU 路径会重复加权（插件 diagnose 会警告）。
   color chan = color(1.0);
   float lam = {O.LAMBDA_D:.7f};
   if (dispersion && dispersion_strength > 0.0) {{
@@ -368,7 +379,8 @@ shader {name}(
     float c0 = j > 0 ? SPC[j - 1] : 0.0;
     float fr = clamp((h - c0) / max(SPC[j] - c0, 1e-9), 0.0, 1.0);
     lam = SP_L0 + (j + fr) * SP_DL;
-    chan = color(SPR[j], SPG[j], SPB[j]);
+    float gr = SPR[j], gg = SPG[j], gb = SPB[j];
+    chan = color(rec_r0 * gr + rec_r1 * gg + rec_r2 * gb, rec_g0 * gr + rec_g1 * gg + rec_g2 * gb, rec_b0 * gr + rec_b1 * gg + rec_b2 * gb);
   }}
   float il2 = 1.0 / (lam * lam);              // n(λ) = A + B/λ² + C/λ⁴ + E/λ⁶（目录色散拟合），按强度在 n_d 与之间插值
 

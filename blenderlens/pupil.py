@@ -15,7 +15,7 @@ except ImportError:
     import optics as O
     from flare import _sag_grad
 
-LAMBDAS = (0.40, 0.55, 0.70)          # 覆盖连续波长色散的范围
+LAMBDAS = (0.38, 0.55, 0.78)          # 覆盖连续波长色散的范围（0.8.2：Cycles 的波长采样范围 380–780 nm）
 
 
 def _passes(S, z_stop, r_stop, P, D, lam):
@@ -83,7 +83,7 @@ def _passes(S, z_stop, r_stop, P, D, lam):
     return alive
 
 
-TABLE_VERSION = 3       # 改了表的算法 / 默认参数就加 1（随包分发与磁盘缓存按 处方内容 + 版本 取用）
+TABLE_VERSION = 4       # 改了表的算法 / 默认参数就加 1（随包分发与磁盘缓存按 处方内容 + 版本 取用）
 
 
 def table(rx, nx=11, ny=9, m=72, focus_states=None, margin_frac=0.01):

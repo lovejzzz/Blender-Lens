@@ -29,6 +29,12 @@ Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same cam
 
 ---
 
+## What's new in 0.8.2: Blender 5.3 compatibility
+
+- **Shared wavelength with 5.3 dispersive glass (GPU)**: Blender 5.3 added dispersion to the Principled BSDF, sampling one wavelength per path. Previously our lens and such glass each sampled their own wavelength and weighted the colour twice — a white sky seen through dispersive glass turned visibly yellow (14% tint). The GPU path now gives both the same random number and mapping, so they share one wavelength (tint 0.2%). Scenes without dispersive materials keep the lower-noise 0.8 sampler. The CPU / OSL path can't do this; `bl.diagnose()` warns and suggests fixes.
+- **Working colour space**: lens dispersion colours now follow the scene's working colour space (e.g. ACEScg) on GPU and CPU.
+- **Kernel patch drift check**: `tests/test_kernel_patch.py` (quick tier) verifies all GPU patch sites against the installed Blender and says exactly which one changed after an upgrade.
+
 ## What's new in 0.8.1: AI-native
 
 AI agents (and scripts) can now use, test and improve BlenderLens without looking at the UI:
@@ -72,12 +78,12 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.8.1.zip`](dist/blenderlens-0.8.1.zip) from this repository.
+1. Download [`dist/blenderlens-0.8.2.zip`](dist/blenderlens-0.8.2.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.1.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.2.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.
@@ -328,7 +334,7 @@ Three corrections in 0.4:
 - The Panavision rear presets have no production-lens specs; close focus is the zoom patent's F3 (133 mm from object to first surface, 0.48 m from the image plane). Internal focus travel matches patent TABLE 1: F3 21.686 / 21.684 mm, F2 11.221 / 11.099 mm (1%; the two-group motion ratio uses the F2/F3 average 0.9088).
 - Glasses that old patents only specify by n_d / V_d (Rosin, Nikon) use two-term Cauchy; Geometry mode uses a single d-line index.
 - Only one BlenderLens lens per .blend file.
-- On the CPU / OSL path the wavelength random number is still a hash (OSL cameras get only two random dimensions); on the GPU path it is stratified when motion blur is off.
+- On the CPU / OSL path the wavelength random number is still a hash (OSL cameras get only two random dimensions), and it cannot share the path wavelength with Blender 5.3 dispersive materials (`bl.diagnose()` warns); the GPU path is stratified and shares it.
 - GPU path: Geometry mode still runs on CPU; only tested on Metal.
 - Lateral in Post has no longitudinal colour (coloured bokeh fringes); use Full when you need it.
 

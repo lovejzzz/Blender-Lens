@@ -242,7 +242,27 @@ def diagnose(scene=None):
         out.append(_issue("info", "no_flare_source", "开了星芒 / 杂光但没有炫光光源；杂光仍会加，星芒不会", "obj['bl_flare_source'] = 1 标记小的发光物体"))
     if p.ghosts and p.mode == 'ANALYTIC':
         out.append(_issue("info", "camera_ghosts", "相机端鬼影只适合大面积亮源；点光源炫光用 bl.render_still(flare=True)", ""))
+    # 0.8.2：Blender 5.3 的色散材质与镜头色散共用路径波长——GPU 路径已处理，CPU / OSL 做不到
+    disp_mats = _dispersive_materials(sc)
+    if disp_mats and p.dispersion and p.dispersion_mode == 'FULL':
+        if rig.gpu_block_reason(sc) is None and getattr(c, "device", 'CPU') == 'GPU' and gpukernel.is_active():
+            out.append(_issue("info", "spectral_shared", f"场景里有色散材质 {disp_mats[:3]}：GPU 路径与它们共用同一个路径波长（正确）", ""))
+        else:
+            out.append(_issue("warning", "spectral_conflict_cpu",
+                              f"场景里有色散材质 {disp_mats[:3]}，CPU / OSL 路径的镜头色散拿不到 Cycles 的路径波长：两者各抽一个波长、颜色加权两次（色噪大、两种色散互相混）",
+                              "用 GPU 路径（bl.enable_gpu()），或 dispersion_mode='LATERAL_POST'，或把这些材质的 Transmission Dispersion Scale 设为 0"))
+    try:
+        from . import spectral as SP
+        ws = SP.working_space_name()
+        if ws not in ("Linear Rec.709",):
+            out.append(_issue("info", "working_space", f"工作色彩空间是 {ws}：镜头色散按它换算；后期炫光颜色与横向色差映射仍按 Rec.709 原色近似", ""))
+    except Exception:                                    # noqa: BLE001
+        pass
     us = rig.mm_per_unit(sc)
+    try:
+        bpy.context.view_layer.update()                  # 刚建 / 刚缩放的物体 dimensions 要更新后才对
+    except Exception:                                    # noqa: BLE001
+        pass
     dims = [max(o.dimensions) * us for o in sc.objects if o.type == 'MESH' and not o.name.startswith("BL_") and o.parent is None]
     if dims and max(dims) < 5.0:
         out.append(_issue("warning", "scene_tiny", f"场景里最大的物体只有 {max(dims):.2f} mm——单位可能不对（米制场景却按毫米搭了镜头？）",
@@ -250,6 +270,10 @@ def diagnose(scene=None):
     if cam.data.animation_data and sc.render.use_motion_blur and not (cam.animation_data and cam.animation_data.action):
         out.append(_issue("info", "motion_blur_static_camera", "开了运动模糊但相机没有位置关键帧（每帧拷贝矩阵会丢运动模糊）", "bl.follow_camera(cam, source)"))
     return out
+
+
+def _dispersive_materials(sc):
+    return rig.dispersive_materials(sc)
 
 
 def _image_stats(path):

@@ -45,6 +45,7 @@ TESTS = [
     ("reference", "quick", "py", ["tests/test_reference.py"], None, None),
     ("presets", "quick", "py", ["tests/test_presets.py"], None, None),
     ("gpu_header", "quick", "py", ["tests/test_gpu_lenspack.py"], None, None),
+    ("kernel_patch", "quick", "py", ["tests/test_kernel_patch.py"], None, None),
     ("bl_smoke", "quick", "bl", ["tests/bl_smoke.py"], "SMOKE", _smoke_ok),
     ("bl_agent", "quick", "bl", ["tests/bl_agent.py"], "AGENT", None),
     ("pupil", "standard", "py", ["tests/test_pupil.py"], None, None),
@@ -54,7 +55,9 @@ TESTS = [
     ("bl_ghosts", "standard", "bl", ["tests/bl_gpu_ghosts.py"], "GHOSTS", None),
     ("bl_units", "standard", "bl", ["tests/bl_units.py"], "UNITS", None),
     ("map_c", "standard", "bl", ["tests/bl_verify_mapping.py", "--", "c_series_style.json"], "MAPPING", _mapping_ok),
-    ("bl_spectral", "full", "bl", ["tests/bl_spectral.py"], "SPECTRAL", None),
+    ("bl_spectral", "standard", "bl", ["tests/bl_spectral.py"], "SPECTRAL", None),
+    ("bl_spectral_glass", "standard", "bl", ["tests/bl_spectral_glass.py"], "SPECGLASS", None),
+    ("bl_colorspace", "standard", "bl", ["tests/bl_colorspace.py"], "COLORSPACE", None),
     ("bl_ghosts_broadband", "full", "bl", ["tests/bl_gpu_ghosts.py", "--", "BROADBAND"], "GHOSTS", None),
     ("bl_mumps_e", "full", "bl", ["tests/bl_mumps.py", "--", "e_series_style.json"], "MUMPS", None),
     ("bl_sampling", "full", "bl", ["tests/bl_sampling.py"], "SAMPLING", None),
@@ -72,7 +75,7 @@ TESTS = [
     ("package_install", "full", "sh", ["tests/package_install.sh"], "INSTALLED_GPU", None),
 ]
 
-SKIP_METRIC = re.compile(r"(second|time|_s$|path|file|seed|resolution|px\b)", re.I)
+SKIP_METRIC = re.compile(r"(second|time|speedup|_s$|path|file|seed|resolution|px\b)", re.I)
 
 
 def flatten(d, prefix=""):

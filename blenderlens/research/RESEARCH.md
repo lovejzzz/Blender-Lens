@@ -346,6 +346,17 @@ T 值在模型里被当作几何 f 值使用。T 值含透过率损失，同数�
 
 缺的数据：ALEXA / RED 的玻璃堆厚度与微透镜主光线角曲线、钍玻璃发黄的实测光谱、Pro-Mist 的实测 PSF、电影变形镜头厂商的公差。
 
+## 6.12 0.8.2：与 Blender 5.3 色散共用波长、工作色彩空间、补丁漂移检查
+
+- **问题实测**（`tests/bl_spectral_glass.py`，白色天空透过一块 5.3 色散玻璃，Abbe 20）：CPU / OSL 路径平均颜色 (0.79, 0.79, 0.63)，偏色 14%，色噪是无色散玻璃的 2.2 倍——不只是噪点，是明显的偏色（镜头与玻璃各抽一个波长、颜色加权两次）。
+- **GPU 修法**（内核补丁共七处，`gpukernel.PATCH_SITES`）：相机与色散材质用**同一个随机数、同一个映射**（Cycles 的 `sample_wavelength`）得到同一个 λ，路径置 `PATH_RAY_SPECTRAL`（Cycles 不再在玻璃处另加权重）。随机数：不开运动模糊时取 Cycles 的 time 维（与出瞳联合分层），`shader_data.h` 的 `shader_setup_wavelength` 按同一规则取。修后：偏色 0.2%，色噪 1.04 倍。
+- **两种模式**：只有场景里真有色散材质时才进入「共用模式」（由 `rig.dispersive_materials` 判断，每次渲染开始同步内核头文件）；默认模式保持 0.8 的逆 CDF 采样表。原因：Cycles 的波长映射按 D65 亮度分配，蓝端概率低，蓝通道权重尖 → 同 spp 色噪高 1.2 倍（`bl_spectral` 实测 `shared_cost_64` = 1.2）。默认模式与 0.8 逐位相同（16 spp 色噪 3.70）。
+- **为什么颜色权重不用 CIE 色匹配**：CIE → RGB 有负瓣，实测每样本色度标准差约 1.9–2.25（三条传感器高斯 1.1–1.3），同 spp 色噪约高 1.7 倍；在 Cycles 的映射下用 CIE 权重，16 spp 色噪 9.65（传感器权重 5.88，0.8 默认 3.70）。所以保留传感器响应，只把它定义在 Rec.709 原色下再换到工作色彩空间（GPU：Cycles 的 `rec709_to_rgb`；OSL：插件用 OpenColorIO 算矩阵写入 `rec_*` 参数）。ACEScg 场景实测：色散开 / 关平均颜色差 < 0.7%（与 Rec.709 相同）。
+- **CPU / OSL 修不了**（OSL 相机读不到也设不了路径波长）：`bl.diagnose()` 发现色散材质时给出 `spectral_conflict_cpu` 警告和三种修法。
+- **补丁漂移**：`tests/test_kernel_patch.py`（quick 级）检查本机 Blender 的七处原文，并在内存里打一遍补丁；`check_compatible()` 的失败信息逐处列出。
+- **教训**：内核拷贝目录只按 `PATCH_VERSION` 命名时，改了补丁文本却没改版本号，会继续用旧拷贝（本次一度测出「分层采样变差 1.4 倍」，其实是旧补丁）。现在目录名含全部补丁文本的哈希。
+- 光谱数据：`tools/extract_cie.py` 从 Cycles 的 `tables.h` / `colorspace.h` 取出 CIE 表与采样器常数（`blenderlens/spectral/cie_d65.json`）；`blenderlens/spectral.py` 是 Python 参考实现。出瞳表波长范围扩到 380–780 nm（表版本 4）。
+
 ## 7. 未完成 / 值得继续的方向
 
 **已移到 `ROADMAP.md`**（0.8 准确性与采样、0.9 新镜头、1.0 管线与速度），那里有做法和验收标准。旧条目的去向：

@@ -19,8 +19,9 @@ except ImportError:
     import optics as O
     import oslgen as G
 
-PATCH_VERSION = "blenderlens-gpu-2"      # 2（0.8）：自定义相机分支多传一维随机数（time），波长分层采样
+PATCH_VERSION = "blenderlens-gpu-3"      # 3（0.8.2）：波长随机数取 Cycles 的路径波长维并置 PATH_RAY_SPECTRAL（与 5.3 色散共用一个 λ）
 HEADER_NAME = "blenderlens_lens.h"
+DEFS_NAME = "blenderlens_defs.h"       # 0.8.2：只有 #define（设置宏），shader_data.h 等较早编译的文件也能安全包含
 
 # 字段 → 新含义（只对 BlenderLens 自定义相机生效；普通相机不受影响）
 FIELD_MAP = [
@@ -48,9 +49,8 @@ EXPECTED_ORIGINAL = '''#else
 PATCHED = '''#else
 #  ifdef BLENDERLENS_GPU_CAMERA
   /* BlenderLens GPU camera (PATCH_VERSION) */
-  (void)kg;
   r_cache_miss = false;
-  return blenderlens_camera_sample(cam, cam_motion, raster, rand_lens, -1.0f, ray);
+  return blenderlens_camera_sample(kg, cam, cam_motion, raster, rand_lens, -1.0f, ray);
 #  else
   (void)kg;
   (void)cam;
@@ -66,8 +66,33 @@ PATCHED = '''#else
 
 ANCHOR = "ccl_device_inline Spectrum camera_sample_custom("
 
-# 第二处（0.8）：camera_sample() 里调用自定义相机的地方，改为直接调用并多传 time 随机数。
-# 不开运动模糊时 time 这一维（与出瞳两维同属一个三维 Sobol 点）没人用，拿来采样波长 → 波长与出瞳点联合分层。
+# 0.8.2 起共五处（都只在 BLENDERLENS_GPU_CAMERA 定义时生效；存根头文件下与原版逐字等价）：
+#   ① camera_sample_custom 的非 OSL 分支（上面）；
+#   ② camera_sample() 多一个参数 rand_wavelength（默认 −1 = 没有）；
+#   ③ camera_sample() 里自定义相机的调用：直接调用我们的相机并传 rand_wavelength；
+#   ④ integrate_camera_sample()：取波长随机数（不开运动模糊 = time 维，与出瞳联合分层；开 = Cycles 的路径波长维）；
+#   ⑤ 路径初始化之后置 PATH_RAY_SPECTRAL：Cycles 不会在色散玻璃处再按另一个波长加权一次；
+#   ⑥ shader_data.h 的 shader_setup_wavelength：按 ④ 的同一规则取随机数 → 色散材质与镜头是同一个 λ。
+EXPECTED_SIGNATURE = """ccl_device_inline Spectrum camera_sample(KernelGlobals kg,
+                                         const int x,
+                                         const int y,
+                                         const float2 filter_uv,
+                                         const float time,
+                                         const float2 lens_uv,
+                                         ccl_private Ray *ray,
+                                         ccl_private int &r_cache_miss)
+{"""
+PATCHED_SIGNATURE = """ccl_device_inline Spectrum camera_sample(KernelGlobals kg,
+                                         const int x,
+                                         const int y,
+                                         const float2 filter_uv,
+                                         const float time,
+                                         const float2 lens_uv,
+                                         ccl_private Ray *ray,
+                                         ccl_private int &r_cache_miss,
+                                         const float rand_wavelength = -1.0f)
+{
+  (void)rand_wavelength;"""
 EXPECTED_CALL = """  if (kernel_data.cam.type == CAMERA_CUSTOM) {
     const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
     return camera_sample_custom(
@@ -76,14 +101,57 @@ EXPECTED_CALL = """  if (kernel_data.cam.type == CAMERA_CUSTOM) {
 PATCHED_CALL = """  if (kernel_data.cam.type == CAMERA_CUSTOM) {
     const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
 #if defined(BLENDERLENS_GPU_CAMERA) && !defined(WITH_OSL)
-    /* BlenderLens GPU camera (PATCH_VERSION): pass the Sobol time dimension for wavelength sampling */
+    /* BlenderLens GPU camera (PATCH_VERSION) */
     r_cache_miss = false;
-    return blenderlens_camera_sample(&kernel_data.cam, cam_motion, raster, lens_uv, time, ray);
+    return blenderlens_camera_sample(kg, &kernel_data.cam, cam_motion, raster, lens_uv, rand_wavelength, ray);
 #else
     return camera_sample_custom(
         kg, &kernel_data.cam, cam_motion, raster, lens_uv, ray, r_cache_miss);
 #endif
   }""".replace("PATCH_VERSION", PATCH_VERSION)
+INIT_FILE = os.path.join("integrator", "init_from_camera.h")
+EXPECTED_INIT_CALL = """  return camera_sample(kg, x, y, rand_filter, rand_time, rand_lens, ray, r_cache_miss);"""
+PATCHED_INIT_CALL = """#if defined(BLENDERLENS_GPU_CAMERA) && !defined(WITH_OSL) && defined(__SPECTRAL__)
+  /* BlenderLens GPU camera (PATCH_VERSION): the path's wavelength random number, shared with dispersive BSDFs */
+  if (kernel_data.cam.type == CAMERA_CUSTOM && BL_DISPERSION) {
+    /* 不开运动模糊：time 维（与出瞳两维同一个三维 Sobol 点 → 联合分层）；开：Cycles 的路径波长维。shader_data.h 用同一规则 */
+    const float rand_wavelength = (kernel_data.cam.shuttertime == -1.0f) ?
+                                      rand_time :
+                                      path_rng_1D(kg, rng_pixel, sample, PRNG_BOUNCE_NUM + PRNG_WAVELENGTH);
+    return camera_sample(kg, x, y, rand_filter, rand_time, rand_lens, ray, r_cache_miss, rand_wavelength);
+  }
+#endif
+  return camera_sample(kg, x, y, rand_filter, rand_time, rand_lens, ray, r_cache_miss);""".replace("PATCH_VERSION", PATCH_VERSION)
+EXPECTED_PATH_INIT = """path_state_init_integrator(kg, state, sample, rng_pixel, T);"""
+PATCHED_PATH_INIT = """path_state_init_integrator(kg, state, sample, rng_pixel, T);
+#if defined(BLENDERLENS_GPU_CAMERA) && !defined(WITH_OSL) && defined(__SPECTRAL__)
+    if (kernel_data.cam.type == CAMERA_CUSTOM && BL_DISPERSION && BL_SPECTRAL_SHARED && BL_DISP_STRENGTH > 0.0f) {
+      INTEGRATOR_STATE_WRITE(state, path, flag) |= PATH_RAY_SPECTRAL; /* BlenderLens: path is already spectral */
+    }
+#endif"""
+
+SHADER_DATA_FILE = os.path.join("geom", "shader_data.h")
+EXPECTED_SD_INCLUDE = "CCL_NAMESPACE_BEGIN"
+EXPECTED_SD_WAVELENGTH = """    sd->rand_wavelength = path_rng_1D(kg, pixel, sample, PRNG_BOUNCE_NUM + PRNG_WAVELENGTH);"""
+PATCHED_SD_WAVELENGTH = """#if defined(BLENDERLENS_GPU_CAMERA) && !defined(WITH_OSL)
+    /* BlenderLens GPU camera (PATCH_VERSION): same random number the lens used for its wavelength */
+    if (kernel_data.cam.type == CAMERA_CUSTOM && BL_DISPERSION && BL_SPECTRAL_SHARED && kernel_data.cam.shuttertime == -1.0f) {
+      sd->rand_wavelength = path_rng_3D(kg, pixel, sample, PRNG_LENS_TIME).x;
+    }
+    else
+#endif
+    sd->rand_wavelength = path_rng_1D(kg, pixel, sample, PRNG_BOUNCE_NUM + PRNG_WAVELENGTH);""".replace("PATCH_VERSION", PATCH_VERSION)
+
+# 补丁检查清单：(文件, 原文, 期望出现次数) —— check_compatible 与 tests/test_kernel_patch.py 共用
+PATCH_SITES = [
+    (os.path.join("camera", "camera.h"), "EXPECTED_ORIGINAL", 1),
+    (os.path.join("camera", "camera.h"), "ANCHOR", 1),
+    (os.path.join("camera", "camera.h"), "EXPECTED_SIGNATURE", 1),
+    (os.path.join("camera", "camera.h"), "EXPECTED_CALL", 1),
+    (INIT_FILE, "EXPECTED_INIT_CALL", 1),
+    (INIT_FILE, "EXPECTED_PATH_INIT", 2),
+    (SHADER_DATA_FILE, "EXPECTED_SD_WAVELENGTH", 1),
+]
 
 
 class GPUPathError(RuntimeError):
@@ -111,25 +179,25 @@ def _carr(name, vals, typ="float"):
 
 def static_settings(dispersion=True, dispersion_strength=1.0, exposure_compensate=True, pupil_importance=True,
                     blade_rotation_deg=0.0, unit_scale=1.0, ghosts=False, ghost_fraction=0.5, ghost_gain=1.0,
-                    coated=True, coating_nm=100.0, coating_ior=1.38, coating_type="SINGLE"):
+                    coated=True, coating_nm=100.0, coating_ior=1.38, coating_type="SINGLE", spectral_shared=False):
     return dict(dispersion=int(bool(dispersion)), dispersion_strength=float(dispersion_strength),
                 exposure_compensate=int(bool(exposure_compensate)), pupil_importance=int(bool(pupil_importance)),
                 blade_rotation=math.radians(blade_rotation_deg), unit_scale=float(unit_scale),
                 ghosts=int(bool(ghosts)), ghost_fraction=float(ghost_fraction), ghost_gain=float(ghost_gain),
                 coated=int(bool(coated)), coating_nm=float(coating_nm), coating_ior=float(coating_ior),
-                coating_type=1 if coating_type == "BROADBAND" else 0)
+                coating_type=1 if coating_type == "BROADBAND" else 0, spectral_shared=int(bool(spectral_shared)))
 
 def generate_header(rx, settings=None):
     """处方 + 静态设置 → C++ 头文件（Cycles 内核语言，Metal / CUDA / HIP 通用）。"""
     st = settings or static_settings()
     D = G.lens_data(rx, importance=bool(st["pupil_importance"]))
     NS = D["NS"]
-    sp = D["SPEC"]
     A = D["AS"]
     h = []
     h.append(f"/* BlenderLens GPU camera — 自动生成，不要手改。{rx['meta']['name']}\n"
              f" * 来源：{D['sources']}；{PATCH_VERSION} */\n")
     h.append("#define BLENDERLENS_GPU_CAMERA 1\n")
+    h.append('#include "kernel/util/colorspace.h"\n')
     h.append(f"#define BL_NS {NS}\n")
     for nm, key in (("BL_Z", "Z"), ("BL_CX", "CX"), ("BL_CY", "CY"), ("BL_KX", "KX"), ("BL_KY", "KY"), ("BL_NA", "A_"),
                     ("BL_NB", "B_"), ("BL_NC", "C_"), ("BL_NE", "E_"), ("BL_ND", "ND"), ("BL_CLR", "CLR"), ("BL_MSX", "MSX"), ("BL_MSY", "MSY"), ("BL_G1", "G1"), ("BL_G2", "G2")):
@@ -141,25 +209,26 @@ def generate_header(rx, settings=None):
         h.append(_carr(nm, A[m]))
     for nm, arr in zip(("BL_PX0", "BL_PX1", "BL_PY0", "BL_PY1"), D["PB"]):
         h.append(_carr(nm, arr))
+    tb = D["SPEC"]["table"]
+    h.append(_carr("BL_SPC", tb["cdf"]))
+    for c, nm in enumerate(("BL_SPR", "BL_SPG", "BL_SPB")):
+        h.append(_carr(nm, tb["w"][c]))
     h.append(_carr("BL_CO", D["CO"], "int"))
     h.append(_carr("BL_AG", D["AG"] if D["AG"] else [0], "int"))
-    h.append(_carr("BL_SPC", sp["cdf"]))
-    for c, nm in enumerate(("BL_SPR", "BL_SPG", "BL_SPB")):
-        h.append(_carr(nm, sp["w"][c]))
     S0 = D["S"]
     efl_x = abs(O.paraxial_infinity(S0, "Rx")[0]); efl_y = abs(O.paraxial_infinity(S0, "Ry")[0])
     consts = dict(BL_EFL_X=efl_x, BL_EFL_Y=efl_y, BL_SENSOR_W=D["W"], BL_SENSOR_H=D["H"], BL_Z_STOP=D["z_stop"], BL_R_STOP=D["r_stop"],
                   BL_Z_EXP=D["z_exp"], BL_R_EXP=D["r_exp"], BL_N0=D["N0"], BL_EXPOSURE_NORM=1.0 / D["T0"],
-                  BL_SG1=float(D["SG1"]), BL_SG2=float(D["SG2"]), BL_SP_L0=sp["l0"], BL_SP_DL=sp["dl"],
+                  BL_SG1=float(D["SG1"]), BL_SG2=float(D["SG2"]), BL_SP_L0=D["SPEC"]["table"]["l0"], BL_SP_DL=D["SPEC"]["table"]["dl"],
                   BL_LAMBDA_D=O.LAMBDA_D, BL_UNIT_SCALE=st["unit_scale"], BL_BLADE_ROT=st["blade_rotation"],
                   BL_DISP_STRENGTH=st["dispersion_strength"], BL_PUPIL_MARGIN=1.4,
                   BL_GHOST_FRACTION=st["ghost_fraction"], BL_GHOST_GAIN=st["ghost_gain"],
                   BL_COATING_NM=st["coating_nm"], BL_COATING_IOR=st["coating_ior"], BL_COAT_HIGH_N=O.COAT_HIGH_N)
     for k, v in consts.items():
         h.append(f"#define {k} ({_cf(v)})\n")
-    ints = dict(BL_PNX=D["PNX"], BL_PNY=D["PNY"], BL_SPN=len(sp["cdf"]), BL_DISPERSION=st["dispersion"],
+    ints = dict(BL_PNX=D["PNX"], BL_PNY=D["PNY"], BL_DISPERSION=st["dispersion"],
                 BL_EXPOSURE_COMP=st["exposure_compensate"], BL_PUPIL_IMPORTANCE=st["pupil_importance"],
-                BL_GHOSTS=st["ghosts"], BL_COATED=st["coated"], BL_COATING_TYPE=st.get("coating_type", 0), BL_NAG=len(D["AG"]), BL_NPAIRS=D["NPAIRS"])
+                BL_GHOSTS=st["ghosts"], BL_COATED=st["coated"], BL_SPECTRAL_SHARED=st.get("spectral_shared", 0), BL_SPN=len(D["SPEC"]["table"]["cdf"]), BL_COATING_TYPE=st.get("coating_type", 0), BL_NAG=len(D["AG"]), BL_NPAIRS=D["NPAIRS"])
     for k, v in ints.items():
         h.append(f"#define {k} {int(v)}\n")
     h.append(KERNEL_BODY)
@@ -270,11 +339,12 @@ ccl_device_inline float bl_lerp(const float a, const float b, const float t)
   return a + (b - a) * t;
 }
 
-ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *cam,
+ccl_device_inline Spectrum blenderlens_camera_sample(KernelGlobals kg,
+                                                     ccl_constant KernelCamera *cam,
                                                      const ccl_global DecomposedTransform *cam_motion,
                                                      const float2 raster,
                                                      const float2 rand_lens,
-                                                     const float rand_time,
+                                                     const float rand_wavelength,
                                                      ccl_private Ray *ray)
 {
   /* 每帧参数（见 gpukernel.FIELD_MAP） */
@@ -343,24 +413,41 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
     w *= k_stop * k_stop;
   }
 
-  /* 连续波长色散（与 OSL 相同的光谱表）。波长的随机数：不开运动模糊时用 Cycles 的 time 维（与出瞳两维同一个
-   * 三维 Sobol 点 → 波长与出瞳点联合分层，色噪按 ~1/N 以上的速度下降）；开运动模糊时 time 已用于快门，
-   * 退回与 OSL 相同的哈希（否则运动拖影会按波长分色） */
+  /* 连续波长色散（0.8.2）：λ 的随机数与场景里的 5.3 色散材质共用（补丁 ④⑤⑥），按 Cycles 的 sample_wavelength 映射；
+   * 颜色权重 = 传感器响应(λ) / pdf，换到工作色彩空间。
+   * 没有这个随机数时（其他调用路径）退回与 OSL 相同的哈希。 */
   float3 chan = make_float3(1.0f, 1.0f, 1.0f);
   float lam = BL_LAMBDA_D;
   if (BL_DISPERSION && BL_DISP_STRENGTH > 0.0f) {
-    const float h = (rand_time >= 0.0f && cam->shuttertime == -1.0f) ?
-                        rand_time :
+    const float h = (rand_wavelength >= 0.0f) ?
+                        rand_wavelength :
                         hash_float3_to_float(make_float3(ras.x * 1000.0f + rand_lens.x * 17.0f,
                                                          ras.y * 1000.0f + rand_lens.y * 17.0f, 6.29f));
-    int j = 0;
-    while (j < BL_SPN - 1 && h > BL_SPC[j]) {
-      j += 1;
+#  ifdef __SPECTRAL__
+    if (BL_SPECTRAL_SHARED) {
+      /* 共用模式（场景里有 5.3 色散材质）：Cycles 的映射 → 与色散材质同一个 λ；权重 = 传感器响应 / pdf */
+      float prob;
+      lam = sample_wavelength(h, &prob);
+      const float pdf_um = fmaxf(prob, 1e-9f) / (WAVELENGTH_CIE_MAX - WAVELENGTH_CIE_MIN);
+      const float gr = expf(-0.5f * sqr((lam - 0.610f) / 0.032f)) / (0.032f * 2.50662827f);
+      const float gg = expf(-0.5f * sqr((lam - 0.550f) / 0.032f)) / (0.032f * 2.50662827f);
+      const float gb = expf(-0.5f * sqr((lam - 0.465f) / 0.026f)) / (0.026f * 2.50662827f);
+      chan = make_float3(gr, gg, gb) / pdf_um;
     }
-    const float c0 = j > 0 ? BL_SPC[j - 1] : 0.0f;
-    const float fr = clamp((h - c0) / fmaxf(BL_SPC[j] - c0, 1e-9f), 0.0f, 1.0f);
-    lam = BL_SP_L0 + (j + fr) * BL_SP_DL;
-    chan = make_float3(BL_SPR[j], BL_SPG[j], BL_SPB[j]);
+    else
+#  endif
+    {
+      /* 默认：传感器响应之和的逆 CDF 表（与 OSL 相同，色噪最低） */
+      int j = 0;
+      while (j < BL_SPN - 1 && h > BL_SPC[j]) {
+        j += 1;
+      }
+      const float c0 = j > 0 ? BL_SPC[j - 1] : 0.0f;
+      const float fr = clamp((h - c0) / fmaxf(BL_SPC[j] - c0, 1e-9f), 0.0f, 1.0f);
+      lam = BL_SP_L0 + (j + fr) * BL_SP_DL;
+      chan = make_float3(BL_SPR[j], BL_SPG[j], BL_SPB[j]);
+    }
+    chan = rec709_to_rgb(kg, chan);  /* 传感器响应定义在 Rec.709 原色下 → 场景工作色彩空间 */
   }
   const float il2 = 1.0f / (lam * lam);       /* n(λ) = A + B/λ² + C/λ⁴ + E/λ⁶，按强度在 n_d 与之间插值 */
 
@@ -580,21 +667,35 @@ def cache_root(sub="gpu_kernel"):
 
 def _build_tag():
     bpy = _bpy()
-    raw = f"{bpy.app.version_string}|{getattr(bpy.app, 'build_hash', b'').decode() if isinstance(getattr(bpy.app, 'build_hash', b''), bytes) else getattr(bpy.app, 'build_hash', '')}|{PATCH_VERSION}"
+    patches = "".join(str(globals()[n]) for n in ("PATCHED", "PATCHED_SIGNATURE", "PATCHED_CALL", "PATCHED_INIT_CALL",
+                                                   "PATCHED_PATH_INIT", "PATCHED_SD_WAVELENGTH"))   # 补丁文本一变就重新拷贝（0.8.2 教训）
+    raw = f"{bpy.app.version_string}|{getattr(bpy.app, 'build_hash', b'').decode() if isinstance(getattr(bpy.app, 'build_hash', b''), bytes) else getattr(bpy.app, 'build_hash', '')}|{PATCH_VERSION}|{hashlib.sha1(patches.encode()).hexdigest()}"
     return hashlib.sha1(raw.encode()).hexdigest()[:12]
 
 def patched_dir():
     return os.path.join(cache_root(), f"cycles_{_build_tag()}")
 
+def patch_report(src_dir):
+    """每个补丁位置在 Cycles 源码里出现几次（纯 Python，不需要 bpy；tests/test_kernel_patch.py 用它）。
+    src_dir = Cycles 插件目录（含 source/kernel）。返回 [{file, site, expected, found}]。"""
+    out = []
+    for rel, name, n in PATCH_SITES:
+        p = os.path.join(src_dir, "source", "kernel", rel)
+        s = open(p, encoding="utf-8").read() if os.path.exists(p) else None
+        out.append(dict(file=rel, site=name, expected=n, found=None if s is None else s.count(globals()[name])))
+    return out
+
 def check_compatible(src_dir=None):
-    """返回 (ok, 原因)。camera.h 里要替换的那段必须与预期逐字一致。"""
+    """返回 (ok, 原因)。所有补丁位置都必须与预期逐字一致，否则拒绝启用、回退 CPU / OSL。"""
     src_dir = src_dir or cycles_addon_dir()
     p = os.path.join(src_dir, "source", "kernel", "camera", "camera.h")
     if not os.path.exists(p):
         return False, f"找不到 Cycles 内核源码 {p}（这个 Blender 构建不带运行时编译的 GPU 内核源码）"
-    s = open(p, encoding="utf-8").read()
-    if s.count(EXPECTED_ORIGINAL) != 1 or s.count(ANCHOR) != 1 or s.count(EXPECTED_CALL) != 1:
-        return False, "camera.h 与补丁预期不一致（Blender 版本变了）：GPU 路径不可用，使用 CPU / OSL"
+    bad = [r for r in patch_report(src_dir) if r["found"] != r["expected"]]
+    if bad:
+        return False, ("Cycles 内核源码与补丁预期不一致（Blender 版本变了）：" +
+                       "；".join(f"{r['file']} {r['site']} 出现 {r['found']} 次（应为 {r['expected']}）" for r in bad) +
+                       "。GPU 路径不可用，使用 CPU / OSL")
     return True, "ok"
 
 def prepare(force=False):
@@ -616,8 +717,19 @@ def prepare(force=False):
     p = os.path.join(dst, "source", "kernel", "camera", "camera.h")
     s = open(p, encoding="utf-8").read()
     s = s.replace(EXPECTED_ORIGINAL, PATCHED)
+    s = s.replace(EXPECTED_SIGNATURE, PATCHED_SIGNATURE)
     s = s.replace(EXPECTED_CALL, PATCHED_CALL)
     s = s.replace(ANCHOR, f'#include "kernel/camera/{HEADER_NAME}"\n\n' + ANCHOR)
+    open(p, "w", encoding="utf-8").write(s)
+    p = os.path.join(dst, "source", "kernel", INIT_FILE)
+    s = open(p, encoding="utf-8").read()
+    s = s.replace(EXPECTED_INIT_CALL, PATCHED_INIT_CALL)
+    s = s.replace(EXPECTED_PATH_INIT, PATCHED_PATH_INIT)
+    open(p, "w", encoding="utf-8").write(s)
+    p = os.path.join(dst, "source", "kernel", SHADER_DATA_FILE)
+    s = open(p, encoding="utf-8").read()
+    s = s.replace(EXPECTED_SD_INCLUDE, f'#include "kernel/camera/{DEFS_NAME}"\n\n' + EXPECTED_SD_INCLUDE, 1)
+    s = s.replace(EXPECTED_SD_WAVELENGTH, PATCHED_SD_WAVELENGTH)
     open(p, "w", encoding="utf-8").write(s)
     write_header(STUB_HEADER, dst)
     open(marker, "w").write(json.dumps({"patch": PATCH_VERSION, "source": cycles_addon_dir()}))
@@ -626,13 +738,26 @@ def prepare(force=False):
 def header_path(dst=None):
     return os.path.join(dst or patched_dir(), "source", "kernel", "camera", HEADER_NAME)
 
+def split_header(text):
+    """生成的头文件 → (defs, lens)：所有 #define 放进 defs（任何内核文件都能包含），其余（数组、函数）留在 lens，lens 先包含 defs。"""
+    lines = text.splitlines(keepends=True)
+    defs = "".join(l for l in lines if l.startswith("#define ")) or STUB_HEADER
+    rest = "".join(l for l in lines if not l.startswith("#define "))
+    return defs, f'#include "kernel/camera/{DEFS_NAME}"\n' + rest
+
 def write_header(text, dst=None):
     """内容没变就不写（避免触发 Metal 重新编译）。返回是否改写。"""
-    p = header_path(dst)
-    if os.path.exists(p) and open(p, encoding="utf-8").read() == text:
+    defs, lens = split_header(text)
+    changed = False
+    for name, body in ((DEFS_NAME, defs), (HEADER_NAME, lens)):
+        p = os.path.join(os.path.dirname(header_path(dst)), name)
+        if os.path.exists(p) and open(p, encoding="utf-8").read() == body:
+            continue
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(body)
+        changed = True
+    if not changed:
         return False
-    with open(p, "w", encoding="utf-8") as f:
-        f.write(text)
     return True
 
 _STATE = {"active": False, "reason": "未启用", "header_hash": None}

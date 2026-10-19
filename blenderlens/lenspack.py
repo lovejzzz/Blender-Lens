@@ -11,11 +11,13 @@ import numpy as np
 try:
     from . import optics as O
     from . import oslgen as G
+    from . import spectral as SP
     from .pupil import _passes
     from .flare import _sag_grad
 except ImportError:
     import optics as O
     import oslgen as G
+    import spectral as SP
     from pupil import _passes
     from flare import _sag_grad
 
@@ -109,10 +111,10 @@ def lateral_ca_offsets(rx, focus_dist=math.inf, nx=33, ny=19, lambdas_nm=LAMBDAS
         out[nm] = (ux - sx, uy - sy)
     return dict(grid=(sx, sy), offsets=out, sensor=(M.W, M.H))
 
-def _channel_weights(lambdas_nm):
-    """各采样波长对 R/G/B 的权重（与 OSL / GPU 的传感器光谱响应一致；每通道归一化）。"""
-    w = np.array([[math.exp(-0.5 * ((nm / 1000.0 - c) / s) ** 2) for nm in lambdas_nm] for c, s in G.SENSOR_RGB])
-    return w / w.sum(axis=1, keepdims=True)
+def _channel_weights(lambdas_nm, M=None):
+    """各采样波长对 R/G/B 的权重（与 OSL / GPU 同一传感器响应；每通道归一化）。"""
+    w = np.array([[SP.sensor_rgb(nm / 1000.0)[r] for nm in lambdas_nm] for r in range(3)])
+    return w / np.maximum(w.sum(axis=1, keepdims=True), 1e-12)
 
 def _upsample(field, nx, ny, W_px, H_px):
     """粗网格 → 像素中心（双线性）。网格覆盖传感器边到边。"""
