@@ -16,7 +16,7 @@
 > - a deterministic forward-traced flare pass, diffraction starbursts and veiling glare;
 > - metre-scale scenes, native 16:9 gates, a Python API with multi-machine frame rendering.
 >
-> Install `dist/blenderlens-0.7.0.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
+> Install `dist/blenderlens-0.8.0.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
 
 | C 系列风格 · 100 mm · f/2.3 | E 系列风格 · 100 mm · f/2.8 | G 系列风格 · 100 mm · f/3 |
 |---|---|---|
@@ -31,6 +31,20 @@
 > Panavision 的 C / E / G / T / Primo 变形系列量产处方从未公开。C / E / G 三个选项是「同年代、同结构的公开专利 + 按 Panavision 公布的规格设定观感参数」，**不是复刻**。唯一公开的真 Panavision 处方是 US 7,085,066（后置 1.34× 变形组），原样收录为两个预设。
 
 ---
+
+## 0.8 新增
+
+按 [`blenderlens/research/ROADMAP.md`](blenderlens/research/ROADMAP.md) 的 0.8「准确性与采样」：
+- **发腮补偿（Mumps Correction，C / E / G 风格）**：Auto Panatar 式（Panavision 1958，Wallin 反向旋转柱面对）的一阶等效补偿板，与对焦环联动。
+  - 默认完全补偿：最近对焦处压缩比 = 无穷远（C 2.011、E/G 2.094），与 ARRI Master Anamorphic 数据表（近摄 1.97–2.01×）一致。
+  - 补偿后对焦呼吸以垂直为主（E：水平 −6%、垂直 −32%），与 Panavision 对 E 系列的描述「vertical focus breathing」一致；背景焦外是经典的 1.9–2.3 竖椭圆。
+  - 滑块拉到 0 = 1950 年代 CinemaScope 式未校正（C 近摄 1.69×、人脸变胖）。CPU / GPU / Geometry 三条路径实测一致。
+- **多层镀膜**：特征矩阵法（Abelès），单层 MgF₂ 或三层 1/4–1/2–1/4 宽带膜（贴玻璃层按每面玻璃配）。宽带膜的鬼影弱一个量级、偏品红 / 琥珀；Neil 与 Panavision 后置预设默认宽带膜。CPU / GPU 鬼影能量差 0.7%。
+- **GPU 波长分层采样**：波长取 Cycles 的 time 维（与出瞳同一个三维 Sobol 点）。同样采样数下色噪低 2.1–2.7 倍（约等于 4.5–7 倍采样），平均颜色不变（0.04%）。开运动模糊时自动退回旧方式。
+- **出瞳采样表加密**：带光采样占比平均从约 0.54 提到 0.62–0.74（无额外每采样开销），预设的表随包分发，搭镜头不再等待。
+- **杂光按 ISO 9358 标定**：预设值就是合成测试（白场中央黑斑）实测的杂光指数（误差 < 1%）；去掉了 FFT 环绕（右边的亮光不再漏到左边），4K 0.6 秒。0.7 实测只有设定值的约 1/4。
+- **Geometry 模式补上光圈**：之前几何模式没有光圈网格，只靠 1.4 倍出瞳采样盘限光，f 值与叶片几乎无效；现在有随对焦移动、随 f 值 / 叶片重建的光圈。网格法线也改成浮点「自由法线」，并绕开 Cycles 法线压缩对 0 分量的偏置。
+- **外部数据回归测试** `tests/test_reference.py`：最近对焦距离、近摄压缩比、焦外形状（前置椭圆 / 后置近圆）、呼吸方向，逐项对照厂方数据与文献。
 
 ## 0.7 新增
 
@@ -53,12 +67,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.7.0.zip`](dist/blenderlens-0.7.0.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.8.0.zip`](dist/blenderlens-0.8.0.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.7.0.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.0.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。
@@ -130,6 +144,8 @@ cam.location = (0.0, -6.0, 1.4)
 cam.rotation_euler = (math.radians(90), 0, 0)
 bl.set_focus(cam, metres=8.5)
 bl.set_stop(cam, 2.8)
+bl.set_mumps_correction(cam, 1.0)                       # 0.8：发腮补偿 0–1（C / E / G 风格；默认 1）
+cam.data.blenderlens.coating_type = 'BROADBAND'         # 0.8：镀膜 'SINGLE' / 'BROADBAND'
 cam.data.blenderlens.dispersion_mode = 'LATERAL_POST'
 
 print(bl.lens_info(cam))                           # 焦距、压缩比、光窗、单位换算……
@@ -169,9 +185,9 @@ O.bokeh_aspect(rx, 1200.0, 20000.0)      # 焦外高宽比（解挤压后）
 
 | 选项 | 光学来源 | 焦距 · 光圈 · 最近对焦 | 压缩比 ∞ → 最近对焦 | 依据的 Panavision 公开规格 |
 |---|---|---|---|---|
-| **C 系列风格（1968）** | 前置 2×：[US 2,944,464](https://patents.google.com/patent/US2944464)（Rosin / Scanoptic 1957）+ 主镜 [US 4,234,242](https://patents.google.com/patent/US4234242A)（Nikon f/2 双高斯） | 垂直 50 mm · f/2.3 · 0.76 m | 2.011 → 1.687（−16%） | C Series 50 mm T2.3、最近对焦 76.2 cm、「明显的变形炫光」 |
-| **E 系列风格 135 mm（1980 年代）** | 前置 2.09×：[US 5,184,880](https://patents.google.com/patent/US5184880A/en) 实施例 3（Isco 1990，两向分别矫正、凸轮对焦）+ 同一主镜 | 垂直 131 mm · f/2.8 · 1.14 m | 2.094 → 1.632（−22%） | E Series 135 mm T2.8、最近对焦 114.3 cm、「干净的蓝色水平炫光、无雾化」 |
-| **G 系列风格 100 mm（2007）** | 同 E 系列风格光学，整体缩放 0.763 | 垂直 100 mm · f/3 · 0.91 m | 2.094 → 1.652（−21%） | G Series 100 mm T3、最近对焦 91.4 cm、「极佳的抗眩光」 |
+| **C 系列风格（1968）** | 前置 2×：[US 2,944,464](https://patents.google.com/patent/US2944464)（Rosin / Scanoptic 1957）+ 主镜 [US 4,234,242](https://patents.google.com/patent/US4234242A)（Nikon f/2 双高斯） | 垂直 50 mm · f/2.3 · 0.76 m | 2.011 → 2.011（补偿，默认）；关补偿 1.687（−16%） | C Series 50 mm T2.3、最近对焦 76.2 cm、「明显的变形炫光」 |
+| **E 系列风格 135 mm（1980 年代）** | 前置 2.09×：[US 5,184,880](https://patents.google.com/patent/US5184880A/en) 实施例 3（Isco 1990，两向分别矫正、凸轮对焦）+ 同一主镜 | 垂直 131 mm · f/2.8 · 1.14 m | 2.094 → 2.094（补偿，默认）；关补偿 1.632（−22%） | E Series 135 mm T2.8、最近对焦 114.3 cm、「干净的蓝色水平炫光、无雾化」 |
+| **G 系列风格 100 mm（2007）** | 同 E 系列风格光学，整体缩放 0.763 | 垂直 100 mm · f/3 · 0.91 m | 2.094 → 2.094（补偿，默认）；关补偿 1.652（−21%） | G Series 100 mm T3、最近对焦 91.4 cm、「极佳的抗眩光」 |
 | **Panavision 后置 1.34×（真实处方）** | [US 7,085,066](https://patents.google.com/patent/US7085066B2/en)（Iain A. Neil / Panavision 2004）原样：变焦镜短焦端 + 8 片后置变形组（3 片 Y 向柱面 + 5 片 X 向柱面），2 个非球面 | 水平 15.8 / 垂直 20.7 mm · f/3.66 · 0.48 m | 1.304 → 1.304（无发腮） | 专利实施例：16:9 画幅解挤压到 2.40:1 |
 | **Neil 2× 现代变形 50 / 65 / 85 mm（真实处方，0.6）** | [CN 111562632 B](https://patents.google.com/patent/CN111562632B/en)（Iain A. Neil / 广东思锐光学 Sirui，2019）原样：同一前变形部分（X 柱面 3 片、Y 柱面 3 片，G1b 两片内对焦）+ 三个可换后组。**美国同族 US 11,287,618 的表格印刷错误多，不能用**（见 `blenderlens/research/RESEARCH.md`） | 垂直 50 / 65 / 85 mm · f/3 · 1.08 m | 2.06 → 1.93（−6.6%） | 专利实施例（不是 Panavision 镜头；设计者与 Panavision 后置组相同） |
 | **Panavision 后置 1.34× 长焦端（真实处方）** | 同上，变焦镜取长焦端 Z4（变焦间隔取自 [US 6,122,111](https://patents.google.com/patent/US6122111A/en) TABLE 1，叠加到已核实的 Z1 表上） | 水平 50.9 / 垂直 66.4 mm · f/4.1（垂直）· 0.48 m | 1.305 → 1.305（无发腮） | 变焦镜单独 49.22 mm（专利 49.2） |
@@ -181,7 +197,7 @@ O.bokeh_aspect(rx, 1200.0, 20000.0)      # 焦外高宽比（解挤压后）
 - 猫眼强弱（f/N 时角落 95%/90% 视场的光瞳通过率，真实追迹）：C 0.64、E 0.84、G 0.90、Panavision 后置 0.68（专利原口径；专利称角落相对照度约 50%）。收两档后 C/E/G 恢复到 1.00。
 - E/G 系列风格用的 Isco 附加镜是长焦设计：配 f=100 主镜时 S35 变形画幅垂直半视场只有约 4°。缩到 50 mm 会超出设计视场 2.6 倍、镜片边厚为负，所以这两个选项取 135 mm 和 100 mm。
 - 解挤压比（输出分辨率宽度 = 高 × 传感器宽高比 × 解挤压比）：C 用名义 2.0（中心实测 2.010）；E/G 用光学实际值 2.09（按名义 2.0 会窄 4.5%）；Panavision 后置用 1.35，因为专利规定整幅 2.40:1 装进 16:9，真实追迹画面边缘张角比正好 2.401。压缩比都随视场变化（水平畸变）：C 从中心 2.01 到边缘 2.27，E 2.09→2.13，G 2.09→2.16，Panavision 后置 1.30→1.35。
-- 发腮（同一放大率下比较，物距 = 20 × 垂直焦距）：C −12.9%、E/G −9.9%、Panavision 后置 0（内对焦）。Isco 设计比 Rosin 少约四分之一，但专利正文「约 4%」是相对其对焦表中段参考距离（约 6 m）的偏差，从无穷远到 2.5 m 实际变化约 10%。
+- 发腮（关掉补偿时，同一放大率下比较，物距 = 20 × 垂直焦距）：C −12.9%、E/G −9.9%、Panavision 后置 0（内对焦）。0.8 起 C/E/G 默认带 Auto Panatar 式补偿（Mumps Correction = 1），各距离压缩比不变。Isco 设计比 Rosin 少约四分之一，但专利正文「约 4%」是相对其对焦表中段参考距离（约 6 m）的偏差，从无穷远到 2.5 m 实际变化约 10%。
 - 后置变形组没有发腮：按 US 6,122,111 的内对焦（前两组按 1 : 0.909 移动），变焦镜输出的中间像位置不变，后置变形组看到的物像关系始终一样，两向同时合焦、压缩比不随对焦变化。这是它与前置设计最大的画面差别之一。
 
 ## 6. 改处方（单一事实来源）与继续研究
@@ -217,7 +233,7 @@ tests/run_all.sh
 | `tests/bl_units.py` | 毫米场景与米制场景渲染一致；GPU 非 OptiX 自动回退 CPU；稳定 API；画幅 |
 | `tests/bl_sampling.py` | 出瞳重要性采样开 / 关：各区域亮度一致（无偏），同 spp 噪点对比 |
 | `tests/bl_convergence.py` | 64 → 256 spp 的噪点下降（理想 2×）：色散开 / 关 × 自适应采样开 / 关 |
-| `tests/test_presets.py` | Isco 凸轮对焦复现专利对焦表（11 行，≤ 0.074 mm、≤ 0.03%）；Panavision 焦距与非球面；所有预设边缘不相撞 |
+| `tests/test_presets.py` | Isco 凸轮对焦复现专利对焦表（11 行，≤ 0.074 mm、≤ 0.03%）；Panavision 焦距与非球面；所有预设边缘不相撞；发腮补偿（各强度压缩比、合焦、不相撞、锐度不变） |
 | `tests/bl_presets_smoke.py` | 每个预设在 Blender 里搭建、网格、法线、对焦同步 |
 | `tests/bl_smoke.py` | 插件注册、搭建、网格合法、法线方向、对焦同步 |
 | `tests/bl_verify_mapping.py` | 渲染刻度靶：两种模式的画面位置与 Python 真实追迹对比（Analytic < 1 px，Geometry < 1.5 px）、方位正确 |
@@ -226,7 +242,12 @@ tests/run_all.sh
 | `tests/bl_gpu.py` | GPU 路径对 CPU / OSL：时间、噪点、亮度、整体位移、对焦关键帧、Geometry 回退 |
 | `tests/bl_dispersion.py` | Lateral in Post 与 Full 的彩边位置对比、三种色散模式的噪点 |
 | `tests/bl_frames.py` | 曝光差 API 对照实测；render_frames 的跳过、断点续渲、确定性、锁 |
-| `tests/bl_gpu_ghosts.py` | GPU 相机端鬼影对照 CPU / OSL：鬼影能量、模糊后逐像素差、时间 |
+| `tests/bl_gpu_ghosts.py` | GPU 相机端鬼影对照 CPU / OSL：鬼影能量、模糊后逐像素差、时间（`-- BROADBAND` 测宽带膜） |
+| `tests/test_coating.py`（0.8） | 镀膜：单层 = Airy 公式、教科书数值（裸玻璃 4.26%、MgF₂ 1.26%）、宽带膜残余反射、互易、全反射、鬼影变弱 |
+| `tests/test_glare.py`（0.8） | 杂光：合成 ISO 9358 测试测出的 VGI = 设定值（3 种分辨率 × 3 个值）、不环绕、能量 |
+| `tests/test_reference.py`（0.8） | 外部数据：最近对焦距离、近摄压缩比、焦外形状、呼吸方向 |
+| `tests/bl_spectral.py`（0.8） | GPU 波长分层采样：色噪对照参考图（16 / 64 / 256 spp）、无偏 |
+| `tests/bl_mumps.py`（0.8） | 发腮补偿：最近对焦处圆盘的宽高比，补偿 0 / 1，CPU / GPU / Geometry 一致 |
 | `tests/bl_follow.py` | follow_camera：子帧位置在两帧之间、对焦距离有关键帧、开运动模糊时拖影存在（且对焦关键帧不再打断相机运动模糊） |
 | `tests/bl_percentage.py` | resolution_percentage ≠ 100% 时后期步骤尺寸正确 |
 | `tests/bl_bench.py` | MessyRoom 合成基准（时间、三种噪点，结果追加进 bench.json） |
@@ -264,16 +285,18 @@ tests/run_all.sh
 
 ## 9. 已知限制
 
-- Analytic 模式不计菲涅耳损失（透过率 1）；Geometry 模式含镀膜损失（16 个镀膜面合计 ≈ 0.87）。
-- 炫光通道只算两次反射的序列鬼影（主导项），不含衍射星芒和镜筒杂散光；每帧单独计算，动画需要逐帧调用。
-- Geometry 模式可以出鬼影，但点光源的鬼影在路径追踪里极难收敛，实际出图请用 Render with Flare。
+- Analytic 模式直射光路不计菲涅耳透过损失（曝光按轴上透过率归一）；开鬼影时按镀膜计。Geometry 模式含镀膜损失，但 Cycles 薄膜只有单层，宽带膜在 Geometry 模式里按单层近似。
+- 炫光：两次反射的序列鬼影 + 衍射星芒 + 杂光；不含镜筒内壁的杂散光、鬼影本身的光圈衍射振铃。
+- 发腮补偿是反向旋转柱面对的一阶等效（一块马鞍面补偿板），不含两片分开、各自转动的柱面之间的高阶交叉项。补偿板在补偿关闭时是平行平板，多两个（镀膜的）反射面。
+- 杂光的指数值是按镀膜年代的估计：公开资料里没有任何电影变形镜头的 ISO 9358 实测。
+- Geometry 模式与 Analytic 在 Panavision 长焦预设上仍有全画面一致的约 0.3–0.4 px（270p）平移，原因未查明（单片球面镜复现不出，排查记录见 RESEARCH.md §5 第 14 条）；成片用 Analytic。
 - 光阑轴向位置专利未给，取 P6–P7 间隔中点；变形器到主镜间隔 5 mm 是我方取值。
-- 预设里的光圈数值取自 Panavision 公布的 T 值，但在模型里当作几何 f 值使用（T 值含透过率损失，同样数值的真实镜头会稍亮一点，约 0.2 档）。
+- 预设里的光圈数值取自 Panavision 公布的 T 值，但在模型里当作几何 f 值使用（同样数值的真实镜头会稍暗约 0.2 档）。
 - Panavision 后置预设没有成品镜头规格；最近对焦取变焦镜专利的 F3（物面到第一面 133 mm，距像面 0.48 m）。内对焦行程与专利 TABLE 1 吻合：F3 21.686 / 21.684 mm，F2 11.221 / 11.099 mm（1%，两组位移比用 F2/F3 平均值 0.9088）。
-- 色散用 Cauchy 近似（由 n_d、V_d 换算）；Geometry 模式为单一 d 线折射率。
+- 老专利只给 n_d / V_d 的玻璃（Rosin、Nikon）用两项 Cauchy；Geometry 模式为单一 d 线折射率。
 - 每个 .blend 只能有一支 BlenderLens 镜头。
-- OSL 相机只有两维随机数（给了出瞳），色散的波长用随机数与像素位置的哈希。
-- GPU 路径只做 Analytic 直射光路：Geometry 模式和相机端鬼影仍走 CPU；GPU 上光线微分为 0（只影响纹理 mip 级别）；只在 Metal 上实测。
+- CPU / OSL 路径的波长随机数仍是哈希（OSL 相机只有两维随机数）；GPU 路径不开运动模糊时是分层的。
+- GPU 路径：Geometry 模式仍走 CPU；只在 Metal 上实测。
 - Lateral in Post 没有纵向色差（焦外彩边）；需要它时用 Full。
 
 ## 10. 许可与来源

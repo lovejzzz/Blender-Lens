@@ -104,6 +104,20 @@ def side_wall(front, back, count=256):
         F.append((2 * k, 2 * k + 1, 2 * k2 + 1, 2 * k2)); M.append(1)
     return V, F, N, M
 
+def iris_outline(r, blades=0, rot_rad=0.0, count=256):
+    """光圈内沿（逆时针）：圆，或 blades 边形（外接圆半径 r，顶点在 rot + k·2π/blades，与 OSL 相机同一判据）。"""
+    if blades < 3:
+        return [(r * math.cos(2 * math.pi * k / count), r * math.sin(2 * math.pi * k / count)) for k in range(count)]
+    per = max(4, count // blades)
+    pts = []
+    for k in range(blades):
+        a0 = rot_rad + 2 * math.pi * k / blades; a1 = rot_rad + 2 * math.pi * (k + 1) / blades
+        x0, y0, x1, y1 = r * math.cos(a0), r * math.sin(a0), r * math.cos(a1), r * math.sin(a1)
+        for j in range(per):
+            u = j / per
+            pts.append((x0 + (x1 - x0) * u, y0 + (y1 - y0) * u))
+    return pts
+
 def annulus(inner_pts, R_out, z):
     """平板环：内边 = 任意闭合轮廓（逆时针），外边 = 半径 R_out 的圆，同角度配对。用于镜框挡板。"""
     V, N, F, M = [], [], [], []

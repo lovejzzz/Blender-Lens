@@ -73,6 +73,7 @@ class Lens:
         nb = [1.0] + [sf["glass"]["nd"] for sf in self.S[:-1]]
         self.coatable = [(nb[k] == 1.0) != (sf["glass"]["nd"] == 1.0) for k, sf in enumerate(self.S)]
         self.AG = [k for k, c in enumerate(self.coatable) if c]
+        self.n_glass = [max(nb[k], sf["glass"]["nd"]) for k, sf in enumerate(self.S)]   # 镀膜面玻璃一侧的 n_d（宽带膜贴玻璃层按它配）
         self.cauchy = [O.dispersion_coeffs(sf["glass"]) for sf in self.S]
 
     def n_after(self, k, lam):
@@ -87,7 +88,7 @@ class Lens:
         return [(a, b) for i, a in enumerate(self.AG) for b in self.AG[i + 1:]]
 
     # ── 单条路径（向量化）：seq = [(面序号, 'T'|'R'), …]，光沿 −Z 从物方出发 ──
-    def trace(self, P, D, seq, lam, coated, coating_nm, coating_ior):
+    def trace(self, P, D, seq, lam, coated, coating_nm, coating_ior, coating_type="SINGLE"):
         """返回 (idx, X, Y, w, Dout)：存活光线在输入中的下标、像面落点、权重、最终方向。
         每过一面就剔除被挡光线，ghost 路径大多很快被挡掉。"""
         idx = np.arange(P.shape[0])
@@ -126,7 +127,7 @@ class Lens:
             n1, n2 = (nb_, na_) if dirn == -1 else (na_, nb_)
             with np.errstate(all="ignore"):
                 if self.coatable[k] and coated and coating_nm > 0:
-                    R = _fresnel_film(n1, coating_ior, n2, c, coating_nm, lam)
+                    R = O.stack_reflectance(n1, n2, c, lam, O.coating_layers(coating_type, coating_nm, coating_ior, self.n_glass[k]))
                 else:
                     R = _fresnel_plain(n1, n2, c)
             if act == 'R':
@@ -245,7 +246,7 @@ def _blur(img, sigma):
 
 
 def flare_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f_number=None,
-                coated=True, coating_nm=100.0, coating_ior=1.38, n_grid=320, blur_px=0.8, exit_filter=None):
+                coated=True, coating_nm=100.0, coating_ior=1.38, n_grid=320, blur_px=0.8, exit_filter=None, coating_type="SINGLE"):
     """一个球形光源（镜头坐标 src_lens，半径 radius，自发光强度 radiance）的鬼影层（线性，H×W×3）。
     以同一套光线的直射像总能量归一化，再乘以 Cycles 中该光源直射像的总能量（像素值 × 像素数）。"""
     lens = Lens(rx, focus_dist, f_number)
@@ -262,10 +263,10 @@ def flare_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f_num
         t = z_exp / -Dout[:, 2]
         return (X - t * Dout[:, 0]) ** 2 + (Y - t * Dout[:, 1]) ** 2 <= r_samp * r_samp
     for ch, lam in enumerate(LAMBDAS):
-        idx, X, Y, w, Dout = lens.trace(P, D, Lens.seq_direct(NS), lam, coated, coating_nm, coating_ior)
+        idx, X, Y, w, Dout = lens.trace(P, D, Lens.seq_direct(NS), lam, coated, coating_nm, coating_ior, coating_type)
         direct_E[ch] = wt[idx].sum()            # 不计透射损失：与 Analytic 主画面（无菲涅耳损失）同一基准
         for a, b in lens.pairs():
-            idx, X, Y, w, Dout = lens.trace(P, D, Lens.seq_ghost(NS, a, b), lam, coated, coating_nm, coating_ior)
+            idx, X, Y, w, Dout = lens.trace(P, D, Lens.seq_ghost(NS, a, b), lam, coated, coating_nm, coating_ior, coating_type)
             if len(idx):
                 m = through_exit_disc(X, Y, Dout)
                 _splat_adaptive(buckets, X[m], Y[m], (w * wt[idx])[m], idx[m], n_grid, lens.sensor, ch, (H, W))
@@ -381,24 +382,94 @@ def starburst_layer(rx, src_lens, radiance, radius, W, H, focus_dist=math.inf, f
     return out, dict(centre_px=(u0, v0), NA=(NAx, NAy), blur_px=blur_px, fade=fade, energy=E)
 
 
-# ───────────────────────── 杂光 / 雾化（veiling glare，0.6）─────────────────────────
-# 镜片表面散射、镜筒内壁和多次反射造成的大范围低对比度光晕。经验模型：保能量的长尾卷积
-#   out = (1 − g)·img + g·(img ⊗ k)，k(r) ∝ 1 / (1 + (r / r0)²)^(p/2)，在画面对角线尺度上归一化。
-# g 是每个预设的观感参数（look.veiling_glare），按 ISO 9358 杂光指数（VGI）的典型范围取值：
-# 现代多层膜 0.5–1.5%，单层 MgF₂ 2–3%，无镀膜 5–10%。只由表面反射率推算会严重高估无镀膜、低估散射，所以不推算。
+# ───────────────────────── 杂光 / 雾化（veiling glare，0.6；0.8 按 ISO 9358 标定）─────────────────────────
+# 镜片表面散射、镜筒内壁和多次反射造成的大范围低对比度光晕。经验模型：
+#   out = (1 − g)·img + g·(img ⊗ k)，k = (1 − c)·幂律核 + c·均匀核
+#   幂律核 ∝ 1 / (1 + (r / r0)²)^(p/2)（近处的光晕），均匀项：任一点的光均匀铺满整个画面（镜筒内壁的漫反射），
+#   即 img ⊗ k = (1 − c)·(img ⊗ 幂律核) + c·画面平均。
+# 线性卷积（补零，不环绕；落到画面外的光就丢掉，与真实传感器一样）。
+# 参数 vgi = 预设的观感参数 look.veiling_glare，含义就是 ISO 9358 的杂光指数：整幅均匀白场中央放一个黑斑
+# （直径 = 画面高度的 SPOT_FRAC），黑斑中心的亮度 / 旁边白场的亮度。g 由数值标定反解，使这个合成测试正好测出 vgi。
+# 取值参考 VGI 的典型范围：现代多层膜 0.5–1.5%，单层 MgF₂ 2–3%，无镀膜 5–10%。公开的电影变形镜头 VGI 实测不存在，
+# 各预设的值是按镀膜年代的估计。c、r0、p、SPOT_FRAC 也是假设（ISO 9358 未规定黑斑的确切大小），改动需同时改测试。
+# 0.7 及以前：同一个幂律核、FFT 环绕卷积、g 直接当能量比例 → 实测 VGI 只有设定值的约 1/4，且右边的亮光会漏到左边。
+VG_SPOT_FRAC = 0.10
+VG_UNIFORM = 0.5
+VG_MAX_DIM = 768            # 卷积在降采样图上做（光晕是低频的），4K 也只要零点几秒
 
-def veiling_glare(img, g, r0_frac=0.004, p=2.6):
-    """img：H×W×3 线性图像；g：杂光比例（0–0.2）。FFT 卷积，保能量（核积分为 1）。"""
-    if g <= 0:
+
+def _vg_kernel(h, w, r0_px, p):
+    """尺寸 (2h, 2w) 的幂律线性卷积核（中心在 [0, 0]，环绕下标），积分为 1。"""
+    fy = np.fft.fftfreq(2 * h)[:, None] * 2 * h; fx = np.fft.fftfreq(2 * w)[None, :] * 2 * w
+    k = (1.0 + (fx * fx + fy * fy) / (r0_px * r0_px)) ** (-p / 2.0)
+    return k / k.sum()
+
+
+def _vg_halo(img, K, h, w, c):
+    mean = img.reshape(h * w, *img.shape[2:]).mean(axis=0)
+    return (1.0 - c) * _vg_convolve(img, K, h, w) + c * mean
+
+
+def _vg_convolve(img, K, h, w):
+    pad = np.zeros((2 * h, 2 * w) + img.shape[2:])
+    pad[:h, :w] = img
+    F = np.fft.rfft2(pad, axes=(0, 1))
+    Kf = np.fft.rfft2(K)
+    if img.ndim == 3:
+        Kf = Kf[..., None]
+    return np.fft.irfft2(F * Kf, s=(2 * h, 2 * w), axes=(0, 1))[:h, :w]
+
+
+def _vg_setup(h, w, r0_frac, p, c, spot_frac):
+    """降采样分辨率 (h, w) 上的核与「单位 g」时的黑斑中心 / 白场亮度（合成 ISO 9358 测试）。"""
+    K = _vg_kernel(h, w, max(r0_frac * math.hypot(w, h), 0.5), p)
+    yy, xx = np.mgrid[0:h, 0:w]
+    rr = np.hypot(yy - (h - 1) / 2, xx - (w - 1) / 2)
+    R = 0.5 * spot_frac * h
+    white = (rr > R).astype(float)
+    conv = _vg_halo(white, K, h, w, c)
+    v_spot = conv[(h - 1) // 2, (w - 1) // 2]
+    ring = (rr > 1.5 * R) & (rr < 2.0 * R)
+    v_field = conv[ring].mean()
+    return K, v_spot, v_field
+
+
+_VG_CACHE = {}
+
+def veiling_glare_strength(vgi, h, w, r0_frac=0.004, p=2.6, c=VG_UNIFORM, spot_frac=VG_SPOT_FRAC):
+    """目标 VGI → 散射能量比例 g：VGI = g·v_s / (1 − g + g·v_f)。"""
+    key = (h, w, r0_frac, p, c, spot_frac)
+    if key not in _VG_CACHE:
+        _VG_CACHE.clear()
+        _VG_CACHE[key] = _vg_setup(h, w, r0_frac, p, c, spot_frac)
+    K, vs, vf = _VG_CACHE[key]
+    return K, vgi / (vs + vgi * (1.0 - vf))
+
+
+def veiling_glare(img, vgi, r0_frac=0.004, p=2.6, c=VG_UNIFORM, spot_frac=VG_SPOT_FRAC):
+    """img：H×W×3 线性图像；vgi：目标杂光指数（0–0.2）。光晕在降采样图上卷积后双线性放大，原图按 (1 − g) 保留。"""
+    if vgi <= 0:
         return img
     H, W = img.shape[:2]
-    r0 = max(r0_frac * math.hypot(W, H), 0.5)
-    fy = np.fft.fftfreq(H)[:, None] * H; fx = np.fft.fftfreq(W)[None, :] * W     # 环绕距离（像素）
-    yy = np.minimum(np.abs(fy), H - np.abs(fy)); xx = np.minimum(np.abs(fx), W - np.abs(fx))
-    k = (1.0 + (xx * xx + yy * yy) / (r0 * r0)) ** (-p / 2.0)
-    k /= k.sum()
-    K = np.fft.rfft2(k)
-    out = np.empty_like(img)
-    for c in range(img.shape[2]):
-        out[:, :, c] = np.fft.irfft2(np.fft.rfft2(img[:, :, c]) * K, s=(H, W))
-    return (1.0 - g) * img + g * np.clip(out, 0, None)
+    s = max(1, int(math.ceil(max(H, W) / VG_MAX_DIM)))
+    h, w = -(-H // s), -(-W // s)
+    small = np.zeros((h * s, w * s) + img.shape[2:])
+    small[:H, :W] = img
+    small = small.reshape(h, s, w, s, *img.shape[2:]).mean(axis=(1, 3))     # 面积平均（保能量）
+    if H % s or W % s:                                                         # 边缘不满的块按实际面积补偿
+        cover = np.zeros((h * s, w * s)); cover[:H, :W] = 1.0
+        cover = cover.reshape(h, s, w, s).mean(axis=(1, 3))
+        small = small / np.maximum(cover, 1e-9)[..., None] if img.ndim == 3 else small / np.maximum(cover, 1e-9)
+    K, g = veiling_glare_strength(vgi, h, w, r0_frac, p, c, spot_frac)
+    halo = np.clip(_vg_halo(small, K, h, w, c), 0, None)
+    if s > 1:                                                                   # 双线性放大回原分辨率（像素中心对齐）
+        yi = (np.arange(H) + 0.5) / s - 0.5; xi = (np.arange(W) + 0.5) / s - 0.5
+        y0 = np.clip(np.floor(yi).astype(int), 0, h - 1); x0 = np.clip(np.floor(xi).astype(int), 0, w - 1)
+        y1 = np.minimum(y0 + 1, h - 1); x1 = np.minimum(x0 + 1, w - 1)
+        ty = np.clip(yi - y0, 0, 1)[:, None]; tx = np.clip(xi - x0, 0, 1)[None, :]
+        if img.ndim == 3:
+            ty = ty[..., None]; tx = tx[..., None]
+        top = halo[y0][:, x0] * (1 - tx) + halo[y0][:, x1] * tx
+        bot = halo[y1][:, x0] * (1 - tx) + halo[y1][:, x1] * tx
+        halo = top * (1 - ty) + bot * ty
+    return (1.0 - g) * img + g * halo

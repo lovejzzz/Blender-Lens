@@ -17,7 +17,7 @@
     },
     "short_name": "C 系列风格（1968）",
     "order": 1,
-    "tagline": "1950–60 年代前置变形器：靠改变柱面组间距对焦，发腮明显；单层镀膜的蓝色拉丝"
+    "tagline": "前置变形器 + 联动补偿（Auto Panatar 式，默认开）；单层镀膜的蓝色拉丝。补偿关掉 = 1950 年代 CinemaScope 的明显发腮"
   },
   "glasses": {
     "air": {
@@ -48,9 +48,47 @@
       "nd": 1.64831,
       "vd": 33.8,
       "note": "US 4,234,242 火石（≈ SF2 类）"
+    },
+    "BL_COMP": {
+      "nd": 1.5168,
+      "vd": 64.17,
+      "catalog": "SCHOTT:N-BK7",
+      "note": "补偿板（一阶等效的反向旋转柱面对，见 optics.compensator）"
     }
   },
   "groups": [
+    {
+      "id": "compensator",
+      "scale": 1.0,
+      "note": "0.8：发腮补偿（Auto Panatar 式，一阶等效）。补偿强度为 0 时是一块平行平板，对成像无影响（只多两个反射面）",
+      "surfaces": [
+        {
+          "id": "K1",
+          "R_x": null,
+          "R_y": null,
+          "d": 5.0,
+          "medium": "BL_COMP",
+          "aperture": {
+            "shape": "circle",
+            "clear": 41,
+            "outer": 42.0
+          },
+          "note": "马鞍面：曲率随对焦（凸轮表 focus.compensator）"
+        },
+        {
+          "id": "K2",
+          "R_x": null,
+          "R_y": null,
+          "d": 6.0,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 41,
+            "outer": 42.0
+          }
+        }
+      ]
+    },
     {
       "id": "anamorph",
       "role": "前组无焦柱面变形器（反伽利略：负组在前、正组在后），水平视场扩大约 2×",
@@ -399,7 +437,42 @@
     "solve": [
       "Ry",
       "Rx"
-    ]
+    ],
+    "compensator": {
+      "surface": "K1",
+      "level": 1.0,
+      "d1": [
+        0.0,
+        0.152672,
+        0.311225,
+        0.475988,
+        0.647315,
+        0.825584,
+        1.011202,
+        1.204607,
+        1.406271,
+        1.6167,
+        1.836445,
+        2.066096,
+        2.306296
+      ],
+      "phi": [
+        0.0,
+        5.02353947e-05,
+        0.000102142574,
+        0.000155809119,
+        0.000211329376,
+        0.000268805201,
+        0.000328346792,
+        0.000390073661,
+        0.000454115736,
+        0.000520614639,
+        0.000589725161,
+        0.000661616978,
+        0.000736476637
+      ],
+      "note": "凸轮表：对焦环行程 Δ1（mm）→ 补偿板光焦度 φ（1/mm，水平 −φ / 垂直 +φ），完全补偿时每个距离的压缩比 = 无穷远；level（0–1）是补偿强度，界面 Mumps Correction 写入"
+    }
   },
   "sensor": {
     "format": "35 mm 变形光窗（SMPTE 59）",
@@ -432,6 +505,8 @@
     "flare_gain": 1.5,
     "corner_pupil_fraction": 0.4,
     "veiling_glare": 0.025,
-    "veiling_glare_note": "1960 年代单层镀膜：ISO 9358 杂光指数典型 2–3%；E 0.8%、G 0.5%（官方「极佳抗眩光」）、Panavision 后置 1.2%（多片变焦）、Neil 0.8%（现代多层膜）"
+    "veiling_glare_note": "1960 年代单层镀膜：ISO 9358 杂光指数典型 2–3%；E 0.8%、G 0.5%（官方「极佳抗眩光」）、Panavision 后置 1.2%（多片变焦）、Neil 0.8%（现代多层膜）",
+    "mumps_correction": 1.0,
+    "mumps_note": "0.8：默认完全补偿。Panavision C 系列实际是发腮已校正的（Auto Panatar 一脉，1958 年科技成就奖）；外部数据（ARRI Master Anamorphic 近摄仍 2.00×、E 系列「垂直呼吸」、经典 2:1 椭圆焦外）都与补偿后的行为一致。Mumps Correction = 0 回到 1950 年代 CinemaScope 式未校正（近摄 2.01 → 1.69×）"
   }
 }

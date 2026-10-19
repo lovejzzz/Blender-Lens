@@ -42,10 +42,15 @@ for fn in [f for f, _, _ in O.list_presets()]:
     st_id = O.stop_group(rx)["stop"]["after_surface"]
     mfd = rx.get("focus", {}).get("min_distance_mm") or 1000.0
     n_pass = n_out = 0
-    for trial in range(6):
+    import copy
+    levels = (0.0, 0.5, 1.0) if O.compensator(rx) else (None,)      # 发腮补偿：表要覆盖所有补偿强度
+    for trial, lv in [(tr, lv) for tr in range(6) for lv in levels]:
         fd = [math.inf, mfd, 1.6 * mfd, 3.3 * mfd, 7.0 * mfd, 30.0 * mfd][trial]
-        d1, d2 = O.solve_focus(rx, fd)
-        S = O.layout(rx, d1, d2)
+        rxl = rx
+        if lv is not None:
+            rxl = copy.deepcopy(rx); rxl["focus"]["compensator"]["level"] = lv
+        d1, d2 = O.solve_focus(rxl, fd)
+        S = O.layout(rxl, d1, d2)
         mv = next(sf["move"] for sf in S if sf["id"] == st_id)
         shift = mv[0] * d1 + mv[1] * d2
         n = 40000

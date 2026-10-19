@@ -1421,7 +1421,8 @@
     "reference": "Panavision 2004 年后置变形组（专利实施例）；无公开的成品镜头规格。最近对焦取变焦镜专利 F3：物面到 S1 133 mm = 距像面 476 mm",
     "f_number": 4.1,
     "min_focus_mm": 476.0,
-    "coating_nm": 100.0,
+    "coating": "BROADBAND",
+    "coating_nm": 94.0,
     "flare_color": "PHYSICAL",
     "flare_gain": 0.6,
     "veiling_glare": 0.012

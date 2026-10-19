@@ -19,7 +19,7 @@ except ImportError:
     import optics as O
     import oslgen as G
 
-PATCH_VERSION = "blenderlens-gpu-1"
+PATCH_VERSION = "blenderlens-gpu-2"      # 2（0.8）：自定义相机分支多传一维随机数（time），波长分层采样
 HEADER_NAME = "blenderlens_lens.h"
 
 # 字段 → 新含义（只对 BlenderLens 自定义相机生效；普通相机不受影响）
@@ -30,6 +30,7 @@ FIELD_MAP = [
     ("data.dof.aperture_ratio", "inv_aperture_ratio", "1 / f 值", "光圈 f 值（内核里读到的就是 f 值）"),
     ("data.dof.aperture_blades", "blades", "叶片数", "光圈叶片数（0 = 圆形）"),
     ("data.dof.use_dof", "—", "True", "让 Blender 同步上面两个 dof 字段"),
+    ("data.fisheye_lens", "fisheye_lens", "50 + 10000·φ", "发腮补偿板光焦度 φ（1/mm；0.8）"),
 ]
 
 EXPECTED_ORIGINAL = '''#else
@@ -49,7 +50,7 @@ PATCHED = '''#else
   /* BlenderLens GPU camera (PATCH_VERSION) */
   (void)kg;
   r_cache_miss = false;
-  return blenderlens_camera_sample(cam, cam_motion, raster, rand_lens, ray);
+  return blenderlens_camera_sample(cam, cam_motion, raster, rand_lens, -1.0f, ray);
 #  else
   (void)kg;
   (void)cam;
@@ -64,6 +65,25 @@ PATCHED = '''#else
 }'''.replace("PATCH_VERSION", PATCH_VERSION)
 
 ANCHOR = "ccl_device_inline Spectrum camera_sample_custom("
+
+# 第二处（0.8）：camera_sample() 里调用自定义相机的地方，改为直接调用并多传 time 随机数。
+# 不开运动模糊时 time 这一维（与出瞳两维同属一个三维 Sobol 点）没人用，拿来采样波长 → 波长与出瞳点联合分层。
+EXPECTED_CALL = """  if (kernel_data.cam.type == CAMERA_CUSTOM) {
+    const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
+    return camera_sample_custom(
+        kg, &kernel_data.cam, cam_motion, raster, lens_uv, ray, r_cache_miss);
+  }"""
+PATCHED_CALL = """  if (kernel_data.cam.type == CAMERA_CUSTOM) {
+    const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
+#if defined(BLENDERLENS_GPU_CAMERA) && !defined(WITH_OSL)
+    /* BlenderLens GPU camera (PATCH_VERSION): pass the Sobol time dimension for wavelength sampling */
+    r_cache_miss = false;
+    return blenderlens_camera_sample(&kernel_data.cam, cam_motion, raster, lens_uv, time, ray);
+#else
+    return camera_sample_custom(
+        kg, &kernel_data.cam, cam_motion, raster, lens_uv, ray, r_cache_miss);
+#endif
+  }""".replace("PATCH_VERSION", PATCH_VERSION)
 
 
 class GPUPathError(RuntimeError):
@@ -91,12 +111,13 @@ def _carr(name, vals, typ="float"):
 
 def static_settings(dispersion=True, dispersion_strength=1.0, exposure_compensate=True, pupil_importance=True,
                     blade_rotation_deg=0.0, unit_scale=1.0, ghosts=False, ghost_fraction=0.5, ghost_gain=1.0,
-                    coated=True, coating_nm=100.0, coating_ior=1.38):
+                    coated=True, coating_nm=100.0, coating_ior=1.38, coating_type="SINGLE"):
     return dict(dispersion=int(bool(dispersion)), dispersion_strength=float(dispersion_strength),
                 exposure_compensate=int(bool(exposure_compensate)), pupil_importance=int(bool(pupil_importance)),
                 blade_rotation=math.radians(blade_rotation_deg), unit_scale=float(unit_scale),
                 ghosts=int(bool(ghosts)), ghost_fraction=float(ghost_fraction), ghost_gain=float(ghost_gain),
-                coated=int(bool(coated)), coating_nm=float(coating_nm), coating_ior=float(coating_ior))
+                coated=int(bool(coated)), coating_nm=float(coating_nm), coating_ior=float(coating_ior),
+                coating_type=1 if coating_type == "BROADBAND" else 0)
 
 def generate_header(rx, settings=None):
     """处方 + 静态设置 → C++ 头文件（Cycles 内核语言，Metal / CUDA / HIP 通用）。"""
@@ -114,7 +135,7 @@ def generate_header(rx, settings=None):
                     ("BL_NB", "B_"), ("BL_NC", "C_"), ("BL_NE", "E_"), ("BL_ND", "ND"), ("BL_CLR", "CLR"), ("BL_MSX", "MSX"), ("BL_MSY", "MSY"), ("BL_G1", "G1"), ("BL_G2", "G2")):
         h.append(_carr(nm, D[key]))
     h.append(_carr("BL_AT", D["AT"], "int"))
-    for nm, key in (("BL_AC", "AC"), ("BL_AMX", "AMX"), ("BL_AMY", "AMY")):
+    for nm, key in (("BL_AC", "AC"), ("BL_AMX", "AMX"), ("BL_AMY", "AMY"), ("BL_KCX", "KCX"), ("BL_KCY", "KCY")):
         h.append(_carr(nm, D[key]))
     for m, nm in enumerate(("BL_A4", "BL_A6", "BL_A8", "BL_A10", "BL_A12")):
         h.append(_carr(nm, A[m]))
@@ -133,12 +154,12 @@ def generate_header(rx, settings=None):
                   BL_LAMBDA_D=O.LAMBDA_D, BL_UNIT_SCALE=st["unit_scale"], BL_BLADE_ROT=st["blade_rotation"],
                   BL_DISP_STRENGTH=st["dispersion_strength"], BL_PUPIL_MARGIN=1.4,
                   BL_GHOST_FRACTION=st["ghost_fraction"], BL_GHOST_GAIN=st["ghost_gain"],
-                  BL_COATING_NM=st["coating_nm"], BL_COATING_IOR=st["coating_ior"])
+                  BL_COATING_NM=st["coating_nm"], BL_COATING_IOR=st["coating_ior"], BL_COAT_HIGH_N=O.COAT_HIGH_N)
     for k, v in consts.items():
         h.append(f"#define {k} ({_cf(v)})\n")
     ints = dict(BL_PNX=D["PNX"], BL_PNY=D["PNY"], BL_SPN=len(sp["cdf"]), BL_DISPERSION=st["dispersion"],
                 BL_EXPOSURE_COMP=st["exposure_compensate"], BL_PUPIL_IMPORTANCE=st["pupil_importance"],
-                BL_GHOSTS=st["ghosts"], BL_COATED=st["coated"], BL_NAG=len(D["AG"]), BL_NPAIRS=D["NPAIRS"])
+                BL_GHOSTS=st["ghosts"], BL_COATED=st["coated"], BL_COATING_TYPE=st.get("coating_type", 0), BL_NAG=len(D["AG"]), BL_NPAIRS=D["NPAIRS"])
     for k, v in ints.items():
         h.append(f"#define {k} {int(v)}\n")
     h.append(KERNEL_BODY)
@@ -147,10 +168,10 @@ def generate_header(rx, settings=None):
 
 # 与 oslgen 的 Analytic 直射光路逐行对应（变量名保持一致，便于对照）
 KERNEL_BODY = r'''
-ccl_device_inline float bl_sag_grad(const float x, const float y, const int i,
+ccl_device_inline float bl_sag_grad(const float x, const float y, const int i, const float cx, const float cy,
                                     ccl_private float *gx, ccl_private float *gy, ccl_private int *ok)
 {
-  const float cx = BL_CX[i], cy = BL_CY[i], kx = BL_KX[i], ky = BL_KY[i];
+  const float kx = BL_KX[i], ky = BL_KY[i];
   const float N = cx * x * x + cy * y * y;
   const float Q = 1.0f - (1.0f + kx) * cx * cx * x * x - (1.0f + ky) * cy * cy * y * y;
   if (Q <= 0.0f) {
@@ -187,29 +208,55 @@ ccl_device_inline float bl_fresnel_plain(const float n1, const float n2, const f
   return 0.5f * (rs * rs + rp * rp);
 }
 
-ccl_device_inline float bl_airy(const float r01, const float r12, const float cd)
+/* 镀膜反射率（非偏振）：特征矩阵法，最多 3 层，与 OSL 的 coat_R / optics.stack_reflectance 相同 */
+ccl_device_inline float bl_coat_R(const float n_in, const float n_out, const float c_in, const float lam_um,
+                                  const float n_glass)
 {
-  return (r01 * r01 + r12 * r12 + 2.0f * r01 * r12 * cd) / (1.0f + r01 * r01 * r12 * r12 + 2.0f * r01 * r12 * cd);
-}
-
-/* 单层薄膜（n0 | 膜 nf, 厚 d_nm | n2）非偏振反射率，λ 单位 μm（与 OSL 的 fresnel_film 相同） */
-ccl_device_inline float bl_fresnel_film(const float n0, const float nf, const float n2, const float c0,
-                                        const float d_nm, const float lam_um)
-{
-  const float s0 = sqrtf(fmaxf(0.0f, 1.0f - c0 * c0));
-  const float s1 = n0 * s0 / nf;
-  const float s2 = n0 * s0 / n2;
-  if (s2 >= 1.0f) {
+  const float s0 = sqrtf(fmaxf(0.0f, 1.0f - c_in * c_in));
+  const float k = n_in * s0;
+  if (k >= n_out) {
     return 1.0f;
   }
-  if (s1 >= 1.0f) {
-    return bl_fresnel_plain(n0, n2, c0);
+  float ln[3], ld[3];
+  int nl = 1;
+  ln[0] = BL_COATING_IOR;
+  ld[0] = BL_COATING_NM;
+  if (BL_COATING_TYPE == 1) {
+    const float l0 = 4.0f * BL_COATING_IOR * BL_COATING_NM;
+    const float n3 = clamp(BL_COATING_IOR * sqrtf(n_glass), 1.55f, 2.0f);
+    ln[1] = BL_COAT_HIGH_N;
+    ld[1] = l0 / (2.0f * BL_COAT_HIGH_N);
+    ln[2] = n3;
+    ld[2] = l0 / (4.0f * n3);
+    nl = 3;
   }
-  const float c1 = sqrtf(1.0f - s1 * s1), c2 = sqrtf(1.0f - s2 * s2);
-  const float cd = cosf(4.0f * M_PI_F * nf * d_nm * c1 / (lam_um * 1000.0f));
-  const float rs01 = (n0 * c0 - nf * c1) / (n0 * c0 + nf * c1), rs12 = (nf * c1 - n2 * c2) / (nf * c1 + n2 * c2);
-  const float rp01 = (nf * c0 - n0 * c1) / (nf * c0 + n0 * c1), rp12 = (n2 * c1 - nf * c2) / (n2 * c1 + nf * c2);
-  return 0.5f * (bl_airy(rs01, rs12, cd) + bl_airy(rp01, rp12, cd));
+  const bool from_air = n_in < n_out;
+  const float cs_out = sqrtf(fmaxf(1e-12f, 1.0f - (k / n_out) * (k / n_out)));
+  float R = 0.0f;
+  for (int pol = 0; pol < 2; ++pol) {
+    float A = 1.0f, B = 0.0f, C = 0.0f, D = 1.0f;
+    for (int j = 0; j < nl; ++j) {
+      const int jj = from_air ? j : nl - 1 - j;
+      const float nj = ln[jj], dj = ld[jj];
+      const float q = 1.0f - (k / nj) * (k / nj);
+      if (q <= 0.0f) {
+        return bl_fresnel_plain(n_in, n_out, c_in); /* 层内倏逝：退回无膜 */
+      }
+      const float cj = sqrtf(q);
+      const float ej = pol == 0 ? nj * cj : nj / cj;
+      const float dl = 2.0f * M_PI_F * nj * dj * cj / (lam_um * 1000.0f);
+      const float cd = cosf(dl), sd = sinf(dl);
+      const float A2 = A * cd - B * ej * sd, B2 = A * sd / ej + B * cd;
+      const float C2 = C * cd + D * ej * sd, D2 = -C * sd / ej + D * cd;
+      A = A2; B = B2; C = C2; D = D2;
+    }
+    const float e0 = pol == 0 ? n_in * c_in : n_in / fmaxf(c_in, 1e-12f);
+    const float es = pol == 0 ? n_out * cs_out : n_out / cs_out;
+    const float nr = e0 * A - D * es, ni = e0 * B * es - C;
+    const float dr = e0 * A + D * es, di = e0 * B * es + C;
+    R += 0.5f * (nr * nr + ni * ni) / (dr * dr + di * di);
+  }
+  return R;
 }
 
 ccl_device_inline float bl_n(const int k, const float il2)
@@ -227,6 +274,7 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
                                                      const ccl_global DecomposedTransform *cam_motion,
                                                      const float2 raster,
                                                      const float2 rand_lens,
+                                                     const float rand_time,
                                                      ccl_private Ray *ray)
 {
   /* 每帧参数（见 gpukernel.FIELD_MAP） */
@@ -234,6 +282,7 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
   const float delta_front = (cam->fisheye_fov - 16.0f) * 5.0f;
   const float f_number = fmaxf(cam->inv_aperture_ratio, BL_N0);
   const int blades = (int)(cam->blades + 0.5f);
+  const float comp_phi = (cam->fisheye_lens - 50.0f) * 1e-4f;   /* 发腮补偿板光焦度 φ（1/mm） */
 
   /* 与 OSL 的 camera_shader_raster_position() 相同：rastertocamera 把像素映射到 [0,1]² */
   const ProjectionTransform rastertocamera = cam->rastertocamera;   /* Metal：取地址前先拷到本地（地址空间） */
@@ -294,12 +343,16 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
     w *= k_stop * k_stop;
   }
 
-  /* 连续波长色散（与 OSL 相同的光谱表；第三维随机数用哈希） */
+  /* 连续波长色散（与 OSL 相同的光谱表）。波长的随机数：不开运动模糊时用 Cycles 的 time 维（与出瞳两维同一个
+   * 三维 Sobol 点 → 波长与出瞳点联合分层，色噪按 ~1/N 以上的速度下降）；开运动模糊时 time 已用于快门，
+   * 退回与 OSL 相同的哈希（否则运动拖影会按波长分色） */
   float3 chan = make_float3(1.0f, 1.0f, 1.0f);
   float lam = BL_LAMBDA_D;
   if (BL_DISPERSION && BL_DISP_STRENGTH > 0.0f) {
-    const float h = hash_float3_to_float(make_float3(ras.x * 1000.0f + rand_lens.x * 17.0f,
-                                                     ras.y * 1000.0f + rand_lens.y * 17.0f, 6.29f));
+    const float h = (rand_time >= 0.0f && cam->shuttertime == -1.0f) ?
+                        rand_time :
+                        hash_float3_to_float(make_float3(ras.x * 1000.0f + rand_lens.x * 17.0f,
+                                                         ras.y * 1000.0f + rand_lens.y * 17.0f, 6.29f));
     int j = 0;
     while (j < BL_SPN - 1 && h > BL_SPC[j]) {
       j += 1;
@@ -381,9 +434,10 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
       const float den = qb + (qb >= 0.0f ? 1.0f : -1.0f) * sqrtf(disc);
       t = tz + (den != 0.0f ? -2.0f * qc / den : 0.0f);
     }
+    const float cxi = BL_CX[i] + BL_KCX[i] * comp_phi, cyi = BL_CY[i] + BL_KCY[i] * comp_phi;
     for (int it = 0; it < (BL_AT[i] ? 0 : 12); ++it) {
       const float x = p.x + t * d.x, y = p.y + t * d.y;
-      const float sg = bl_sag_grad(x, y, i, &gx, &gy, &ok);
+      const float sg = bl_sag_grad(x, y, i, cxi, cyi, &gx, &gy, &ok);
       if (!ok) {
         return zero_spectrum();
       }
@@ -399,7 +453,7 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
       return zero_spectrum();
     }
     p = p + t * d;
-    bl_sag_grad(p.x, p.y, i, &gx, &gy, &ok);
+    bl_sag_grad(p.x, p.y, i, cxi, cyi, &gx, &gy, &ok);
     if (!ok) {
       return zero_spectrum();
     }
@@ -423,15 +477,20 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
 
     float3 R = make_float3(0.0f, 0.0f, 0.0f);
     if (BL_GHOSTS) {
-      if (BL_CO[i] && BL_COATED) {
-        const float iR = 1.0f / (LR * LR), iB = 1.0f / (LB * LB);
-        const float naR = bl_n(i, iR), naB = bl_n(i, iB);
-        const float nbR = (i > 0) ? bl_n(i - 1, iR) : 1.0f, nbB = (i > 0) ? bl_n(i - 1, iB) : 1.0f;
-        const float n1R = dirn == 1 ? naR : nbR, n2R = dirn == 1 ? nbR : naR;
-        const float n1B = dirn == 1 ? naB : nbB, n2B = dirn == 1 ? nbB : naB;
-        R = make_float3(bl_fresnel_film(n1R, BL_COATING_IOR, n2R, c, BL_COATING_NM, LR),
-                        bl_fresnel_film(n1, BL_COATING_IOR, n2, c, BL_COATING_NM, LG),
-                        bl_fresnel_film(n1B, BL_COATING_IOR, n2B, c, BL_COATING_NM, LB));
+      if (BL_CO[i] && BL_COATED && BL_COATING_NM > 0.0f) {
+        const float ng = fmaxf(BL_ND[i], i > 0 ? BL_ND[i - 1] : 1.0f);
+        if (BL_DISPERSION && BL_DISP_STRENGTH > 0.0f) {
+          const float r = bl_coat_R(n1, n2, c, lam, ng); /* 光谱采样：反射率按本条光线的波长 */
+          R = make_float3(r, r, r);
+        }
+        else {
+          const float iR = 1.0f / (LR * LR), iB = 1.0f / (LB * LB);
+          const float naR = bl_n(i, iR), naB = bl_n(i, iB);
+          const float nbR = (i > 0) ? bl_n(i - 1, iR) : 1.0f, nbB = (i > 0) ? bl_n(i - 1, iB) : 1.0f;
+          const float n1R = dirn == 1 ? naR : nbR, n2R = dirn == 1 ? nbR : naR;
+          const float n1B = dirn == 1 ? naB : nbB, n2B = dirn == 1 ? nbB : naB;
+          R = make_float3(bl_coat_R(n1R, n2R, c, LR, ng), bl_coat_R(n1, n2, c, LG, ng), bl_coat_R(n1B, n2B, c, LB, ng));
+        }
       }
       else {
         const float r = bl_fresnel_plain(n1, n2, c);
@@ -501,12 +560,12 @@ def cycles_addon_dir():
     import cycles
     return os.path.dirname(os.path.abspath(cycles.__file__))
 
-def cache_root():
+def cache_root(sub="gpu_kernel"):
     """扩展自己的用户目录（安装为扩展时）；开发副本退回用户缓存目录。删除它即恢复原状。"""
     bpy = _bpy()
     pkg = __package__ or "blenderlens"
     try:
-        return bpy.utils.extension_path_user(pkg, path="gpu_kernel", create=True)
+        return bpy.utils.extension_path_user(pkg, path=sub, create=True)
     except (ValueError, AttributeError, KeyError):
         import sys
         if sys.platform == "darwin":
@@ -515,7 +574,7 @@ def cache_root():
             base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
         else:
             base = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
-        d = os.path.join(base, "blenderlens_gpu_kernel")
+        d = os.path.join(base, "blenderlens_" + sub)
         os.makedirs(d, exist_ok=True)
         return d
 
@@ -534,7 +593,7 @@ def check_compatible(src_dir=None):
     if not os.path.exists(p):
         return False, f"找不到 Cycles 内核源码 {p}（这个 Blender 构建不带运行时编译的 GPU 内核源码）"
     s = open(p, encoding="utf-8").read()
-    if s.count(EXPECTED_ORIGINAL) != 1 or s.count(ANCHOR) != 1:
+    if s.count(EXPECTED_ORIGINAL) != 1 or s.count(ANCHOR) != 1 or s.count(EXPECTED_CALL) != 1:
         return False, "camera.h 与补丁预期不一致（Blender 版本变了）：GPU 路径不可用，使用 CPU / OSL"
     return True, "ok"
 
@@ -549,10 +608,15 @@ def prepare(force=False):
         raise GPUPathError(why)
     if os.path.exists(dst):
         shutil.rmtree(dst)
+    root = os.path.dirname(dst)
+    for old in os.listdir(root):                     # 旧版本补丁 / 旧 Blender 构建的拷贝（各几十 MB）
+        if old.startswith("cycles_") and os.path.join(root, old) != dst and os.path.isdir(os.path.join(root, old)):
+            shutil.rmtree(os.path.join(root, old), ignore_errors=True)
     shutil.copytree(cycles_addon_dir(), dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     p = os.path.join(dst, "source", "kernel", "camera", "camera.h")
     s = open(p, encoding="utf-8").read()
     s = s.replace(EXPECTED_ORIGINAL, PATCHED)
+    s = s.replace(EXPECTED_CALL, PATCHED_CALL)
     s = s.replace(ANCHOR, f'#include "kernel/camera/{HEADER_NAME}"\n\n' + ANCHOR)
     open(p, "w", encoding="utf-8").write(s)
     write_header(STUB_HEADER, dst)

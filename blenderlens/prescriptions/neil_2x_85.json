@@ -569,7 +569,8 @@
   "look": {
     "reference": "思锐专利实施例；成品镜头规格未公开。最近对焦取专利 FD3：物面到第一面 868 mm",
     "f_number": 3.0,
-    "coating_nm": 100.0,
+    "coating": "BROADBAND",
+    "coating_nm": 94.0,
     "flare_color": "PHYSICAL",
     "flare_gain": 1.0,
     "veiling_glare": 0.008,

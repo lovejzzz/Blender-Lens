@@ -14,6 +14,11 @@ def _owner_object(cam_data):
             return ob
     return None
 
+def _on_mumps(self, context):
+    ob = _owner_object(self.id_data)
+    if ob is not None and "BL_Rig" in {c.name.split(".")[0] for c in ob.children}:
+        rig.set_compensation(ob, self.mumps_correction)
+
 def _on_change(self, context):
     ob = _owner_object(self.id_data)
     if ob is not None and "BL_Rig" in {c.name.split(".")[0] for c in ob.children}:
@@ -44,9 +49,19 @@ class BLCameraSettings(bpy.types.PropertyGroup):
                          description="Analytic 模式下的序列鬼影追迹（两次反射）：一字拉丝与鬼影；需要更多采样")
     ghost_gain: FloatProperty(name="Ghost Gain", default=1.0, min=0.0, soft_max=50.0, update=_on_change,
                               description="1 = 物理正确；调大只为看清")
-    coated: BoolProperty(name="MgF₂ Coating", default=True, update=_on_change)
+    mumps_correction: FloatProperty(
+        name="Mumps Correction", default=0.0, min=0.0, max=1.0, subtype='FACTOR', update=_on_mumps,
+        description="发腮补偿强度（只有带补偿板的前置变形预设：C / E / G 风格）。0 = 1950 年代 CinemaScope 式（近摄压缩比明显下降、"
+                    "人脸变胖）；1 = Auto Panatar 式完全补偿（Panavision 实际镜头的做法，每个距离的压缩比 = 无穷远）")
+    coated: BoolProperty(name="Coating", default=True, update=_on_change)
+    coating_type: EnumProperty(
+        name="Coating Type", default='SINGLE', update=_on_change,
+        items=[('SINGLE', "Single MgF₂", "单层 MgF₂（1950–80 年代）：残余反射 1.3–2%，鬼影偏品红 / 蓝紫"),
+               ('BROADBAND', "Broadband 3-layer", "三层 1/4–1/2–1/4 宽带膜（现代）：可见光中段 < 0.2%，鬼影弱一个量级、偏品红 / 琥珀")],
+        description="镀膜膜系（鬼影 / 炫光的颜色与强度；Geometry 模式只支持单层）")
     coating_nm: FloatProperty(name="Coating (nm)", default=100.0, min=0.0, max=400.0, update=_on_change,
-                              description="≈100 nm 为 550 nm 四分之一波（标准）；125–140 nm 残余反射偏蓝（风格化）")
+                              description="外层 MgF₂ 膜厚。单层：≈100 nm 为 550 nm 四分之一波（标准），125–140 nm 残余反射偏蓝（风格化）；"
+                                          "宽带膜：整套膜系按它缩放，94 nm ≈ 设计波长 520 nm")
     flare_color: EnumProperty(
         name="Flare Color", default='PHYSICAL',
         items=[('PHYSICAL', "Physical (Coating)", "由镀膜膜厚算出的颜色：100 nm 蓝紫，125–140 nm 蓝，无镀膜中性"),
@@ -243,6 +258,8 @@ def _draw_settings(layout, cam_ob):
     col = layout.column(align=True)
     col.prop(p, "mode")
     col.prop(p, "focus_distance")
+    if cam_ob.get("bl_has_compensator"):
+        col.prop(p, "mumps_correction")
     col.prop(p, "f_number")
     row = col.row(align=True)
     row.prop(p, "blades")
@@ -262,6 +279,7 @@ def _draw_settings(layout, cam_ob):
     col.prop(p, "coated")
     sub = col.column(align=True)
     sub.active = p.coated
+    sub.prop(p, "coating_type", text="")
     sub.prop(p, "coating_nm")
     col = layout.column(align=True)
     col.label(text="Render with Flare")
@@ -348,6 +366,8 @@ def _frame_change(scene, depsgraph=None):
         return
     for ob in scene.objects:
         if ob.type == 'CAMERA' and ob.data.animation_data and any(c.name.startswith("BL_Rig") for c in ob.children):
+            if ob.get("bl_has_compensator"):                     # 补偿强度存在处方里：有关键帧时按帧写回（没变就不动）
+                rig.set_compensation(ob, ob.data.blenderlens.mumps_correction)
             rig.apply_settings(ob)
 
 
@@ -360,6 +380,11 @@ def register():
     bpy.types.Camera.blenderlens = PointerProperty(type=BLCameraSettings)
     bpy.app.handlers.frame_change_post.append(_frame_change)
     bpy.app.handlers.render_init.append(_render_guard)
+    try:                                         # 出瞳表的磁盘缓存（自定义处方 / 非默认画幅第一次算完就存下）
+        from . import gpukernel, oslgen
+        oslgen.PUPIL_CACHE_DIR = gpukernel.cache_root("pupil_tables")
+    except Exception:
+        pass
 
 def unregister():
     if _frame_change in bpy.app.handlers.frame_change_post:

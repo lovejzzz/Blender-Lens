@@ -49,9 +49,47 @@
       "n_F": 1.80645,
       "catalog": "SCHOTT:SF11",
       "note": "SF 11（Isco 原表 n_d/n_C/n_F；与 Schott 目录 SF11 相差 ≤ 5e-6）"
+    },
+    "BL_COMP": {
+      "nd": 1.5168,
+      "vd": 64.17,
+      "catalog": "SCHOTT:N-BK7",
+      "note": "补偿板（一阶等效的反向旋转柱面对，见 optics.compensator）"
     }
   },
   "groups": [
+    {
+      "id": "compensator",
+      "scale": 1.0,
+      "note": "0.8：发腮补偿（Auto Panatar 式，一阶等效）。补偿强度为 0 时是一块平行平板，对成像无影响（只多两个反射面）",
+      "surfaces": [
+        {
+          "id": "K1",
+          "R_x": null,
+          "R_y": null,
+          "d": 5.0,
+          "medium": "BL_COMP",
+          "aperture": {
+            "shape": "circle",
+            "clear": 66,
+            "outer": 67.0
+          },
+          "note": "马鞍面：曲率随对焦（凸轮表 focus.compensator）"
+        },
+        {
+          "id": "K2",
+          "R_x": null,
+          "R_y": null,
+          "d": 6.0,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 66,
+            "outer": 67.0
+          }
+        }
+      ]
+    },
     {
       "id": "anamorph",
       "role": "前置无焦变形器：前组在垂直方向放大 1.31×（伽利略），后组在水平方向缩小到 0.627×（反伽利略），合计约 2.09×",
@@ -153,7 +191,7 @@
           "acts": "垂直",
           "aperture": {
             "shape": "rect",
-            "semi_x": 44.25,
+            "semi_x": 44.5,
             "semi_y": 47.0
           }
         },
@@ -166,7 +204,7 @@
           "acts": "垂直",
           "aperture": {
             "shape": "rect",
-            "semi_x": 44.25,
+            "semi_x": 44.5,
             "semi_y": 47.0
           }
         },
@@ -179,7 +217,7 @@
           "acts": "垂直",
           "aperture": {
             "shape": "rect",
-            "semi_x": 44.25,
+            "semi_x": 44.5,
             "semi_y": 47.0
           }
         },
@@ -483,6 +521,7 @@
     "reference": "Panavision G Series 100 mm T3，最近对焦 91.4 cm（panavision.com）；页面描述：excellent glare resistance、minimal breathing",
     "f_number": 3.0,
     "min_focus_mm": 914.0,
+    "mumps_correction": 1.0,
     "coating_nm": 100.0,
     "flare_color": "PHYSICAL",
     "flare_gain": 0.15,
@@ -533,7 +572,42 @@
       "Ry",
       "Rx"
     ],
-    "min_distance_mm": 914.0
+    "min_distance_mm": 914.0,
+    "compensator": {
+      "surface": "K1",
+      "level": 1.0,
+      "d1": [
+        0.0,
+        0.548094,
+        1.120554,
+        1.718907,
+        2.34481,
+        3.000076,
+        3.686687,
+        4.406819,
+        5.162874,
+        5.957508,
+        6.793677,
+        7.67468,
+        8.604226
+      ],
+      "phi": [
+        0.0,
+        3.66170941e-05,
+        7.54141909e-05,
+        0.000116591975,
+        0.000160376656,
+        0.000207024193,
+        0.000256825381,
+        0.000310112038,
+        0.000367264552,
+        0.000428721179,
+        0.00049498956,
+        0.000566661125,
+        0.000644429254
+      ],
+      "note": "凸轮表：对焦环行程 Δ1（mm）→ 补偿板光焦度 φ（1/mm，水平 −φ / 垂直 +φ），完全补偿时每个距离的压缩比 = 无穷远；level（0–1）是补偿强度，界面 Mumps Correction 写入"
+    }
   },
   "sensor": {
     "format": "35 mm 变形光窗（SMPTE 59）",

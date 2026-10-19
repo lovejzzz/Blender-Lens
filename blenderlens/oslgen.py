@@ -2,7 +2,7 @@
 # mode 0 = 解析：在 OSL 里按处方逐面真实追迹（快、无几何噪点、可做三波长色散）
 # mode 1 = 几何：只从传感器向出瞳发射光线，由 Cycles 穿过场景里的镜片网格（鬼影/炫光）
 # 相机坐标：+Z 视线、+Y 上；镜头坐标经绕 Y 轴 180° 映射：cam = (−x, y, z)。
-import math
+import math, os
 try:
     from . import optics as O
 except ImportError:
@@ -50,24 +50,71 @@ def spectral_table(l0=0.400, l1=0.700, dl=0.005):
 
 _PUPIL_CACHE = {}
 _T0_CACHE = {}
+# 出瞳表的磁盘位置：随包分发的（预设，tools/build_presets.py 生成）+ 用户缓存（rig 在 register 时设置；None = 不写盘）
+SHIPPED_PUPIL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prescriptions", "pupil_tables")
+PUPIL_CACHE_DIR = None
 
-def pupil_table(rx):
-    """出瞳重要性采样表（见 pupil.py），按处方内容缓存。"""
-    import json
+def rx_key(rx):
+    """处方内容的稳定指纹（跨进程不变；Python 的 hash() 每次启动都不同，不能用来做磁盘缓存）。"""
+    import hashlib, json
+    return hashlib.sha1(json.dumps(rx, sort_keys=True, default=str).encode()).hexdigest()[:20]
+
+def _pupil_key(rx):
     try:
         from . import pupil as PU
     except ImportError:
         import pupil as PU
-    key = hash(json.dumps(rx, sort_keys=True, default=str))
-    if key not in _PUPIL_CACHE:
-        if len(_PUPIL_CACHE) > 8:
-            _PUPIL_CACHE.clear()
-        _PUPIL_CACHE[key] = PU.table(rx)
-    return _PUPIL_CACHE[key]
+    import copy
+    optical = {k: v for k, v in rx.items() if k not in ("meta", "look")}   # 观感参数 / 说明文字不影响出瞳表
+    if optical.get("focus", {}).get("compensator"):                        # 表已覆盖补偿强度 0–1
+        optical = copy.deepcopy(optical); optical["focus"]["compensator"].pop("level", None)
+    return f"{rx_key(optical)}_v{PU.TABLE_VERSION}"
+
+def save_pupil_table(T, path):
+    import numpy as np
+    np.savez_compressed(path, **{k: np.asarray(T[k]) for k in ("NX", "NY", "X0", "X1", "Y0", "Y1", "r_samp", "eff_disc", "eff_box")})
+
+def _load_pupil_table(path):
+    import numpy as np
+    with np.load(path) as z:
+        T = {k: z[k] for k in z.files}
+    T["NX"], T["NY"] = int(T["NX"]), int(T["NY"])
+    return T
+
+def pupil_table(rx):
+    """出瞳重要性采样表（见 pupil.py）：内存缓存 → 随包分发 → 用户磁盘缓存 → 现算（约 2–10 秒）并写盘。"""
+    try:
+        from . import pupil as PU
+    except ImportError:
+        import pupil as PU
+    key = _pupil_key(rx)
+    if key in _PUPIL_CACHE:
+        return _PUPIL_CACHE[key]
+    T = None
+    for d in (SHIPPED_PUPIL_DIR, PUPIL_CACHE_DIR):
+        f = os.path.join(d, key + ".npz") if d else None
+        if f and os.path.exists(f):
+            try:
+                T = _load_pupil_table(f)
+                break
+            except (OSError, ValueError, KeyError):
+                T = None
+    if T is None:
+        T = PU.table(rx)
+        if PUPIL_CACHE_DIR:
+            try:
+                os.makedirs(PUPIL_CACHE_DIR, exist_ok=True)
+                save_pupil_table(T, os.path.join(PUPIL_CACHE_DIR, key + ".npz"))
+            except OSError:
+                pass
+    if len(_PUPIL_CACHE) > 8:
+        _PUPIL_CACHE.clear()
+    _PUPIL_CACHE[key] = T
+    return T
 
 _DATA_KEYS = ("S", "z_exp", "r_exp", "z_stop", "r_stop", "NS", "Z", "CX", "CY", "KX", "KY", "A_", "B_", "CLR", "MSX", "MSY",
               "AS", "G1", "G2", "CO", "AG", "NPAIRS", "SG1", "SG2", "W", "H", "N0", "sources", "SPEC", "T0", "PNX", "PNY", "PB",
-              "AT", "AC", "AMX", "AMY", "C_", "E_", "ND")
+              "AT", "AC", "AMX", "AMY", "C_", "E_", "ND", "KCX", "KCY")
 
 def lens_data(rx, importance=True):
     """OSL 相机与 GPU 内核（gpugen）共用的处方数据：同一份数组，两边结果才能逐像素对得上。"""
@@ -92,10 +139,11 @@ def lens_data(rx, importance=True):
     AT, AC, AMX, AMY = [], [], [], []
     for sf in S:
         cx, cy = O.curv(sf["Rx"]), O.curv(sf["Ry"])
-        general = any(sf.get("asph") or []) or sf["kx"] or sf["ky"] or (cx and cy and cx != cy)
+        general = any(sf.get("asph") or []) or sf["kx"] or sf["ky"] or (cx and cy and cx != cy) or any(sf["kc"])   # 补偿板（曲率随对焦）走牛顿
         AT.append(0 if general else 1)
         AC.append(cx or cy)
         AMX.append(1.0 if cx else 0.0); AMY.append(1.0 if cy else 0.0)
+    KCX = [sf["kc"][0] for sf in S]; KCY = [sf["kc"][1] for sf in S]      # 发腮补偿：曲率 = C + KC·φ（φ 每帧由插件写入）
     before = [1.0] + [sf["glass"]["nd"] for sf in S[:-1]]
     CO = [1 if (before[k] == 1.0) != (sf["glass"]["nd"] == 1.0) else 0 for k, sf in enumerate(S)]   # 空气-玻璃面（镀膜）
     AG = [k for k in range(NS) if CO[k]]                                                             # 鬼影反射候选面
@@ -110,8 +158,7 @@ def lens_data(rx, importance=True):
         from . import pupil as PU
     except ImportError:
         import pupil as PU
-    import json as _json
-    _k = hash(_json.dumps(rx, sort_keys=True, default=str))
+    _k = rx_key(rx)
     if _k not in _T0_CACHE:
         _T0_CACHE[_k] = PU.axial_transmission(rx)
     T0 = _T0_CACHE[_k]
@@ -128,7 +175,7 @@ def lens_data(rx, importance=True):
 def generate(rx, name="blenderlens_camera", importance=True):
     D = lens_data(rx, importance)
     (S, z_exp, r_exp, z_stop, r_stop, NS, Z, CX, CY, KX, KY, A_, B_, CLR, MSX, MSY, AS, G1, G2, CO, AG, NPAIRS,
-     SG1, SG2, W, H, N0, sources, SPEC, T0, PNX, PNY, PB, AT, AC, AMX, AMY, C_, E_, ND) = (D[k] for k in _DATA_KEYS)
+     SG1, SG2, W, H, N0, sources, SPEC, T0, PNX, PNY, PB, AT, AC, AMX, AMY, C_, E_, ND, KCX, KCY) = (D[k] for k in _DATA_KEYS)
 
     src = f"""// 自动生成：{rx['meta']['name']}
 // 来源处方：{sources}
@@ -168,24 +215,48 @@ float fresnel_plain(float n1, float n2, float ci)
   return 0.5 * (rs * rs + rp * rp);
 }}
 
-float airy(float r01, float r12, float cd)
+// 镀膜反射率（非偏振）：特征矩阵法，最多 3 层（与 optics.stack_reflectance 相同）。
+// kind 0 = 单层（厚 d1，折射率 nf1）；1 = 三层 1/4–1/2–1/4 宽带膜（外层同上，λ0 = 4·nf1·d1，
+// 中层 2.05 半波，贴玻璃层 clamp(nf1·√n_glass, 1.55, 2.0) 四分之一波）。从玻璃一侧入射时层序反过来。
+float coat_R(float n_in, float n_out, float c_in, float lam_um, int kind, float d1, float nf1, float n_glass)
 {{
-  return (r01 * r01 + r12 * r12 + 2.0 * r01 * r12 * cd) / (1.0 + r01 * r01 * r12 * r12 + 2.0 * r01 * r12 * cd);
-}}
-
-// 单层薄膜（入射介质 n0 | 膜 nf, 厚 d_nm | 出射介质 n2）的非偏振反射率，λ 单位 μm
-float fresnel_film(float n0, float nf, float n2, float c0, float d_nm, float lam_um)
-{{
-  float s0 = sqrt(max(0.0, 1.0 - c0 * c0));
-  float s1 = n0 * s0 / nf;
-  float s2 = n0 * s0 / n2;
-  if (s2 >= 1.0) return 1.0;
-  if (s1 >= 1.0) return fresnel_plain(n0, n2, c0);
-  float c1 = sqrt(1.0 - s1 * s1), c2 = sqrt(1.0 - s2 * s2);
-  float cd = cos(4.0 * M_PI * nf * d_nm * c1 / (lam_um * 1000.0));
-  float rs01 = (n0 * c0 - nf * c1) / (n0 * c0 + nf * c1), rs12 = (nf * c1 - n2 * c2) / (nf * c1 + n2 * c2);
-  float rp01 = (nf * c0 - n0 * c1) / (nf * c0 + n0 * c1), rp12 = (n2 * c1 - nf * c2) / (n2 * c1 + nf * c2);
-  return 0.5 * (airy(rs01, rs12, cd) + airy(rp01, rp12, cd));
+  float s0 = sqrt(max(0.0, 1.0 - c_in * c_in));
+  float k = n_in * s0;
+  if (k >= n_out) return 1.0;
+  float ln[3], ld[3];
+  int nl = 1;
+  ln[0] = nf1; ld[0] = d1;
+  if (kind == 1) {{
+    float l0 = 4.0 * nf1 * d1;
+    float n3 = clamp(nf1 * sqrt(n_glass), 1.55, 2.0);
+    ln[1] = {O.COAT_HIGH_N}; ld[1] = l0 / (2.0 * {O.COAT_HIGH_N});
+    ln[2] = n3; ld[2] = l0 / (4.0 * n3);
+    nl = 3;
+  }}
+  int from_air = n_in < n_out;
+  float cs_out = sqrt(max(1e-12, 1.0 - (k / n_out) * (k / n_out)));
+  float R = 0.0;
+  for (int pol = 0; pol < 2; ++pol) {{
+    float A = 1.0, B = 0.0, C = 0.0, D = 1.0;
+    for (int j = 0; j < nl; ++j) {{
+      int jj = from_air ? j : nl - 1 - j;
+      float nj = ln[jj], dj = ld[jj];
+      float q = 1.0 - (k / nj) * (k / nj);
+      if (q <= 0.0) return fresnel_plain(n_in, n_out, c_in);   // 层内倏逝：退回无膜
+      float cj = sqrt(q);
+      float ej = pol == 0 ? nj * cj : nj / cj;
+      float dl = 2.0 * M_PI * nj * dj * cj / (lam_um * 1000.0);
+      float cd = cos(dl), sd = sin(dl);
+      float A2 = A * cd - B * ej * sd, B2 = A * sd / ej + B * cd, C2 = C * cd + D * ej * sd, D2 = -C * sd / ej + D * cd;
+      A = A2; B = B2; C = C2; D = D2;
+    }}
+    float e0 = pol == 0 ? n_in * c_in : n_in / max(c_in, 1e-12);
+    float es = pol == 0 ? n_out * cs_out : n_out / cs_out;
+    float nr = e0 * A - D * es, ni = e0 * B * es - C;
+    float dr = e0 * A + D * es, di = e0 * B * es + C;
+    R += 0.5 * (nr * nr + ni * ni) / (dr * dr + di * di);
+  }}
+  return R;
 }}
 
 shader {name}(
@@ -197,14 +268,17 @@ shader {name}(
   float blade_rotation = 0.0 [[ string help = "叶片旋转（度）" ]],
   float delta_unit = 0.0 [[ string help = "对焦：整体单元前移量 Δ1（mm），由插件按对焦距离写入" ]],
   float delta_front = 0.0 [[ string help = "对焦：变形器前组附加位移 Δ2（mm），由插件按对焦距离写入" ]],
+  float comp_phi = 0.0 [[ string help = "发腮补偿板的光焦度 φ（1/mm，水平 −φ、垂直 +φ），由插件按对焦距离写入" ]],
   int dispersion = 1 [[ string widget = "checkBox", string help = "三波长色散（仅 Analytic）" ]],
   int exposure_compensate = 1 [[ string widget = "checkBox", string help = "收光圈时补偿曝光（关闭 = 物理 T 值变暗）" ]],
   float pupil_margin = 1.4 [[ float min = 1.0, float max = 3.0, string help = "出瞳采样盘相对近轴出瞳的放大倍数" ]],
   int ghosts = 0 [[ string widget = "checkBox", string help = "序列鬼影追迹（两次反射，炫光/一字拉丝；仅 Analytic）" ]],
   float ghost_fraction = 0.5 [[ float min = 0.05, float max = 0.95, string help = "走鬼影路径的采样比例" ]],
   float ghost_gain = 1.0 [[ float min = 0.0, float max = 1000.0, string help = "鬼影增益（1 = 物理正确）" ]],
-  int coated = 1 [[ string widget = "checkBox", string help = "空气-玻璃面 MgF₂ 单层镀膜" ]],
-  float coating_nm = 100.0 [[ float min = 0.0, float max = 400.0, string help = "膜厚（nm）；~100 = 550 nm 四分之一波" ]],
+  int coated = 1 [[ string widget = "checkBox", string help = "空气-玻璃面镀膜" ]],
+  int coating_type = 0 [[ string widget = "mapper", string options = "Single MgF2:0|Broadband 3-layer:1",
+                  string help = "单层 MgF₂ / 三层宽带膜（1/4–1/2–1/4）" ]],
+  float coating_nm = 100.0 [[ float min = 0.0, float max = 400.0, string help = "外层 MgF₂ 膜厚（nm）；~100 = 550 nm 四分之一波；宽带膜整套按它缩放" ]],
   float coating_ior = 1.38 [[ float min = 1.0, float max = 2.5 ]],
   int pupil_importance = {1 if importance else 0} [[ string widget = "checkBox",
                   string help = "出瞳重要性采样：只在各视场真正通光的区域里采样（无偏；鬼影 / Geometry 模式自动关闭）" ]],
@@ -215,7 +289,7 @@ shader {name}(
   output vector direction = vector(0.0, 0.0, 1.0),
   output color throughput = 1.0)
 {{
-{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("NC", C_)}{_arr("NE", E_)}{_arr("ND", ND)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}{_arr("PX0", PB[0])}{_arr("PX1", PB[1])}{_arr("PY0", PB[2])}{_arr("PY1", PB[3])}{_arr("AT", AT, "{:d}", "int")}{_arr("AC", AC)}{_arr("AMX", AMX)}{_arr("AMY", AMY)}{_arr("SPC", SPEC["cdf"])}{_arr("SPR", SPEC["w"][0])}{_arr("SPG", SPEC["w"][1])}{_arr("SPB", SPEC["w"][2])}
+{_arr("Z", Z)}{_arr("CX", CX)}{_arr("CY", CY)}{_arr("KX", KX)}{_arr("KY", KY)}{_arr("NA", A_)}{_arr("NB", B_)}{_arr("NC", C_)}{_arr("NE", E_)}{_arr("ND", ND)}{_arr("CLR", CLR)}{_arr("MSX", MSX)}{_arr("MSY", MSY)}{_arr("AA4", AS[0])}{_arr("AA6", AS[1])}{_arr("AA8", AS[2])}{_arr("AA10", AS[3])}{_arr("AA12", AS[4])}{_arr("G1", G1)}{_arr("G2", G2)}{_arr("CO", CO, "{:d}", "int")}{_arr("AG", AG, "{:d}", "int")}{_arr("PX0", PB[0])}{_arr("PX1", PB[1])}{_arr("PY0", PB[2])}{_arr("PY1", PB[3])}{_arr("AT", AT, "{:d}", "int")}{_arr("AC", AC)}{_arr("AMX", AMX)}{_arr("AMY", AMY)}{_arr("KCX", KCX)}{_arr("KCY", KCY)}{_arr("SPC", SPEC["cdf"])}{_arr("SPR", SPEC["w"][0])}{_arr("SPG", SPEC["w"][1])}{_arr("SPB", SPEC["w"][2])}
   float SENSOR_W = {W:.6g}, SENSOR_H = {H:.6g};
   float Z_STOP = {z_stop:.9g}, R_STOP = {r_stop:.9g}, Z_EXP = {z_exp:.9g}, R_EXP = {r_exp:.9g};
   float N0 = {N0:.6g};
@@ -355,9 +429,10 @@ shader {name}(
       float den = qb + (qb >= 0.0 ? 1.0 : -1.0) * sqrt(disc);
       t = tz + (den != 0.0 ? -2.0 * qc / den : 0.0);
     }}
+    float cxi = CX[i] + KCX[i] * comp_phi, cyi = CY[i] + KCY[i] * comp_phi;
     for (int it = 0; it < (AT[i] ? 0 : 12); ++it) {{
       float x = p[0] + t * d[0], y = p[1] + t * d[1];
-      float sg = sag_grad(x, y, CX[i], CY[i], KX[i], KY[i], AA4[i], AA6[i], AA8[i], AA10[i], AA12[i], gx, gy, ok);
+      float sg = sag_grad(x, y, cxi, cyi, KX[i], KY[i], AA4[i], AA6[i], AA8[i], AA10[i], AA12[i], gx, gy, ok);
       if (!ok) {{ throughput = color(0.0); return; }}
       float g = p[2] + t * d[2] - zi + sg;
       float dg = d[2] + gx * d[0] + gy * d[1];
@@ -367,7 +442,7 @@ shader {name}(
     }}
     if (t <= 1e-6) {{ throughput = color(0.0); return; }}
     p = p + t * d;
-    sag_grad(p[0], p[1], CX[i], CY[i], KX[i], KY[i], AA4[i], AA6[i], AA8[i], AA10[i], AA12[i], gx, gy, ok);
+    sag_grad(p[0], p[1], cxi, cyi, KX[i], KY[i], AA4[i], AA6[i], AA8[i], AA10[i], AA12[i], gx, gy, ok);
     if (!ok) {{ throughput = color(0.0); return; }}
 
     // 口径：圆形通光区 + x/y 遮罩（矩形镜片、切边、矩形视场光阑）；平台与镜筒都按挡光处理
@@ -386,16 +461,21 @@ shader {name}(
 
     color R = color(0.0);
     if (ghosts) {{
-      if (CO[i] && coated) {{
-        float iR = 1.0 / (LR * LR), iB = 1.0 / (LB * LB);
-        float naR = NA[i] + iR * (NB[i] + iR * (NC[i] + iR * NE[i])), naB = NA[i] + iB * (NB[i] + iB * (NC[i] + iB * NE[i]));
-        float nbR = (i > 0) ? NA[i - 1] + iR * (NB[i - 1] + iR * (NC[i - 1] + iR * NE[i - 1])) : 1.0;
-        float nbB = (i > 0) ? NA[i - 1] + iB * (NB[i - 1] + iB * (NC[i - 1] + iB * NE[i - 1])) : 1.0;
-        float n1R = dirn == 1 ? naR : nbR, n2R = dirn == 1 ? nbR : naR;
-        float n1B = dirn == 1 ? naB : nbB, n2B = dirn == 1 ? nbB : naB;
-        R = color(fresnel_film(n1R, coating_ior, n2R, c, coating_nm, LR),
-                  fresnel_film(n1, coating_ior, n2, c, coating_nm, LG),
-                  fresnel_film(n1B, coating_ior, n2B, c, coating_nm, LB));
+      if (CO[i] && coated && coating_nm > 0.0) {{
+        float ng = max(ND[i], i > 0 ? ND[i - 1] : 1.0);
+        if (dispersion && dispersion_strength > 0.0) {{
+          R = color(coat_R(n1, n2, c, lam, coating_type, coating_nm, coating_ior, ng));   // 光谱采样：反射率按本条光线的波长
+        }} else {{
+          float iR = 1.0 / (LR * LR), iB = 1.0 / (LB * LB);
+          float naR = NA[i] + iR * (NB[i] + iR * (NC[i] + iR * NE[i])), naB = NA[i] + iB * (NB[i] + iB * (NC[i] + iB * NE[i]));
+          float nbR = (i > 0) ? NA[i - 1] + iR * (NB[i - 1] + iR * (NC[i - 1] + iR * NE[i - 1])) : 1.0;
+          float nbB = (i > 0) ? NA[i - 1] + iB * (NB[i - 1] + iB * (NC[i - 1] + iB * NE[i - 1])) : 1.0;
+          float n1R = dirn == 1 ? naR : nbR, n2R = dirn == 1 ? nbR : naR;
+          float n1B = dirn == 1 ? naB : nbB, n2B = dirn == 1 ? nbB : naB;
+          R = color(coat_R(n1R, n2R, c, LR, coating_type, coating_nm, coating_ior, ng),
+                    coat_R(n1, n2, c, LG, coating_type, coating_nm, coating_ior, ng),
+                    coat_R(n1B, n2B, c, LB, coating_type, coating_nm, coating_ior, ng));
+        }}
       }} else {{
         R = color(fresnel_plain(n1, n2, c));
       }}

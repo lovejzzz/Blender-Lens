@@ -1,7 +1,7 @@
 # 由专利转录数据生成预设处方 JSON（E / G 系列风格、Panavision 后置 1.34×）。
 # 转录来源与核对见各预设 JSON 的 source 字段；生成后用 python3 tools/rebuild_apertures.py 估算口径。
 # 运行：python3 tools/build_presets.py
-import json, os, sys, copy
+import json, math, os, sys, copy
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "blenderlens"))
 import optics as O
@@ -165,6 +165,56 @@ def nikon_prime(scale, f_number):
     return g, glasses
 
 
+# ───────────────────────── 发腮补偿板（0.8）─────────────────────────
+# 一阶等效的 Auto Panatar 补偿（见 optics.compensator）：变形器最前面加一块 N-BK7 薄平板（不随对焦移动），
+# 前表面的马鞍面曲率由凸轮表 φ(Δ1) 决定。这里按「每个距离的压缩比 = 无穷远压缩比」逐点解出凸轮表。
+COMP_GLASS = {"nd": 1.5168, "vd": 64.17, "catalog": "SCHOTT:N-BK7",
+              "note": "补偿板（一阶等效的反向旋转柱面对，见 optics.compensator）"}
+
+def add_compensator(rx, gap=6.0, thickness=5.0, n_table=13, level=0.0):
+    rx = json.loads(json.dumps(rx))
+    rx["groups"] = [g for g in rx["groups"] if g["id"] != "compensator"]
+    rx["focus"].pop("compensator", None)
+    a0 = rx["groups"][0]["surfaces"][0]["aperture"]
+    r = math.hypot(a0["semi_x"], a0["semi_y"]) if a0["shape"] == "rect" else a0["outer"]
+    r = math.ceil(r + 1.0)
+    rx["glasses"]["BL_COMP"] = COMP_GLASS
+    ap = {"shape": "circle", "clear": r, "outer": r + 1.0}
+    rx["groups"].insert(0, {"id": "compensator", "scale": 1.0,
+        "note": "0.8：发腮补偿（Auto Panatar 式，一阶等效）。补偿强度为 0 时是一块平行平板，对成像无影响（只多两个反射面）",
+        "surfaces": [
+            {"id": "K1", "R_x": None, "R_y": None, "d": thickness, "medium": "BL_COMP", "aperture": ap,
+             "note": "马鞍面：曲率随对焦（凸轮表 focus.compensator）"},
+            {"id": "K2", "R_x": None, "R_y": None, "d": gap, "medium": "air", "aperture": ap}]})
+    rx["focus"]["compensator"] = {"surface": "K1", "level": 0.0, "d1": [0.0, 1.0], "phi": [0.0, 0.0]}
+    mfd = rx["focus"]["min_distance_mm"]
+    d1s, phis = [], []
+    for j in range(n_table):
+        u = j / (n_table - 1)
+        if u == 0:
+            d1s.append(0.0); phis.append(0.0); continue
+        d1, d2, phi = O.solve_compensated(rx, mfd / u)
+        d1s.append(round(d1, 6)); phis.append(phi)
+    order = sorted(range(n_table), key=lambda k: d1s[k])
+    if order != list(range(n_table)) and order != list(range(n_table))[::-1]:
+        raise RuntimeError("补偿凸轮表：Δ1 不随距离单调")
+    if d1s[-1] < d1s[0]:
+        d1s, phis = d1s[::-1], phis[::-1]
+    rx["focus"]["compensator"] = {
+        "surface": "K1", "level": float(level), "d1": d1s, "phi": [float(f"{v:.9g}") for v in phis],
+        "note": "凸轮表：对焦环行程 Δ1（mm）→ 补偿板光焦度 φ（1/mm，水平 −φ / 垂直 +φ），完全补偿时每个距离的压缩比 = 无穷远；"
+                "level（0–1）是补偿强度，界面 Mumps Correction 写入"}
+    return rx
+
+def add_compensator_file(fname):
+    path = os.path.join(PDIR, fname)
+    rx0 = O.load(path)
+    rx = add_compensator(rx0, level=rx0.get("look", {}).get("mumps_correction", 0.0))
+    O.save(rx, path)
+    c = rx["focus"]["compensator"]
+    print(f"{fname}: 补偿凸轮表 Δ1 {c['d1'][0]:.3f}…{c['d1'][-1]:.3f} mm，φ 最大 {1000 * max(map(abs, c['phi'])):.3f} D")
+
+
 def isco_preset(fname, meta, look, prime_scale, att_scale):
     prime, glasses = nikon_prime(prime_scale, look["f_number"])
     # 色散：目录曲线（Schott，refractiveindex.info CC0）的形状 + 精确通过专利给的 C / F 线（optics.dispersion_coeffs）
@@ -295,7 +345,7 @@ def panavision_rear(zoom_pos="Z1"):
           "anamorphic": {"desqueeze": 1.35, "type": "rear",
                          "note": "专利：把 2.40:1 物方画面垂直拉伸到 16:9 像面（正文称压缩比约 1.34）。真实追迹：画面边缘物方张角比 2.401，整幅解挤压比 1.350；压缩比从中心 1.304 增到边缘 1.351（水平畸变），所以中心物体解挤压后略宽约 3.5%"},
           "look": {"reference": "Panavision 2004 年后置变形组（专利实施例）；无公开的成品镜头规格。最近对焦取变焦镜专利 F3：物面到 S1 133 mm = 距像面 476 mm",
-                   "f_number": 3.66 if zoom_pos == "Z1" else 4.10, "min_focus_mm": 476.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.6,
+                   "f_number": 3.66 if zoom_pos == "Z1" else 4.10, "min_focus_mm": 476.0, "coating": "BROADBAND", "coating_nm": 94.0, "flare_color": "PHYSICAL", "flare_gain": 0.6,
                    "veiling_glare": 0.012},
           "focus": {"mechanism": "按 US 6,122,111 的内对焦：前组（第 1–2 片，S2–S5）移动 Δ，第二组（第 3–4 片，S6–S9）移动 0.909·Δ"
                                  "（专利 TABLE 1：F2 时 S5/S9 间隔 +1.022/+10.077、F3 时 +1.960/+19.724 → 两组位移比 0.908/0.910）；变焦组与后置变形组不动。"
@@ -410,7 +460,7 @@ def neil_sirui(fl):
           "anamorphic": {"desqueeze": 2.06, "type": "front",
                          "note": "专利称约 2×；近轴压缩比 FLY/FLX = 2.06（三个焦段相同，由前变形部分决定），按光学实际值解挤压（与 E/G 一致）"},
           "look": {"reference": "思锐专利实施例；成品镜头规格未公开。最近对焦取专利 FD3：物面到第一面 868 mm",
-                   "f_number": 3.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 1.0, "veiling_glare": 0.008},
+                   "f_number": 3.0, "coating": "BROADBAND", "coating_nm": 94.0, "flare_color": "PHYSICAL", "flare_gain": 1.0, "veiling_glare": 0.008},
           "focus": {"mechanism": "G1b（L3–L4，S5–S8）整体移动：S4 后间隔减小、S8 后间隔增大同样多（专利 FD1/FD2/FD3：15.511/12.339/9.120 与 2.285/5.458/8.677）。"
                                  "一个自由度同时对准两向（X 残差 ≤ 0.07 mm）。近轴求解的行程比专利多 2–4%（FD2 3.31 vs 3.17、FD3 6.54 vs 6.39 mm），"
                                  "三个后组相同，来自前组：专利按弯曲像面上的最佳聚焦定位，像方相差约 0.05 mm，在 f/3 景深以内",
@@ -435,7 +485,7 @@ if __name__ == "__main__":
                  "note": "Panavision E 系列处方未公开。本选项用同年代的 Isco 公开专利前置变形器（实施例 3，原尺寸）+ 公开的 f/2 双高斯主镜（f=100），垂直焦距 131 mm，观感参数按 Panavision 公布的 E 系列 135 mm 规格设定。",
                  "units": "mm", "conventions": conv},
                 {"reference": "Panavision E Series 135 mm T2.8，最近对焦 114.3 cm（panavision.com）；页面原文：Clean blue horizontal flares without additional artifacts such as veiling glare or edge reflections",
-                 "f_number": 2.8, "min_focus_mm": 1143.0, "coating_nm": 125.0, "flare_color": "PHYSICAL", "flare_gain": 0.18, "corner_pupil_fraction": 0.55,
+                 "f_number": 2.8, "min_focus_mm": 1143.0, "mumps_correction": 1.0, "coating_nm": 125.0, "flare_color": "PHYSICAL", "flare_gain": 0.18, "corner_pupil_fraction": 0.55,
                  "veiling_glare": 0.008},
                 prime_scale=1.0, att_scale=1.0)
     isco_preset("g_series_style.json",
@@ -444,13 +494,15 @@ if __name__ == "__main__":
                  "note": "Panavision G 系列处方未公开。光学结构与 E 系列风格相同，整体缩放到垂直焦距 100 mm（视场比原设计大约 30%）；按 Panavision 公布的 G 系列 100 mm 规格设定光圈与最近对焦，并按其「excellent glare resistance」把炫光调弱。",
                  "units": "mm", "conventions": conv},
                 {"reference": "Panavision G Series 100 mm T3，最近对焦 91.4 cm（panavision.com）；页面描述：excellent glare resistance、minimal breathing",
-                 "f_number": 3.0, "min_focus_mm": 914.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.15, "corner_pupil_fraction": 0.75,
+                 "f_number": 3.0, "min_focus_mm": 914.0, "mumps_correction": 1.0, "coating_nm": 100.0, "flare_color": "PHYSICAL", "flare_gain": 0.15, "corner_pupil_fraction": 0.75,
                  "veiling_glare": 0.005},
                 prime_scale=0.763, att_scale=0.763)
     panavision_rear("Z1")
     panavision_rear("Z4")
     for fl in (50, 65, 85):
         neil_sirui(fl)
+    for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json"):   # C 是手工维护的 JSON，这一步幂等
+        add_compensator_file(fn)
     for fn in ("e_series_style.json", "panavision_rear_134.json", "panavision_rear_134_tele.json",
                "neil_2x_50.json", "neil_2x_65.json", "neil_2x_85.json"):
         rx = O.load(os.path.join(PDIR, fn))

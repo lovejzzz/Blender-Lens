@@ -230,10 +230,84 @@ def layout(rx, d1=0.0, d2=0.0):
         z[i] += c1 * d1 + c2 * d2
         sf["z"] = z[i]
         sf["move"] = (c1, c2)
+        sf["kc"] = (0.0, 0.0)
     for i in range(len(S) - 1):
         S[i]["d"] = S[i]["z"] - S[i + 1]["z"]
     S[-1]["d"] = S[-1]["z"]
+    comp = compensator(rx)
+    if comp:
+        phi = comp_phi(rx, d1)
+        for sf in S:
+            if sf["id"] == comp["surface"]:
+                k = 1.0 / (sf["n"] - 1.0)                     # 前表面曲率 / 光焦度（薄板，后表面为平面）
+                sf["kc"] = (-k, k)                            # dc/dφ：水平 −φ、垂直 +φ
+                sf["Rx"] = INF if phi == 0 else 1.0 / (-k * phi)
+                sf["Ry"] = INF if phi == 0 else 1.0 / (k * phi)
+                sf["phi"] = phi
     return S
+
+
+# ───────────────────────── 发腮补偿（0.8，Auto Panatar 式）─────────────────────────
+# 前置变形器靠改变间距对焦时，近摄的实际压缩比会下降（C 风格 2.01 → 1.69）。Panavision 1958 年的 Auto Panatar
+# （Wallin US 2,890,622）在前面加一对与对焦环联动、反向旋转的弱柱面镜：同号功率 P、轴向 ±θ 的两片叠加 =
+# 水平 P(1 − cos2θ)、垂直 P(1 + cos2θ)，再配一片 −P 的球面 → 水平 −P·cos2θ、垂直 +P·cos2θ，主截面始终在 x / y。
+# 这里用它的一阶等效：变形器前一块薄平板，前表面是曲率随对焦变化的马鞍面（水平 −φ、垂直 +φ），后表面平面；
+# 没有模拟两片分开、各自转动的真实柱面之间的高阶交叉项。
+# φ 由对焦环行程 Δ1 经凸轮表决定（rx.focus.compensator.d1 / phi，tools/build_presets.py 按「每个距离的
+# 压缩比 = 无穷远压缩比」解出），再乘补偿强度 level（0 = 无补偿 → 与没有这块板完全相同；1 = 完全补偿）。
+
+def compensator(rx):
+    return rx.get("focus", {}).get("compensator")
+
+def comp_phi(rx, d1):
+    """对焦环行程 Δ1 → 补偿板的光焦度 φ（1/mm）。表外线性外推。"""
+    c = compensator(rx)
+    if not c:
+        return 0.0
+    lev = float(c.get("level", 0.0))
+    if lev == 0.0:
+        return 0.0
+    X, Y = c["d1"], c["phi"]
+    if len(X) < 2:
+        return 0.0
+    j = 0
+    while j < len(X) - 2 and d1 > X[j + 1]:
+        j += 1
+    t = (d1 - X[j]) / (X[j + 1] - X[j])
+    return lev * (Y[j] + t * (Y[j + 1] - Y[j]))
+
+def solve_compensated(rx, obj_dist):
+    """完全补偿时某物距下的 (Δ1, Δ2, φ)：两截面合焦到无穷远像位 + 压缩比 = 无穷远压缩比。三维牛顿。"""
+    import copy
+    rx0 = copy.deepcopy(rx)
+    rx0["focus"]["compensator"] = dict(compensator(rx), level=0.0)
+    S0 = layout(rx0)
+    target = {a: _image_z_inf(S0, a) for a in ("Ry", "Rx")}
+    sq0 = paraxial_infinity(S0, "Ry")[0] / paraxial_infinity(S0, "Rx")[0]
+    k = next(i for i, sf in enumerate(S0) if sf["id"] == compensator(rx)["surface"])
+    def F(d1, d2, phi):
+        S = layout(rx0, d1, d2)
+        kk = 1.0 / (S[k]["n"] - 1.0)
+        S[k]["Rx"] = INF if phi == 0 else 1.0 / (-kk * phi)
+        S[k]["Ry"] = INF if phi == 0 else 1.0 / (kk * phi)
+        L = obj_dist - S[0]["z"]
+        sq = paraxial_finite(S, "Ry", L)[1] / paraxial_finite(S, "Rx", L)[1]
+        return [_image_z(S, "Ry", obj_dist) - target["Ry"], _image_z(S, "Rx", obj_dist) - target["Rx"], sq - sq0]
+    x = list(solve_focus(rx0, obj_dist)) + [0.0]
+    h = (1e-4, 1e-4, 1e-7)
+    for _ in range(60):
+        f = F(*x)
+        if max(abs(v) for v in f) < 1e-11:
+            break
+        J = []
+        for j in range(3):
+            xp = list(x); xp[j] += h[j]
+            fp = F(*xp)
+            J.append([(fp[i] - f[i]) / h[j] for i in range(3)])
+        J = [[J[j][i] for j in range(3)] for i in range(3)]           # J[i][j] = ∂F_i/∂x_j
+        dx = _solve(J, [-v for v in f])
+        x = [a + b for a, b in zip(x, dx)]
+    return tuple(x)
 
 def _image_z(S, axis, obj_z):
     """物点在 z = obj_z（轴上），返回近轴像点 z（像面原点下）。"""
@@ -294,6 +368,61 @@ def desqueeze(rx):
 
 
 # ───────────────────────── 曲面 ─────────────────────────
+
+# ───────────────────────── 镀膜（0.8：多层膜，特征矩阵法）─────────────────────────
+# 'SINGLE'：单层 MgF₂（厚 nm，折射率 ior）。'BROADBAND'：三层 1/4–1/2–1/4 宽带膜（Macleod《Thin-Film Optical Filters》
+# 的经典 QHQ）：外层 = 同一层 MgF₂，设计波长 λ0 = 4·ior·nm；中间 1/2 波高折射率层（ZrO₂ 型，2.05）；
+# 贴玻璃的 1/4 波层折射率随基底取 ior·√n_glass（在 λ0 处 L/M 两层的零反射条件，镀膜厂按玻璃配膜也是这么做的）。
+# 默认 nm = 94（λ0 ≈ 520 nm）：n_glass 1.5–1.95 时 420–680 nm 的残余反射 ≤ 0.5–1.3%，中段 < 0.2%。
+COATING_TYPES = ("SINGLE", "BROADBAND")
+COAT_HIGH_N = 2.05
+
+def coating_layers(kind, nm, ior, n_glass):
+    """从空气一侧起的膜层 [(n, 厚 nm), …]；nm ≤ 0 = 无镀膜。"""
+    if nm <= 0:
+        return []
+    if kind == "BROADBAND":
+        l0 = 4.0 * ior * nm
+        n3 = min(max(ior * math.sqrt(n_glass), 1.55), 2.0)
+        return [(ior, nm), (COAT_HIGH_N, l0 / (2.0 * COAT_HIGH_N)), (n3, l0 / (4.0 * n3))]
+    return [(ior, nm)]
+
+def stack_reflectance(n_in, n_out, c_in, lam_um, layers_from_air):
+    """非偏振反射率（numpy 广播）：光从 n_in 以入射角余弦 c_in 射到膜系，出射介质 n_out。
+    特征矩阵（Abelès）：无吸收时每层矩阵形如 [[a, i·b], [i·c, d]]（a…d 实数），乘积保持此形，只需实数运算。
+    哪一侧是空气由 n_in < n_out 判断（镀膜面总是空气-玻璃）；从玻璃一侧入射时膜层顺序反过来。
+    基底全反射 → 1；某层里倏逝（入射角过大）→ 退回无膜菲涅耳。"""
+    import numpy as np
+    n_in = np.asarray(n_in, float); n_out = np.asarray(n_out, float); c_in = np.asarray(c_in, float)
+    s0 = np.sqrt(np.clip(1.0 - c_in * c_in, 0.0, None))
+    k = n_in * s0                                            # 不变量 n·sinθ
+    from_air = n_in < n_out
+    out = 0.0
+    tir = k >= n_out
+    cs_out = np.sqrt(np.clip(1.0 - (k / n_out) ** 2, 1e-12, None))
+    evan = np.zeros(np.broadcast(n_in, c_in).shape, bool)
+    for pol in (0, 1):                                       # 0 = s，1 = p
+        A = np.ones_like(k); B = np.zeros_like(k); C = np.zeros_like(k); D = np.ones_like(k)
+        L = layers_from_air
+        for j in range(len(L)):
+            nj_a, dj_a = L[j]; nj_g, dj_g = L[len(L) - 1 - j]
+            nj = np.where(from_air, nj_a, nj_g); dj = np.where(from_air, dj_a, dj_g)
+            q = 1.0 - (k / nj) ** 2
+            evan |= q <= 0
+            cj = np.sqrt(np.clip(q, 1e-12, None))
+            ej = nj * cj if pol == 0 else nj / cj
+            dl = 2.0 * math.pi * nj * dj * cj / (lam_um * 1000.0)
+            cd, sd = np.cos(dl), np.sin(dl)
+            A, B, C, D = A * cd - B * ej * sd, A * sd / ej + B * cd, C * cd + D * ej * sd, -C * sd / ej + D * cd
+        e0 = n_in * c_in if pol == 0 else n_in / np.maximum(c_in, 1e-12)
+        es = n_out * cs_out if pol == 0 else n_out / cs_out
+        nr = e0 * A - D * es; ni = e0 * B * es - C
+        dr = e0 * A + D * es; di = e0 * B * es + C
+        out = out + 0.5 * (nr * nr + ni * ni) / (dr * dr + di * di)
+    if len(layers_from_air):
+        out = np.where(evan, stack_reflectance(n_in, n_out, c_in, lam_um, []), out)
+    return np.where(tir, 1.0, out)
+
 
 def sag_and_grad(x, y, cx, cy, kx=0.0, ky=0.0, asph=()):
     """双二次曲面 + 转动对称高次项（A4 r⁴ + A6 r⁶ + …）的矢高与解析梯度；超出有效区返回 None。"""

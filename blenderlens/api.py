@@ -76,6 +76,15 @@ def set_stop(cam_ob, f_number):
     return cam_ob.data.blenderlens.f_number
 
 
+def set_mumps_correction(cam_ob, level):
+    """发腮补偿强度 0–1（0.8，只对带补偿板的 C / E / G 风格有效；其余预设返回 None）。
+    1 = Auto Panatar 式完全补偿（默认）：每个距离压缩比 = 无穷远；0 = 1950 年代未校正。"""
+    if not cam_ob.get("bl_has_compensator"):
+        return None
+    cam_ob.data.blenderlens.mumps_correction = float(level)
+    return cam_ob.data.blenderlens.mumps_correction
+
+
 def lens_info(cam_ob):
     """当前状态的光学信息（全部由处方算出）。"""
     rx = rig.read_prescription()
@@ -85,7 +94,8 @@ def lens_info(cam_ob):
                 efl_x=optics.paraxial_infinity(S, "Rx")[0], efl_y=optics.paraxial_infinity(S, "Ry")[0],
                 squeeze=optics.squeeze_at(rx, dist), desqueeze=optics.desqueeze(rx),
                 gate_mm=(rx["sensor"]["width"], rx["sensor"]["height"]), units=cam_ob.get("bl_units"),
-                mm_per_scene_unit=rig.mm_per_unit(rig._cam_scene(cam_ob)), min_focus_mm=cam_ob.get("bl_min_focus_mm"))
+                mm_per_scene_unit=rig.mm_per_unit(rig._cam_scene(cam_ob)), min_focus_mm=cam_ob.get("bl_min_focus_mm"),
+                mumps_correction=(optics.compensator(rx) or {}).get("level"))
 
 
 def render_still(filepath, scene=None, flare=True, n_grid=260):

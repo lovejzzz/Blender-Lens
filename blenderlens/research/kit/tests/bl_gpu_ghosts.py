@@ -1,6 +1,6 @@
 # GPU 路径的相机端鬼影（0.7）对照 CPU / OSL 参考实现：
 # 黑背景 + 画面外侧一块很亮的发光面板（窗户类大面积亮源），开鬼影（增益放大便于比较），
-# 比较：去掉直射像后鬼影区域的总能量、模糊后逐像素差、时间。运行：Blender -b --factory-startup --python tests/bl_gpu_ghosts.py
+# 比较：去掉直射像后鬼影区域的总能量、模糊后逐像素差、时间。运行：Blender -b --factory-startup --python tests/bl_gpu_ghosts.py [-- BROADBAND]
 import os, sys, json, math, time
 import bpy
 import numpy as np
@@ -28,7 +28,9 @@ e.inputs[1].default_value = 400.0; em.node_tree.links.new(e.outputs[0], o_.input
 bpy.ops.mesh.primitive_plane_add(size=1, location=(1300, 250, -6000)); pl = bpy.context.object
 pl.scale = (500, 350, 1); pl.data.materials.append(em)
 p = cam.data.blenderlens
-p.ghosts = True; p.ghost_gain = 20.0; p.dispersion = False
+COAT = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "SINGLE"
+p.ghosts = True; p.ghost_gain = 20.0 if COAT == "SINGLE" else 200.0; p.dispersion = False
+p.coating_type = COAT; p.coating_nm = 100.0 if COAT == "SINGLE" else 94.0
 bl.set_focus(cam, metres=6.0); bl.set_stop(cam, 4.0)
 rig.render_preset(sc)
 sc.render.resolution_x, sc.render.resolution_y = 240, 101
@@ -41,7 +43,7 @@ for d in pr.devices:
 
 def render(dev):
     sc.cycles.device = dev
-    sc.render.filepath = os.path.join(OUT, f"ghost_{dev}.exr")
+    sc.render.filepath = os.path.join(OUT, f"ghost_{COAT}_{dev}.exr")
     t = time.time(); bpy.ops.render.render(write_still=True); dt = time.time() - t
     im = bpy.data.images.load(sc.render.filepath, check_existing=False)
     a = np.array(im.pixels[:], np.float64).reshape(im.size[1], im.size[0], 4)[:, :, :3]
@@ -60,7 +62,7 @@ lg, lc = g.mean(2), c.mean(2)
 direct = lc > 0.3 * lc.max()                             # 直射像（面板）掩掉，只比鬼影
 mask = ~direct
 ghost_g, ghost_c = lg[mask].sum(), lc[mask].sum()
-rep = dict(enable=ok, device_gpu=dg, device_cpu=dc, seconds_gpu=round(tg, 2), seconds_cpu=round(tc, 2),
+rep = dict(coating=COAT, enable=ok, device_gpu=dg, device_cpu=dc, seconds_gpu=round(tg, 2), seconds_cpu=round(tc, 2),
            ghost_energy_gpu=round(float(ghost_g), 3), ghost_energy_cpu=round(float(ghost_c), 3),
            ghost_rel_diff=round(float(ghost_g / max(ghost_c, 1e-9) - 1), 4),
            blurred_rel_rms_ghost=round(float(np.sqrt(np.mean((blur(lg)[mask] - blur(lc)[mask]) ** 2)) / max(blur(lc)[mask].mean(), 1e-9)), 4),

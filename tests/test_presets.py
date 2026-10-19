@@ -16,8 +16,9 @@ P = lambda fn: O.load(os.path.join(O.PRESCRIPTION_DIR, fn))
 # ── Isco：对焦表（用专利自己的 f=100 BK7 主镜，距离从焦面量起）──
 import copy
 rx = copy.deepcopy(P("e_series_style.json"))
+rx["focus"]["compensator"]["level"] = 0.0             # 专利对焦表是未补偿的 Isco 凸轮
 rx["glasses"]["BK7"] = {"nd": 1.5168, "vd": 64.17}
-rx["groups"][1] = {"id": "prime", "scale": 1.0, "stop": {"after_surface": "B1", "offset_fraction": 0.5, "f_number": 2.8},
+rx["groups"][next(i for i, g in enumerate(rx["groups"]) if g["id"] == "prime")] = {"id": "prime", "scale": 1.0, "stop": {"after_surface": "B1", "offset_fraction": 0.5, "f_number": 2.8},
                    "surfaces": [{"id": "B1", "R_x": 51.68, "R_y": 51.68, "d": 18.9, "medium": "BK7"},
                                 {"id": "B2", "R_x": None, "R_y": None, "d": None, "medium": "air"}]}
 rx["focus"]["groups"][0]["ids"] = ["I10", "I11", "I12", "B1", "B2"]
@@ -35,7 +36,8 @@ for dist_m, E3, E9, dpct in BP.ISCO_FOCUS_TABLE[1:]:
     worst = tuple(max(a, b) for a, b in zip(worst, errs))
 ok(worst[0] < 0.1 and worst[1] < 0.1, f"Isco: cam motion reproduces focus table (11 rows), worst {worst[0]:.3f} / {worst[1]:.3f} mm")
 ok(worst[2] < 0.001, f"Isco: squeeze change reproduces focus table, worst {100 * worst[2]:.3f}%")
-sq = O.squeeze_at(P("e_series_style.json"), 2500.0) / O.squeeze_at(P("e_series_style.json"), math.inf)
+_e0 = copy.deepcopy(P("e_series_style.json")); _e0["focus"]["compensator"]["level"] = 0.0
+sq = O.squeeze_at(_e0, 2500.0) / O.squeeze_at(_e0, math.inf)
 print(f"    info: E 系列风格（Nikon 主镜）2.5 m / ∞ 压缩比 = {sq:.4f}；专利表 = {(1 - 0.0632) / 1.0445:.4f}")
 
 # ── Panavision：焦距 ──
@@ -112,4 +114,35 @@ for fn, name, _ in O.list_presets():
         d1, d2 = O.solve_focus(rx, dist)
         bad = [e["between"] for e in O.edge_report(rx, d1, d2) if e["min_gap"] < 0]
         ok(not bad, f"{name} @ {'∞' if math.isinf(dist) else f'{dist / 1000:.2f} m'}: no edge clash")
+# ── 发腮补偿（0.8，Auto Panatar 式一阶等效）──
+import numpy as np
+sys.path.insert(0, ROOT)
+import blenderlens.flare as FL
+def rms_spot(rx, dist, fx, fy):
+    lens = FL.Lens(rx, dist, None); S = lens.S
+    W, H = rx["sensor"]["width"], rx["sensor"]["height"]
+    sx, sy = fx * W / 2, fy * H / 2
+    pnt, dv = O.trace_reverse(S, (sx, sy, 0.0), O.aim_through_stop(S, (sx, sy), (0.0, 0.0), lens.z_stop), clip=False)
+    t = (dist - pnt[2]) / dv[2]
+    P_, D_, wt = FL._source_rays(lens, (pnt[0] + t * dv[0], pnt[1] + t * dv[1], dist), 100)
+    idx, X, Y, w, Dout = lens.trace(P_, D_, FL.Lens.seq_direct(len(S)), O.LAMBDA_D, True, 0.0, 1.38)
+    return math.hypot(X.std(), Y.std())
+for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json"):
+    base = P(fn)
+    mfd = base["focus"]["min_distance_mm"]
+    def lev(v):
+        r = copy.deepcopy(base); r["focus"]["compensator"]["level"] = v
+        return r
+    s_inf = O.squeeze_at(base, math.inf)
+    s0, s5, s1 = (O.squeeze_at(lev(v), mfd) for v in (0.0, 0.5, 1.0))
+    s1b = O.squeeze_at(lev(1.0), 2.0 * mfd)
+    ok(abs(s1 / s_inf - 1) < 0.002 and abs(s1b / s_inf - 1) < 0.002 and s0 < s5 < s1,
+       f"{fn}: mumps correction — squeeze at MFD {s0:.3f} (0) → {s5:.3f} (0.5) → {s1:.3f} (1), ∞ {s_inf:.3f}")
+    ok(max(abs(v) for v in O.focus_residual(lev(1.0), mfd)) < 1e-6, f"{fn}: both axes in focus at MFD with full correction")
+    clash = [e for e in O.edge_report(lev(1.0), *O.solve_focus(lev(1.0), mfd)) if e["min_gap"] < 0]
+    ok(not clash, f"{fn}: no edge clash at MFD with full correction")
+    a0 = max(rms_spot(lev(0.0), mfd, f, g) for f, g in ((0, 0), (0.7, 0), (0, 0.7)))
+    a1 = max(rms_spot(lev(1.0), mfd, f, g) for f, g in ((0, 0), (0.7, 0), (0, 0.7)))
+    ok(a1 < 1.35 * a0, f"{fn}: sharpness at MFD kept (worst RMS spot {1000 * a0:.0f} → {1000 * a1:.0f} µm)")
+    ok(O.comp_phi(lev(1.0), 0.0) == 0.0, f"{fn}: compensator plate is flat at infinity")
 print("ALL PRESET TESTS PASSED")

@@ -55,7 +55,18 @@ def _interface(sf_id, ior, coatable, coated, film_nm, film_ior):
 
 # ───────────────────────── 网格 ─────────────────────────
 
-def _mesh_object(name, data, mats, parent, collection):
+def _dither_zero_normals(N):
+    """Cycles 把顶点法线压成八面体 16+16 位（util/types_normal.h，65535 级），0 不可表示：恰为 0 的分量一律
+    解码成 +1.5×10⁻⁵（柱面一个方向、平面两个方向恒为 0 → 各成一个指向 +x / +y 的微小棱镜）。把恰为 0 的分量
+    按顶点序号交替写成 ±1e-12，量化后正负各半，平均为 0；平面另外改平直着色（用精确的几何法线）。
+    实测这项偏差很小：Panavision 长焦端 Geometry 模式的同向残差（约 0.3 px @ 270p）修前修后相差 < 0.01 px。"""
+    out = []
+    for k, (x, y, z) in enumerate(N):
+        s = 1e-12 if k % 2 else -1e-12
+        out.append((x if x != 0.0 else s, y if y != 0.0 else -s, z))
+    return out
+
+def _mesh_object(name, data, mats, parent, collection, flat=False):
     V, F, N, M = data
     me = bpy.data.meshes.get(name)
     if me:
@@ -65,13 +76,31 @@ def _mesh_object(name, data, mats, parent, collection):
     for m in mats:
         me.materials.append(m)
     me.polygons.foreach_set("material_index", M)
-    me.shade_smooth()
-    me.normals_split_custom_set_from_vertices(N)
-    me.validate(clean_customdata=False)
+    if flat:
+        # 平面光学面：平直着色 → Cycles 用三角形的几何法线（浮点、精确），不经过压缩的顶点法线
+        me.shade_flat()
+        me.validate(clean_customdata=False)
+    else:
+        me.shade_smooth()
+        _set_normals(me, N)
     ob = bpy.data.objects.new(name, me)
     collection.objects.link(ob)
     ob.parent = parent
     return ob
+
+def _set_normals(me, N):
+    """逐顶点法线（解析值）。Blender 4.5+ 用浮点「自由法线」（custom_normal 属性）：旧接口
+    normals_split_custom_set_from_vertices 把法线压成角点法线空间里的两个 16 位角度，回读误差最大约 100″
+    （同样不是 Geometry 残差的主因，见 RESEARCH.md §5 第 14 条）。"""
+    N = _dither_zero_normals(N)
+    a = me.attributes.get("custom_normal")
+    try:
+        if a is None:
+            a = me.attributes.new("custom_normal", 'FLOAT_VECTOR', 'POINT')
+        a.data.foreach_set("vector", [c for n in N for c in n])
+    except (TypeError, RuntimeError, AttributeError):
+        me.normals_split_custom_set_from_vertices(N)
+    me.validate(clean_customdata=False)
 
 def _empty(name, parent, collection, loc=(0, 0, 0), rot=(0, 0, 0)):
     ob = bpy.data.objects.new(name, None)
@@ -198,8 +227,10 @@ def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_
         ior = nb[k] / na[k] if flip else na[k] / nb[k]
         air_glass = (nb[k] == 1.0) != (na[k] == 1.0)
         mat = _interface(sf["id"], ior, air_glass, coated, film_nm, film_ior)
+        plane = (math.isinf(sf["Rx"]) and math.isinf(sf["Ry"]) and not any(sf.get("asph") or [])
+                 and not any(sf.get("kc", (0.0, 0.0))))                   # 补偿板会改形，保持平滑着色
         ob = _mesh_object(f"BL_S_{sf['id']}", G.surface_mesh(sf, flip=flip), [mat, black],
-                          parent_of.get(sf["id"], rig), lens_col)
+                          parent_of.get(sf["id"], rig), lens_col, flat=plane)
         ob["bl_surface"] = sf["id"]
         ob["bl_normal_sign"] = -1 if flip else 1
 
@@ -214,12 +245,19 @@ def build(context, rx=None, coated=True, film_nm=100.0, film_ior=1.38, name="BL_
         plate = G.annulus(G.outline(a["ap"]), R_barrel - 0.05, zc)
         _mesh_object(f"BL_E_{ids[0]}_{ids[-1]}", G.merge(wall, plate), [black], par, lens_col)
 
+    # 光圈（0.8 之前 Geometry 模式没有光圈：只靠 OSL 出瞳采样盘（1.4 倍近轴出瞳）和镜片口径限光）
+    st_id = O.stop_group(rx)["stop"]["after_surface"]
+    iris = _mesh_object("BL_Iris", _iris_mesh(rx, S, R_barrel, O.nominal_f_number(rx), 0, 0.0), [black],
+                        parent_of.get(st_id, rig), lens_col, flat=True)
+    iris["bl_iris"] = 1
+
     # 镜筒（固定）+ 后盖（传感器后 0.5 mm，挡住反射回来的光线去看相机背后）
     z_front = S[0]["z"] + 6.0
     _mesh_object("BL_Barrel", G.merge(G.tube(R_barrel, -0.5, z_front), G.disc(R_barrel, -0.5)), [black], rig, lens_col)
 
     cam_ob["bl_R_barrel"] = R_barrel
     cam_ob["bl_units"] = units_used
+    cam_ob["bl_has_compensator"] = bool(O.compensator(rx))
     lens_col.hide_render = True                 # 默认 Analytic 模式不需要镜片几何
     apply_look(cam_ob, rx)
     return cam_ob
@@ -231,6 +269,10 @@ def apply_look(cam_ob, rx):
     p.f_number = max(look.get("f_number", O.nominal_f_number(rx)), O.nominal_f_number(rx))
     p.coating_nm = look.get("coating_nm", 100.0)
     p.coated = p.coating_nm > 0
+    p.coating_type = look.get("coating", 'SINGLE')
+    if O.compensator(rx):
+        p["mumps_correction"] = float(look.get("mumps_correction", rx["focus"]["compensator"].get("level", 0.0)))
+        set_compensation(cam_ob, p["mumps_correction"])
     p.flare_color = look.get("flare_color", 'PHYSICAL')
     p.flare_gain = look.get("flare_gain", 1.0)
     p.veiling_glare = look.get("veiling_glare", 0.0)
@@ -315,11 +357,12 @@ def apply_settings(cam_ob):
                 ch.location.z = z
                 changed = True
     cc = cam.cycles_custom
+    phi = O.comp_phi(rx, d1)
     vals = dict(mode=1 if p.mode == 'GEOMETRY' else 0, f_number=max(p.f_number, O.nominal_f_number(rx)), blades=p.blades,
-                blade_rotation=p.blade_rotation, delta_unit=d1, delta_front=d2,
+                blade_rotation=p.blade_rotation, delta_unit=d1, delta_front=d2, comp_phi=phi,
                 dispersion=int(p.dispersion and p.dispersion_mode == 'FULL'), exposure_compensate=int(p.exposure_compensate),
                 ghosts=int(p.ghosts), ghost_gain=p.ghost_gain, coated=int(p.coated), coating_nm=p.coating_nm,
-                unit_scale=us)
+                coating_type=1 if p.coating_type == 'BROADBAND' else 0, unit_scale=us)
     keys = cc.keys()
     for k, v in vals.items():
         if k in keys:
@@ -327,7 +370,12 @@ def apply_settings(cam_ob):
             if (abs(cur - v) > 1e-9 * max(1.0, abs(v))) if isinstance(v, float) else cur != v:
                 cc[k] = v
                 changed = True
-    changed |= _write_gpu_fields(cam, d1, d2, vals["f_number"], p.blades)
+    changed |= _write_gpu_fields(cam, d1, d2, vals["f_number"], p.blades, phi)
+    changed |= _update_iris(cam_ob, rx, vals["f_number"], p.blades, p.blade_rotation)
+    if O.compensator(rx) and abs(cam_ob.get("bl_comp_phi", 0.0) - phi) > 1e-12:
+        _update_compensator_mesh(cam_ob, rx, phi)
+        cam_ob["bl_comp_phi"] = phi
+        changed = True
     if gpukernel.is_active():
         sync_gpu_lens(cam_ob)
     col = bpy.data.collections.get("BL_LensGeometry")
@@ -343,7 +391,68 @@ def apply_settings(cam_ob):
         cam.update_tag()
     return d1, d2
 
-def _write_gpu_fields(cam, d1, d2, f_number, blades):
+def _update_compensator_mesh(cam_ob, rx, phi):
+    """Geometry 模式：补偿板前表面的网格随 φ 改形（顶点 + 自由法线原地改写，拓扑不变）。"""
+    comp = O.compensator(rx)
+    ob = next((c for c in cam_ob.children_recursive if c.get("bl_surface") == comp["surface"]), None)
+    if ob is None or ob.type != 'MESH':
+        return
+    S = O.layout(rx)
+    sf = next(s for s in S if s["id"] == comp["surface"])
+    k = 1.0 / (sf["n"] - 1.0)
+    sf["Rx"] = math.inf if phi == 0 else 1.0 / (-k * phi)
+    sf["Ry"] = math.inf if phi == 0 else 1.0 / (k * phi)
+    V, F, N, M = G.surface_mesh(sf, flip=ob.get("bl_normal_sign", 1) < 0)
+    me = ob.data
+    if len(me.vertices) != len(V):
+        return
+    me.vertices.foreach_set("co", [c for v in V for c in v])
+    _set_normals(me, N)
+    me.update()
+
+def _iris_mesh(rx, S, R_barrel, f_number, blades, rot_deg):
+    z_stop, r0 = O.stop_geometry(rx, S)                      # 静止状态（对焦位移由父物体 BL_Move 给）
+    r = r0 * O.nominal_f_number(rx) / max(f_number, O.nominal_f_number(rx))
+    return G.annulus(G.iris_outline(r, int(blades), math.radians(rot_deg)), R_barrel - 0.05, z_stop)
+
+def _update_iris(cam_ob, rx, f_number, blades, rot_deg):
+    ob = next((c for c in cam_ob.children_recursive if c.get("bl_iris")), None)
+    if ob is None:
+        return False
+    key = f"{f_number:.6f}|{int(blades)}|{rot_deg:.6f}"
+    if ob.get("bl_iris_key") == key:
+        return False
+    V, F, N, M = _iris_mesh(rx, O.layout(rx), cam_ob.get("bl_R_barrel", 50.0), f_number, blades, rot_deg)
+    me = ob.data
+    if len(me.vertices) == len(V) and len(me.polygons) == len(F):
+        me.vertices.foreach_set("co", [c for v in V for c in v])
+        me.update()
+    else:
+        new = bpy.data.meshes.new(me.name)
+        new.from_pydata(V, [], F)
+        for m in me.materials:
+            new.materials.append(m)
+        new.shade_flat()
+        ob.data = new
+        bpy.data.meshes.remove(me)
+        new.name = "BL_Iris"
+    ob["bl_iris_key"] = key
+    return True
+
+def set_compensation(cam_ob, level):
+    """发腮补偿强度（0–1）写进场景里的处方（所有派生计算都从处方读），再同步。"""
+    rx = read_prescription()
+    if not O.compensator(rx):
+        return False
+    level = min(max(float(level), 0.0), 1.0)
+    if abs(rx["focus"]["compensator"].get("level", 0.0) - level) < 1e-9:
+        return False
+    rx["focus"]["compensator"]["level"] = level
+    store_prescription(rx)
+    apply_settings(cam_ob)
+    return True
+
+def _write_gpu_fields(cam, d1, d2, f_number, blades, phi=0.0):
     """GPU 路径的每帧参数通道（见 gpukernel.FIELD_MAP）。自定义相机用不到这些字段；CPU / OSL 路径忽略它们。
     它们跟随对焦 / 光圈的关键帧（frame_change 时 apply_settings 重写），所以动画在 GPU 路径下同样生效。返回是否改写。"""
     c = _set(cam.stereo, "convergence_distance", 1000.0 + d1, 1e-7)
@@ -351,6 +460,7 @@ def _write_gpu_fields(cam, d1, d2, f_number, blades):
     c |= _set(cam.dof, "use_dof", True)
     c |= _set(cam.dof, "aperture_ratio", 1.0 / max(f_number, 1e-3), 1e-7)
     c |= _set(cam.dof, "aperture_blades", int(blades))
+    c |= _set(cam, "fisheye_lens", 50.0 + 1.0e4 * phi, 1e-7)
     return c
 
 def gpu_settings(cam_ob):
@@ -364,7 +474,8 @@ def gpu_settings(cam_ob):
                                      pupil_importance=bool(get("pupil_importance", 1)),
                                      blade_rotation_deg=p.blade_rotation, unit_scale=unit_scale(_cam_scene(cam_ob)),
                                      ghosts=p.ghosts, ghost_fraction=get("ghost_fraction", 0.5), ghost_gain=p.ghost_gain,
-                                     coated=p.coated, coating_nm=p.coating_nm, coating_ior=get("coating_ior", 1.38))
+                                     coated=p.coated, coating_nm=p.coating_nm, coating_ior=get("coating_ior", 1.38),
+                                     coating_type=p.coating_type)
 
 def sync_gpu_lens(cam_ob):
     """把当前镜头写进 GPU 内核头文件（内容不变则不动；变了下一次 GPU 渲染会重编内核，约 10 秒）。"""
@@ -554,7 +665,8 @@ def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_lay
             continue
         radius = 0.5 * max(ob.dimensions) * mm_per_unit(scene)
         lay, info = FL.flare_layer(rx, src, strength, radius, W, H, focus_dist=dist, f_number=p.f_number,
-                                   coated=p.coated, coating_nm=p.coating_nm, n_grid=n_grid, blur_px=blur_px)
+                                   coated=p.coated, coating_nm=p.coating_nm, coating_type=p.coating_type,
+                                   n_grid=n_grid, blur_px=blur_px)
         layer += recolor(lay, color, p.flare_color, tuple(p.flare_tint)) * p.flare_gain
         if p.starburst and p.starburst_gain > 0:                 # 衍射星芒：光源本色（不受炫光着色影响）
             sb, _ = FL.starburst_layer(rx, src, strength, radius, W, H, focus_dist=dist, f_number=p.f_number,
