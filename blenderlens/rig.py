@@ -279,55 +279,79 @@ def _rx_cached():
         _rx_cache[key] = read_prescription()
     return _rx_cache[key]
 
+def _set(obj, attr, value, tol=1e-9):
+    """只在值变化时写（RNA 写入会触发更新；动画渲染的运动模糊子帧里多余的写入会打断相机运动的导出）。返回是否改写。"""
+    cur = getattr(obj, attr)
+    if isinstance(value, (tuple, list)):
+        if all(abs(a - b) <= tol for a, b in zip(cur, value)):
+            return False
+    elif isinstance(value, float):
+        if abs(cur - value) <= tol * max(1.0, abs(value)):
+            return False
+    elif cur == value:
+        return False
+    setattr(obj, attr, value)
+    return True
+
 def apply_settings(cam_ob):
-    """把 cam.blenderlens 的设置写到：分组位置、OSL 参数、镜片几何的渲染可见性。"""
+    """把 cam.blenderlens 的设置写到：分组位置、OSL 参数、镜片几何的渲染可见性。只写变化了的值。"""
     cam = cam_ob.data
     p = cam.blenderlens
     rx = _rx_cached()
     dist = focus_mm(cam_ob)
     us = unit_scale(_cam_scene(cam_ob))
     d1, d2 = O.solve_focus(rx, dist)
+    changed = False
     for ch in cam_ob.children:
         if ch.name.startswith("BL_Rig"):
-            ch.scale = (us, us, us)                  # 镜片网格与对焦分组都在 BL_Rig 下，内部仍是毫米
-    cam.clip_start = 0.1 * us
-    cam.clip_end = 1e7 * us
+            changed |= _set(ch, "scale", (us, us, us))   # 镜片网格与对焦分组都在 BL_Rig 下，内部仍是毫米
+    changed |= _set(cam, "clip_start", 0.1 * us, 1e-6)
+    changed |= _set(cam, "clip_end", 1e7 * us, 1e-6)
     for ch in cam_ob.children_recursive:
         if "bl_move" in ch:
             c1, c2 = ch["bl_move"]
-            ch.location.z = c1 * d1 + c2 * d2
+            z = c1 * d1 + c2 * d2
+            if abs(ch.location.z - z) > 1e-7:
+                ch.location.z = z
+                changed = True
     cc = cam.cycles_custom
     vals = dict(mode=1 if p.mode == 'GEOMETRY' else 0, f_number=max(p.f_number, O.nominal_f_number(rx)), blades=p.blades,
                 blade_rotation=p.blade_rotation, delta_unit=d1, delta_front=d2,
                 dispersion=int(p.dispersion and p.dispersion_mode == 'FULL'), exposure_compensate=int(p.exposure_compensate),
                 ghosts=int(p.ghosts), ghost_gain=p.ghost_gain, coated=int(p.coated), coating_nm=p.coating_nm,
                 unit_scale=us)
+    keys = cc.keys()
     for k, v in vals.items():
-        if k in cc.keys():
-            cc[k] = v
-    _write_gpu_fields(cam, d1, d2, vals["f_number"], p.blades)
+        if k in keys:
+            cur = cc[k]
+            if (abs(cur - v) > 1e-9 * max(1.0, abs(v))) if isinstance(v, float) else cur != v:
+                cc[k] = v
+                changed = True
+    changed |= _write_gpu_fields(cam, d1, d2, vals["f_number"], p.blades)
     if gpukernel.is_active():
         sync_gpu_lens(cam_ob)
     col = bpy.data.collections.get("BL_LensGeometry")
     if col:
-        col.hide_render = (p.mode != 'GEOMETRY')
+        _set(col, "hide_render", p.mode != 'GEOMETRY')
+    film = p.coating_nm if p.coated else 0.0
     for m in bpy.data.materials:                     # Geometry 模式的镀膜与 Analytic 共用同一组设置
         if m.name.startswith("BL_IF_") and m.get("bl_coatable") and m.node_tree:
             for n in m.node_tree.nodes:
-                if n.type == 'BSDF_GLASS':
-                    n.inputs["Thin Film Thickness"].default_value = p.coating_nm if p.coated else 0.0
-    cam.update_tag()
-    cam_ob.update_tag()
+                if n.type == 'BSDF_GLASS' and abs(n.inputs["Thin Film Thickness"].default_value - film) > 1e-6:
+                    n.inputs["Thin Film Thickness"].default_value = film
+    if changed:
+        cam.update_tag()
     return d1, d2
 
 def _write_gpu_fields(cam, d1, d2, f_number, blades):
     """GPU 路径的每帧参数通道（见 gpukernel.FIELD_MAP）。自定义相机用不到这些字段；CPU / OSL 路径忽略它们。
-    它们跟随对焦 / 光圈的关键帧（frame_change 时 apply_settings 重写），所以动画在 GPU 路径下同样生效。"""
-    cam.stereo.convergence_distance = 1000.0 + d1
-    cam.fisheye_fov = 16.0 + d2 / 5.0
-    cam.dof.use_dof = True
-    cam.dof.aperture_ratio = 1.0 / max(f_number, 1e-3)
-    cam.dof.aperture_blades = int(blades)
+    它们跟随对焦 / 光圈的关键帧（frame_change 时 apply_settings 重写），所以动画在 GPU 路径下同样生效。返回是否改写。"""
+    c = _set(cam.stereo, "convergence_distance", 1000.0 + d1, 1e-7)
+    c |= _set(cam, "fisheye_fov", 16.0 + d2 / 5.0, 1e-7)
+    c |= _set(cam.dof, "use_dof", True)
+    c |= _set(cam.dof, "aperture_ratio", 1.0 / max(f_number, 1e-3), 1e-7)
+    c |= _set(cam.dof, "aperture_blades", int(blades))
+    return c
 
 def gpu_settings(cam_ob):
     cam = cam_ob.data

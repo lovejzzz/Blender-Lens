@@ -16,7 +16,7 @@
 > - a deterministic forward-traced flare pass, diffraction starbursts and veiling glare;
 > - metre-scale scenes, native 16:9 gates, a Python API with multi-machine frame rendering.
 >
-> Install `dist/blenderlens-0.6.0.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
+> Install `dist/blenderlens-0.6.1.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
 
 | C 系列风格 · 100 mm · f/2.3 | E 系列风格 · 100 mm · f/2.8 | G 系列风格 · 100 mm · f/3 |
 |---|---|---|
@@ -46,12 +46,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.6.0.zip`](dist/blenderlens-0.6.0.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.6.1.zip`](dist/blenderlens-0.6.1.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.6.0.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.6.1.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。
@@ -136,6 +136,12 @@ bl.render_still("//shot.exr", flare=True)          # 渲染 + 插件后期（横
 blender -b shot.blend --python-expr "import blenderlens.api as bl; bl.enable_gpu(); bl.render_frames(frames=range(1, 145), out_dir='/shared/shot010')"
 ```
 
+跟随已有的场景相机（保留相机运动模糊）：
+
+```python
+bl.follow_camera(cam, bpy.data.objects["ShotCam"], 1, 144, substeps=2)   # 位置 / 旋转 / 对焦距离烘焙成关键帧
+```
+
 `render_frames` 的行为：
 - **确定性**：种子 = seed + 帧号，同一帧在任何机器上结果相同。
 - **可断点续渲**：先写 `.partial` 再改名，已有帧跳过。
@@ -211,6 +217,7 @@ tests/run_all.sh
 | `tests/bl_gpu.py` | GPU 路径对 CPU / OSL：时间、噪点、亮度、整体位移、对焦关键帧、Geometry 回退 |
 | `tests/bl_dispersion.py` | Lateral in Post 与 Full 的彩边位置对比、三种色散模式的噪点 |
 | `tests/bl_frames.py` | 曝光差 API 对照实测；render_frames 的跳过、断点续渲、确定性、锁 |
+| `tests/bl_follow.py` | follow_camera：子帧位置在两帧之间、对焦距离有关键帧、开运动模糊时拖影存在（且对焦关键帧不再打断相机运动模糊） |
 | `tests/bl_percentage.py` | resolution_percentage ≠ 100% 时后期步骤尺寸正确 |
 | `tests/bl_bench.py` | MessyRoom 合成基准（时间、三种噪点，结果追加进 bench.json） |
 | `tests/install_test.sh` | 在全新用户配置里从 zip 安装、渲染，并按 HANDOFF 的命令行用法跑 GPU 帧（模拟另一台机器） |

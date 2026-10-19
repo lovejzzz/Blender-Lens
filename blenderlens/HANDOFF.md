@@ -1,6 +1,6 @@
-# BlenderLens 0.6.0 交接说明（给接手的 AI）
+# BlenderLens 0.6.1 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.6.0**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.6.1**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -16,11 +16,11 @@ Panavision 的 C/E/G/T/Primo 量产处方从未公开。除「Panavision 后置�
 
 要求：Blender **5.0 及以上**（开发和测试都在 macOS / Apple M2 Max / Blender 5.3 beta 上完成；Windows、Linux、5.0–5.2 未实测）。不依赖第三方 Python 包。
 
-- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.6.0.zip`。
+- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.6.1.zip`。
 - 命令行：
 
 ```bash
-blender --command extension install-file -r user_default -e blenderlens-0.6.0.zip
+blender --command extension install-file -r user_default -e blenderlens-0.6.1.zip
 ```
 
 装好后的 Python 模块路径是 `bl_ext.user_default.blenderlens`（仓库名 `user_default` 取决于安装到哪个仓库）。启用后插件会把自己同时登记为 `blenderlens`，脚本里直接写 `import blenderlens.api as bl` 即可，不用管仓库名。
@@ -228,6 +228,11 @@ blender -b shot.blend --python-expr "import blenderlens.api as bl; bl.enable_gpu
   - 先写 `.partial` 再原子改名，已有帧跳过，所以可以断点续渲；
   - 每帧开始前原子创建 `.lock`，两台 Mac 对同一共享目录跑同一条命令就会自动分帧，过期锁（默认 12 小时）会被接手；
   - 输出按扩展名：EXR 为线性，PNG / TIFF 为 16 位并按场景色彩管理。
+- **相机运动模糊（0.6.1，MessyRoom 反馈）**：
+  - 每帧只拷贝源相机的 `matrix_world`，快门时间里相机不动，相机运动模糊会丢失。要给 BlenderLens 相机打关键帧。
+  - 用 **`bl.follow_camera(cam, source, frame_start, frame_end, substeps=1, focus=True)`**：逐帧（`substeps` > 1 时含子帧）把源相机的位置 / 旋转烘焙成关键帧，`focus=True` 时同时烘焙源相机景深的对焦距离（或对焦物体的距离）。烘焙后再 `render_frames`。
+  - 实测：横移镜头开运动模糊，烘焙后点光源拖影 28 px，只拷贝矩阵时 4 px。
+  - **0.6.0 及以前的缺陷**：只要 BlenderLens 相机的对焦 / 光圈有关键帧，相机运动模糊就会丢失。原因是每帧同步的回调在运动模糊的子帧也会写相机参数，打断了相机运动的导出。0.6.1 起回调跳过子帧，`apply_settings` 只写变化了的值。
 
 ## 7. 输出与解挤压
 

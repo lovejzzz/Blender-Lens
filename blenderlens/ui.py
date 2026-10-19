@@ -342,7 +342,10 @@ def _render_guard(scene, depsgraph=None):
 
 @persistent
 def _frame_change(scene, depsgraph=None):
-    """对焦/光圈做了关键帧时，属性 update 不会触发 → 每帧同步一次。"""
+    """对焦/光圈做了关键帧时，属性 update 不会触发 → 每帧同步一次。
+    运动模糊导出时 Cycles 会在快门内的子帧求值；这里跳过子帧（镜头参数取整帧值），否则写入会打断相机运动的导出。"""
+    if scene.frame_subframe != 0.0:
+        return
     for ob in scene.objects:
         if ob.type == 'CAMERA' and ob.data.animation_data and any(c.name.startswith("BL_Rig") for c in ob.children):
             rig.apply_settings(ob)

@@ -22,6 +22,7 @@ for p in c_series_style panavision_rear_134_tele; do
 done
 "$BLENDER" -b --factory-startup --python tests/bl_dispersion.py 2>&1 | grep -E "^DISP|Traceback|rror:"
 "$BLENDER" -b --factory-startup --python tests/bl_percentage.py 2>&1 | grep -E "^PCT |Traceback|rror:"
+"$BLENDER" -b --factory-startup --python tests/bl_follow.py 2>&1 | grep -E "^FOLLOW|Traceback|rror:"
 "$BLENDER" -b --factory-startup --python tests/bl_frames.py 2>&1 | grep -E "^FRAMES|Traceback|rror:"
 "$BLENDER" -b --factory-startup --python tests/bl_acceptance.py -- all 2>&1 | grep -E "ACCEPT|Traceback|rror:"
 mkdir -p dist

@@ -11,7 +11,7 @@ import bpy
 from . import optics, rig
 
 __all__ = ["presets", "build", "set_focus", "set_stop", "lens_info", "render_still", "camera",
-           "enable_gpu", "gpu_status", "remove_gpu_cache", "exposure_vs_pinhole", "render_frames"]
+           "enable_gpu", "gpu_status", "remove_gpu_cache", "exposure_vs_pinhole", "render_frames", "follow_camera"]
 
 
 def presets():
@@ -197,3 +197,68 @@ def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", see
             if lock and os.path.exists(lk):
                 os.remove(lk)
     return done
+
+
+def follow_camera(cam_ob, source, frame_start=None, frame_end=None, scene=None, substeps=1, focus=True,
+                  interpolation='BEZIER'):
+    """让 BlenderLens 相机逐帧跟随源相机，并烘焙成关键帧（位置、旋转，可选对焦距离）。
+    只在每帧拷贝 matrix_world 时，快门时间里相机不动，相机运动模糊会丢失；烘焙成关键帧后 Cycles 可以在快门内插值。
+    substeps > 1 时在子帧也采样（快门内运动是曲线或很快时更准，例如 substeps=4）。
+    focus=True：同时把源相机的景深对焦距离（或对焦物体的距离）烘焙到 focus_distance。
+    返回烘焙的关键帧数。相机不能有父物体（matrix_world 直接写到自身变换）。"""
+    import math as _m
+    scene = scene or bpy.context.scene
+    fs = scene.frame_start if frame_start is None else frame_start
+    fe = scene.frame_end if frame_end is None else frame_end
+    if cam_ob.parent is not None:
+        raise RuntimeError("follow_camera：BlenderLens 相机不能有父物体")
+    cam_ob.rotation_mode = 'XYZ'
+    prev = None
+    n = 0
+    cur = (scene.frame_current, scene.frame_subframe)
+    p = cam_ob.data.blenderlens
+    for f in range(fs, fe + 1):
+        for k in range(max(1, int(substeps))):
+            sub = k / max(1, int(substeps))
+            if f == fe and sub > 0:
+                break
+            scene.frame_set(f, subframe=sub)
+            mw = source.matrix_world.copy()
+            loc, rot, _ = mw.decompose()
+            eul = rot.to_euler('XYZ', prev) if prev is not None else rot.to_euler('XYZ')
+            prev = eul
+            fr = f + sub
+            cam_ob.location = loc
+            cam_ob.rotation_euler = eul
+            cam_ob.keyframe_insert("location", frame=fr)
+            cam_ob.keyframe_insert("rotation_euler", frame=fr)
+            if focus and source.type == 'CAMERA' and source.data.dof.use_dof:
+                dof = source.data.dof
+                if dof.focus_object is not None:
+                    d = (dof.focus_object.matrix_world.translation - mw.translation).length
+                else:
+                    d = dof.focus_distance
+                p.focus_distance = d                            # 场景单位，与源相机一致
+                cam_ob.data.keyframe_insert("blenderlens.focus_distance", frame=fr)
+            n += 1
+    for ad in (cam_ob.animation_data, cam_ob.data.animation_data):
+        if ad and ad.action:
+            for fc in _action_fcurves(ad.action):
+                for kp in fc.keyframe_points:
+                    kp.interpolation = interpolation
+    scene.frame_set(cur[0], subframe=cur[1])
+    rig.apply_settings(cam_ob)
+    return n
+
+
+def _action_fcurves(action):
+    """Blender 4.4+ 的分层动作（layers / strips / channelbags）与旧的 action.fcurves 都兼容。"""
+    fcs = list(getattr(action, "fcurves", []) or [])
+    if fcs:
+        return fcs
+    out = []
+    for layer in getattr(action, "layers", []):
+        for strip in layer.strips:
+            for bag in getattr(strip, "channelbags", []):
+                out.extend(bag.fcurves)
+    return out
