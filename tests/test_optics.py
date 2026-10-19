@@ -86,11 +86,15 @@ for _f in _glob.glob(os.path.join(O.PRESCRIPTION_DIR, "*.json")):
         _k, _rec = O.catalog_entry(_g)
         if _rec is None:
             continue
+        if _g.get("n_C"):                                # 专利给了 d / C / F 线：按专利谱线校验，不与目录比
+            for _l, _nl in ((O.LAMBDA_D, _g["nd"]), (O.LAMBDA_C, _g["n_C"]), (O.LAMBDA_F, _g["n_F"])):
+                assert abs(O.index_at(_g, _l) - _nl) < 1e-9, (_k, _l)
+            continue
         _n += 1
         assert abs(O.index_at(_g) - _g["nd"]) < 1e-9, (_k, "nd 未锚定")
         _worst = max(_worst, max(abs(O.index_at(_g, l / 1000) - O.catalog_index(_rec, l / 1000)) for l in range(400, 701, 5)))
 assert _n >= 20 and _worst < 3e-5, (_n, _worst)
-print(f"ok  catalog dispersion: {_n} preset glasses match Ohara formulas, worst {_worst:.1e} over 400–700 nm")
+print(f"ok  catalog dispersion: {_n} preset glasses match catalog formulas (Ohara / Schott), worst {_worst:.1e} over 400–700 nm; patent-line glasses exact")
 _g = {"nd": 1.5168, "vd": 64.17}                         # 无目录：仍是两项 Cauchy
 _A, _B = O.cauchy(1.5168, 64.17)
 assert abs(O.index_at(_g, 0.45) - (_A + _B / 0.45 ** 2)) < 1e-12

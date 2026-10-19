@@ -167,8 +167,11 @@ def nikon_prime(scale, f_number):
 
 def isco_preset(fname, meta, look, prime_scale, att_scale):
     prime, glasses = nikon_prime(prime_scale, look["f_number"])
-    glasses["I_LAFN21"] = {"nd": LAFN21[0], "vd": abbe(LAFN21), "note": "LaF N21（Isco 原表 n_d/n_C/n_F）"}
-    glasses["I_SF11"] = {"nd": SF11[0], "vd": abbe(SF11), "note": "SF 11（Isco 原表 n_d/n_C/n_F）"}
+    # 色散：目录曲线（Schott，refractiveindex.info CC0）的形状 + 精确通过专利给的 C / F 线（optics.dispersion_coeffs）
+    glasses["I_LAFN21"] = {"nd": LAFN21[0], "vd": abbe(LAFN21), "n_C": LAFN21[1], "n_F": LAFN21[2], "catalog": "SCHOTT:N-LAF21",
+                           "note": "LaF N21（Isco 原表 n_d/n_C/n_F）；色散曲线形状取其无铅后继 N-LAF21，并校正到专利的 C / F 线"}
+    glasses["I_SF11"] = {"nd": SF11[0], "vd": abbe(SF11), "n_C": SF11[1], "n_F": SF11[2], "catalog": "SCHOTT:SF11",
+                         "note": "SF 11（Isco 原表 n_d/n_C/n_F；与 Schott 目录 SF11 相差 ≤ 5e-6）"}
     surfs = []
     for sid, R, d, gl, ax in ISCO_EMB3:
         surfs.append({"id": sid, "R_x": R if ax == "x" else None, "R_y": R if ax == "y" else None,

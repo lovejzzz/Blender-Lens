@@ -1,6 +1,6 @@
-# BlenderLens 0.6.1 交接说明（给接手的 AI）
+# BlenderLens 0.7.0 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.6.1**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.7.0**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -16,11 +16,11 @@ Panavision 的 C/E/G/T/Primo 量产处方从未公开。除「Panavision 后置�
 
 要求：Blender **5.0 及以上**（开发和测试都在 macOS / Apple M2 Max / Blender 5.3 beta 上完成；Windows、Linux、5.0–5.2 未实测）。不依赖第三方 Python 包。
 
-- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.6.1.zip`。
+- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.7.0.zip`。
 - 命令行：
 
 ```bash
-blender --command extension install-file -r user_default -e blenderlens-0.6.1.zip
+blender --command extension install-file -r user_default -e blenderlens-0.7.0.zip
 ```
 
 装好后的 Python 模块路径是 `bl_ext.user_default.blenderlens`（仓库名 `user_default` 取决于安装到哪个仓库）。启用后插件会把自己同时登记为 `blenderlens`，脚本里直接写 `import blenderlens.api as bl` 即可，不用管仓库名。
@@ -37,7 +37,7 @@ blender --command extension install-file -r user_default -e blenderlens-0.6.1.zi
 3. **渲染设备（0.5 起支持 Metal GPU，见第 6.5 节）**：Cycles 原生的 OSL 自定义相机只在 CPU 和 NVIDIA OptiX 上运行，Metal / HIP / oneAPI 上会静默出黑图。0.5 的 **GPU 路径**把镜头追迹编进 Cycles 的 GPU 内核：
    - 合成基准下 256 spp 1.23 s，比 0.5 的 CPU（23.0 s）快 19 倍、比 0.4 的 CPU（69.7 s）快 57 倍，与 CPU / OSL 画面一致。
    - **必须在本次启动后第一次 GPU 渲染之前启用。**
-   - 没启用、Blender 版本不匹配、Geometry 模式、开了相机端鬼影时，每次渲染开始会自动改回 CPU，并在控制台和面板上写明原因，不会出黑图。
+   - 没启用、Blender 版本不匹配、Geometry 模式时，每次渲染开始会自动改回 CPU，并在控制台和面板上写明原因，不会出黑图。0.7 起相机端鬼影（Ghosts / Flare）也能在 GPU 上跑（与 CPU 对照能量差 0.6%，快 19 倍）。
 4. **采样**：色散和光瞳采样都会摊薄每个像素的采样。0.4 的出瞳重要性采样在最大光圈下把同等噪点所需的采样减到 1/1.4–1/1.8（无偏，实测）；连续波长色散的色噪也比旧的三选一低。720p 仍建议 **≥ 512 spp + OIDN**（prefilter ACCURATE），过低会出现斑块状降噪痕迹。关闭色散可以进一步降低噪点。
 5. **点光源炫光必须用「Render with Flare」**。相机里的「Ghosts / Flare」复选框对点光源几乎收敛不了，只适合窗户、天空这类大面积亮源。几何模式或开启鬼影时，插件会自动关闭自适应采样（否则鬼影会被低估约 8 倍）。
 
@@ -194,7 +194,8 @@ blender -b shot.blend --python-expr "import blenderlens.api as bl; bl.enable_gpu
 - 收敛：GPU 上 64 → 256 spp 噪点下降 2.02 倍。
 
 **限制**：
-- GPU 路径只做 Analytic 直射光路。Geometry 模式和相机端鬼影仍走 CPU；Render with Flare 是后期叠加，不受影响。
+- GPU 路径做 Analytic 光路（含相机端鬼影，0.7）。Geometry 模式仍走 CPU；Render with Flare 是后期叠加，不受影响。
+- 鬼影设置（开关、增益、镀膜）编进 GPU 内核，改了会重编（约 10 秒）。
 - 光线微分为 0。这只影响纹理过滤的 mip 级别，合成基准下画面差在噪点以内。
 
 **MessyRoom 在 M4 Max（40 核 GPU）上的复测**（汽车旅馆第 110 帧，960×540，256 spp）：
@@ -260,7 +261,8 @@ blender -b shot.blend --python-expr "import blenderlens.api as bl; bl.enable_gpu
 - 炫光只算两次反射的序列鬼影，不含衍射星芒和镜筒杂散光。
 - 光阑轴向位置（尼康主镜）专利未给，取间隔中点；C 系列风格的变形器到主镜间隔 5 mm 为我方取值。
 - 色散（0.6）：有目录数据的玻璃（Panavision、Neil 预设的 Ohara 玻璃）用 Ohara 目录公式的四项拟合，400–700 nm 误差 ≤ 2.6e-5，旧的两项 Cauchy 在重火石的紫端误差达 8.7e-3。老专利只给 nd / Vd 的玻璃（Rosin、Nikon、Isco）仍用两项 Cauchy。Geometry 模式为单一 d 线折射率。
-- Neil 2× 预设的像面在专利里是弯曲的（模拟弯曲物面），这里是平面传感器，边缘带该设计本身的场曲。
+- Neil 2× 预设的像面在专利里是弯曲的（模拟弯曲物面），这里是平面传感器：画面边缘的最佳聚焦在传感器前 0.1–0.2 mm（有像散），f/3 时 4K 角落约 6–12 px 弥散，属于该设计本身的软角（research/RESEARCH.md §6.8）。
+- Isco（E/G）玻璃 0.7 起用 Schott 目录曲线并精确通过专利的 d / C / F 三条谱线。
 - Isco「低发腮」：同放大率下压缩比变化 −9.9%（Rosin −12.9%），没有专利正文说的那么低。
 
 ## 11. 出问题时先查

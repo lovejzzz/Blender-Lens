@@ -61,19 +61,27 @@ _CATALOG = None
 _COEFF_CACHE = {}
 
 def _catalog():
+    """{厂商: {牌号: 记录}}：glass/ 目录下的每个 <厂商>.json（ohara、schott，refractiveindex.info CC0 数据）。"""
     global _CATALOG
     if _CATALOG is None:
-        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glass", "ohara.json")
-        _CATALOG = json.load(open(p, encoding="utf-8"))["glasses"] if os.path.exists(p) else {}
+        d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glass")
+        _CATALOG = {}
+        if os.path.isdir(d):
+            for fn in sorted(os.listdir(d)):
+                if fn.endswith(".json"):
+                    _CATALOG[fn[:-5].upper()] = json.load(open(os.path.join(d, fn), encoding="utf-8"))["glasses"]
     return _CATALOG
 
 def catalog_entry(glass):
-    """处方玻璃 → 目录记录（无则 None）。认 glass["catalog"]（如 "OHARA:S-TIH53"）或 glass["name"]（老牌号，或省略连字符的 S 系列）。"""
-    cat = _catalog()
-    key = (glass.get("catalog") or "").split(":")[-1] or glass.get("name")
+    """处方玻璃 → (牌号, 目录记录)，无则 (None, None)。
+    认 glass["catalog"]（"OHARA:S-TIH53"、"SCHOTT:SF11"）；没有时按 glass["name"] 在 Ohara 里找（老牌号，或省略连字符的 S 系列）。"""
+    cats = _catalog()
+    ref = glass.get("catalog") or ""
+    vendor, _, key = ref.partition(":") if ":" in ref else ("OHARA", "", glass.get("name") or "")
+    cat = cats.get(vendor.upper(), {})
     if not key:
         return None, None
-    for k in (key, "S-" + key[1:] if key.startswith("S") and not key.startswith("S-") else None):
+    for k in (key, "S-" + key[1:] if vendor.upper() == "OHARA" and key.startswith("S") and not key.startswith("S-") else None):
         if k and k in cat:
             return k, cat[k]
     return None, None
@@ -92,7 +100,7 @@ def dispersion_coeffs(glass):
     if vd is None or nd == 1.0:
         return nd, 0.0, 0.0, 0.0
     key, rec = catalog_entry(glass)
-    ck = (nd, vd, key)
+    ck = (nd, vd, key, glass.get("n_C"), glass.get("n_F"))
     if ck in _COEFF_CACHE:
         return _COEFF_CACHE[ck]
     if rec is None:
@@ -107,6 +115,14 @@ def dispersion_coeffs(glass):
         M = [[sum(r[i] * r[j] for r in rows) for j in range(4)] for i in range(4)]
         v = [sum(r[i] * y for r, y in zip(rows, ys)) for i in range(4)]
         out = tuple(_solve(M, v))
+        if glass.get("n_C") and glass.get("n_F"):
+            # 专利给了 d / C / F 三条谱线（如 Isco）：保留目录曲线的形状，加 a + b/λ² + c/λ⁴ 使其精确通过这三条谱线
+            A, B, C, E = out
+            n_at = lambda l: A + l ** -2 * (B + l ** -2 * (C + l ** -2 * E))
+            ls = (LAMBDA_D, LAMBDA_C, LAMBDA_F)
+            r = [nd - n_at(LAMBDA_D), glass["n_C"] - n_at(LAMBDA_C), glass["n_F"] - n_at(LAMBDA_F)]
+            a, b, c = _solve([[1.0, l ** -2, l ** -4] for l in ls], r)
+            out = (A + a, B + b, C + c, E)
     _COEFF_CACHE[ck] = out
     return out
 

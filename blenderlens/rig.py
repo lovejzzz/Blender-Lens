@@ -362,7 +362,9 @@ def gpu_settings(cam_ob):
                                      dispersion_strength=get("dispersion_strength", 1.0),
                                      exposure_compensate=p.exposure_compensate,
                                      pupil_importance=bool(get("pupil_importance", 1)),
-                                     blade_rotation_deg=p.blade_rotation, unit_scale=unit_scale(_cam_scene(cam_ob)))
+                                     blade_rotation_deg=p.blade_rotation, unit_scale=unit_scale(_cam_scene(cam_ob)),
+                                     ghosts=p.ghosts, ghost_fraction=get("ghost_fraction", 0.5), ghost_gain=p.ghost_gain,
+                                     coated=p.coated, coating_nm=p.coating_nm, coating_ior=get("coating_ior", 1.38))
 
 def sync_gpu_lens(cam_ob):
     """把当前镜头写进 GPU 内核头文件（内容不变则不动；变了下一次 GPU 渲染会重编内核，约 10 秒）。"""
@@ -402,8 +404,8 @@ def gpu_block_reason(scene):
     if not gpukernel.is_active():
         return f"{backend} 不支持 OSL 相机，且 BlenderLens GPU 路径未启用（{gpukernel.status()['reason']}）"
     p = cam_ob.data.blenderlens
-    if p.mode != 'ANALYTIC' or p.ghosts:
-        return "GPU 路径只支持 Analytic 模式且不开相机端鬼影（Geometry / Ghosts 需要 CPU）"
+    if p.mode != 'ANALYTIC':
+        return "GPU 路径只支持 Analytic 模式（Geometry 模式需要 CPU）"
     sync_gpu_lens(cam_ob)
     return None
 

@@ -37,12 +37,18 @@
     "I_LAFN21": {
       "nd": 1.78831,
       "vd": 47.49,
-      "note": "LaF N21（Isco 原表 n_d/n_C/n_F）"
+      "n_C": 1.78332,
+      "n_F": 1.79992,
+      "catalog": "SCHOTT:N-LAF21",
+      "note": "LaF N21（Isco 原表 n_d/n_C/n_F）；色散曲线形状取其无铅后继 N-LAF21，并校正到专利的 C / F 线"
     },
     "I_SF11": {
       "nd": 1.78472,
       "vd": 25.76,
-      "note": "SF 11（Isco 原表 n_d/n_C/n_F）"
+      "n_C": 1.77599,
+      "n_F": 1.80645,
+      "catalog": "SCHOTT:SF11",
+      "note": "SF 11（Isco 原表 n_d/n_C/n_F；与 Schott 目录 SF11 相差 ≤ 5e-6）"
     }
   },
   "groups": [

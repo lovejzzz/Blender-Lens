@@ -90,10 +90,13 @@ def _carr(name, vals, typ="float"):
     return f"ccl_inline_constant {typ} {name}[{len(vals)}] = {{ {body} }};\n"
 
 def static_settings(dispersion=True, dispersion_strength=1.0, exposure_compensate=True, pupil_importance=True,
-                    blade_rotation_deg=0.0, unit_scale=1.0):
+                    blade_rotation_deg=0.0, unit_scale=1.0, ghosts=False, ghost_fraction=0.5, ghost_gain=1.0,
+                    coated=True, coating_nm=100.0, coating_ior=1.38):
     return dict(dispersion=int(bool(dispersion)), dispersion_strength=float(dispersion_strength),
                 exposure_compensate=int(bool(exposure_compensate)), pupil_importance=int(bool(pupil_importance)),
-                blade_rotation=math.radians(blade_rotation_deg), unit_scale=float(unit_scale))
+                blade_rotation=math.radians(blade_rotation_deg), unit_scale=float(unit_scale),
+                ghosts=int(bool(ghosts)), ghost_fraction=float(ghost_fraction), ghost_gain=float(ghost_gain),
+                coated=int(bool(coated)), coating_nm=float(coating_nm), coating_ior=float(coating_ior))
 
 def generate_header(rx, settings=None):
     """处方 + 静态设置 → C++ 头文件（Cycles 内核语言，Metal / CUDA / HIP 通用）。"""
@@ -117,6 +120,8 @@ def generate_header(rx, settings=None):
         h.append(_carr(nm, A[m]))
     for nm, arr in zip(("BL_PX0", "BL_PX1", "BL_PY0", "BL_PY1"), D["PB"]):
         h.append(_carr(nm, arr))
+    h.append(_carr("BL_CO", D["CO"], "int"))
+    h.append(_carr("BL_AG", D["AG"] if D["AG"] else [0], "int"))
     h.append(_carr("BL_SPC", sp["cdf"]))
     for c, nm in enumerate(("BL_SPR", "BL_SPG", "BL_SPB")):
         h.append(_carr(nm, sp["w"][c]))
@@ -126,11 +131,14 @@ def generate_header(rx, settings=None):
                   BL_Z_EXP=D["z_exp"], BL_R_EXP=D["r_exp"], BL_N0=D["N0"], BL_EXPOSURE_NORM=1.0 / D["T0"],
                   BL_SG1=float(D["SG1"]), BL_SG2=float(D["SG2"]), BL_SP_L0=sp["l0"], BL_SP_DL=sp["dl"],
                   BL_LAMBDA_D=O.LAMBDA_D, BL_UNIT_SCALE=st["unit_scale"], BL_BLADE_ROT=st["blade_rotation"],
-                  BL_DISP_STRENGTH=st["dispersion_strength"], BL_PUPIL_MARGIN=1.4)
+                  BL_DISP_STRENGTH=st["dispersion_strength"], BL_PUPIL_MARGIN=1.4,
+                  BL_GHOST_FRACTION=st["ghost_fraction"], BL_GHOST_GAIN=st["ghost_gain"],
+                  BL_COATING_NM=st["coating_nm"], BL_COATING_IOR=st["coating_ior"])
     for k, v in consts.items():
         h.append(f"#define {k} ({_cf(v)})\n")
     ints = dict(BL_PNX=D["PNX"], BL_PNY=D["PNY"], BL_SPN=len(sp["cdf"]), BL_DISPERSION=st["dispersion"],
-                BL_EXPOSURE_COMP=st["exposure_compensate"], BL_PUPIL_IMPORTANCE=st["pupil_importance"])
+                BL_EXPOSURE_COMP=st["exposure_compensate"], BL_PUPIL_IMPORTANCE=st["pupil_importance"],
+                BL_GHOSTS=st["ghosts"], BL_COATED=st["coated"], BL_NAG=len(D["AG"]), BL_NPAIRS=D["NPAIRS"])
     for k, v in ints.items():
         h.append(f"#define {k} {int(v)}\n")
     h.append(KERNEL_BODY)
@@ -167,6 +175,49 @@ ccl_device_inline float bl_sag_grad(const float x, const float y, const int i,
   return s;
 }
 
+ccl_device_inline float bl_fresnel_plain(const float n1, const float n2, const float ci)
+{
+  const float st = n1 / n2 * sqrtf(fmaxf(0.0f, 1.0f - ci * ci));
+  if (st >= 1.0f) {
+    return 1.0f;
+  }
+  const float ct = sqrtf(1.0f - st * st);
+  const float rs = (n1 * ci - n2 * ct) / (n1 * ci + n2 * ct);
+  const float rp = (n2 * ci - n1 * ct) / (n2 * ci + n1 * ct);
+  return 0.5f * (rs * rs + rp * rp);
+}
+
+ccl_device_inline float bl_airy(const float r01, const float r12, const float cd)
+{
+  return (r01 * r01 + r12 * r12 + 2.0f * r01 * r12 * cd) / (1.0f + r01 * r01 * r12 * r12 + 2.0f * r01 * r12 * cd);
+}
+
+/* 单层薄膜（n0 | 膜 nf, 厚 d_nm | n2）非偏振反射率，λ 单位 μm（与 OSL 的 fresnel_film 相同） */
+ccl_device_inline float bl_fresnel_film(const float n0, const float nf, const float n2, const float c0,
+                                        const float d_nm, const float lam_um)
+{
+  const float s0 = sqrtf(fmaxf(0.0f, 1.0f - c0 * c0));
+  const float s1 = n0 * s0 / nf;
+  const float s2 = n0 * s0 / n2;
+  if (s2 >= 1.0f) {
+    return 1.0f;
+  }
+  if (s1 >= 1.0f) {
+    return bl_fresnel_plain(n0, n2, c0);
+  }
+  const float c1 = sqrtf(1.0f - s1 * s1), c2 = sqrtf(1.0f - s2 * s2);
+  const float cd = cosf(4.0f * M_PI_F * nf * d_nm * c1 / (lam_um * 1000.0f));
+  const float rs01 = (n0 * c0 - nf * c1) / (n0 * c0 + nf * c1), rs12 = (nf * c1 - n2 * c2) / (nf * c1 + n2 * c2);
+  const float rp01 = (nf * c0 - n0 * c1) / (nf * c0 + n0 * c1), rp12 = (n2 * c1 - nf * c2) / (n2 * c1 + nf * c2);
+  return 0.5f * (bl_airy(rs01, rs12, cd) + bl_airy(rp01, rp12, cd));
+}
+
+ccl_device_inline float bl_n(const int k, const float il2)
+{
+  /* 第 k 面之后的介质在 il2 = 1/λ² 处的折射率（k < 0：物方空气） */
+  return k < 0 ? 1.0f : BL_NA[k] + il2 * (BL_NB[k] + il2 * (BL_NC[k] + il2 * BL_NE[k]));
+}
+
 ccl_device_inline float bl_lerp(const float a, const float b, const float t)
 {
   return a + (b - a) * t;
@@ -198,7 +249,7 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
   float ex = 0.0f, ey = 0.0f, area_w = 1.0f;
   int use_box = 0;
   float bx0 = 0.0f, bx1 = 0.0f, by0 = 0.0f, by1 = 0.0f;
-  if (BL_PUPIL_IMPORTANCE) {
+  if (BL_PUPIL_IMPORTANCE && !BL_GHOSTS) {      /* 鬼影路径会穿过盒外区域 → 开鬼影时用整盘 */
     const float fx = fabsf(sx) / (0.5f * BL_SENSOR_W) * (BL_PNX - 1);
     const float fy = fabsf(sy) / (0.5f * BL_SENSOR_H) * (BL_PNY - 1);
     const int ix = min((int)floorf(fx), BL_PNX - 2), iy = min((int)floorf(fy), BL_PNY - 2);
@@ -264,7 +315,35 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
   const float z_stop = BL_Z_STOP + BL_SG1 * delta_unit + BL_SG2 * delta_front;
   const float ca = cosf(BL_BLADE_ROT), sa = sinf(BL_BLADE_ROT);
 
-  for (int i = BL_NS - 1; i >= 0; --i) {
+  /* 鬼影：以 BL_GHOST_FRACTION 的概率在空气-玻璃面里均匀选一对 (ga < gb)，权重做无偏补偿（与 OSL 相同） */
+  int ga = -1, gb = -1;
+  float wsel = 1.0f;
+  if (BL_GHOSTS && BL_NPAIRS > 0) {
+    const float h1 = hash_float3_to_float(make_float3(ras.x * 911.0f + rand_lens.y * 23.0f, ras.y * 911.0f + rand_lens.x * 23.0f, 0.71f));
+    if (h1 < BL_GHOST_FRACTION) {
+      const float h2 = hash_float3_to_float(make_float3(ras.x * 577.0f + rand_lens.x * 41.0f, ras.y * 577.0f + rand_lens.y * 41.0f, 0.13f));
+      int k = min((int)floorf(h2 * BL_NPAIRS), BL_NPAIRS - 1);
+      int u = 0;
+      while (k >= BL_NAG - 1 - u) {
+        k -= BL_NAG - 1 - u;
+        u += 1;
+      }
+      ga = BL_AG[u];
+      gb = BL_AG[u + 1 + k];
+      wsel = BL_NPAIRS / BL_GHOST_FRACTION * BL_GHOST_GAIN;
+    }
+    else {
+      wsel = 1.0f / (1.0f - BL_GHOST_FRACTION);
+    }
+  }
+  float3 T = make_float3(1.0f, 1.0f, 1.0f);
+  const float LR = 0.610f, LG = 0.550f, LB = 0.465f;
+
+  int i = BL_NS - 1, dirn = 1, state = 0; /* dirn = 1：沿 +Z（面序号递减）；−1：沿 −Z */
+  for (int step = 0; step < 3 * BL_NS + 4; ++step) {
+    if (i < 0 || i >= BL_NS) {
+      break;
+    }
     const float zi = BL_Z[i] + BL_G1[i] * delta_unit + BL_G2[i] * delta_front;
 
     /* 光阑 */
@@ -285,7 +364,7 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
       }
     }
 
-    /* 求交：平面 / 球面 / 纯柱面解析（与 OSL 相同的稳定二次式），其余牛顿 */
+    /* 求交：平面 / 球面 / 纯柱面解析（稳定二次式），其余牛顿 */
     float t = tz;
     float gx = 0.0f, gy = 0.0f;
     int ok = 1;
@@ -330,22 +409,62 @@ ccl_device_inline Spectrum blenderlens_camera_sample(ccl_constant KernelCamera *
       return zero_spectrum();
     }
 
-    /* 折射：沿 +Z 从面后介质进入面前介质 */
-    const float n1 = BL_ND[i] + BL_DISP_STRENGTH * (BL_NA[i] + il2 * (BL_NB[i] + il2 * (BL_NC[i] + il2 * BL_NE[i])) - BL_ND[i]);
-    const float n2 = (i > 0) ? BL_ND[i - 1] + BL_DISP_STRENGTH * (BL_NA[i - 1] + il2 * (BL_NB[i - 1] + il2 * (BL_NC[i - 1] + il2 * BL_NE[i - 1])) - BL_ND[i - 1]) : 1.0f;
+    /* 两侧介质：沿 +Z 从「面后」到「面前」，沿 −Z 反之 */
+    const float na_ = BL_ND[i] + BL_DISP_STRENGTH * (bl_n(i, il2) - BL_ND[i]);
+    const float nb_ = (i > 0) ? BL_ND[i - 1] + BL_DISP_STRENGTH * (bl_n(i - 1, il2) - BL_ND[i - 1]) : 1.0f;
+    const float n1 = dirn == 1 ? na_ : nb_;
+    const float n2 = dirn == 1 ? nb_ : na_;
     float3 nrm = normalize(make_float3(gx, gy, 1.0f));
     float c = -dot(nrm, d);
     if (c < 0.0f) {
       nrm = -nrm;
       c = -c;
     }
-    const float eta = n1 / n2;
-    const float kk = 1.0f - eta * eta * (1.0f - c * c);
-    if (kk < 0.0f) {
-      return zero_spectrum();
+
+    float3 R = make_float3(0.0f, 0.0f, 0.0f);
+    if (BL_GHOSTS) {
+      if (BL_CO[i] && BL_COATED) {
+        const float iR = 1.0f / (LR * LR), iB = 1.0f / (LB * LB);
+        const float naR = bl_n(i, iR), naB = bl_n(i, iB);
+        const float nbR = (i > 0) ? bl_n(i - 1, iR) : 1.0f, nbB = (i > 0) ? bl_n(i - 1, iB) : 1.0f;
+        const float n1R = dirn == 1 ? naR : nbR, n2R = dirn == 1 ? nbR : naR;
+        const float n1B = dirn == 1 ? naB : nbB, n2B = dirn == 1 ? nbB : naB;
+        R = make_float3(bl_fresnel_film(n1R, BL_COATING_IOR, n2R, c, BL_COATING_NM, LR),
+                        bl_fresnel_film(n1, BL_COATING_IOR, n2, c, BL_COATING_NM, LG),
+                        bl_fresnel_film(n1B, BL_COATING_IOR, n2B, c, BL_COATING_NM, LB));
+      }
+      else {
+        const float r = bl_fresnel_plain(n1, n2, c);
+        R = make_float3(r, r, r);
+      }
     }
-    d = normalize(eta * d + (eta * c - sqrtf(kk)) * nrm);
+
+    const bool refl = (state == 0 && i == ga) || (state == 1 && i == gb);
+    if (refl) {
+      d = normalize(d + 2.0f * c * nrm);
+      T = T * R;
+      state += 1;
+      dirn = -dirn;
+    }
+    else {
+      const float eta = n1 / n2;
+      const float kk = 1.0f - eta * eta * (1.0f - c * c);
+      if (kk < 0.0f) {
+        return zero_spectrum();
+      }
+      d = normalize(eta * d + (eta * c - sqrtf(kk)) * nrm);
+      if (BL_GHOSTS) {
+        T = T * (make_float3(1.0f, 1.0f, 1.0f) - R);
+      }
+    }
+    i -= dirn;
   }
+  if (i != -1 || dirn != 1 || state != (ga >= 0 ? 2 : 0)) {
+    return zero_spectrum();
+  }
+  (void)LG;
+  w *= wsel;
+  chan = chan * T;
 
   const float3 P = make_float3(-p.x, p.y, p.z) * BL_UNIT_SCALE;
   const float3 Dout = make_float3(-d.x, d.y, d.z);

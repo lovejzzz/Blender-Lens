@@ -1,12 +1,12 @@
-# 把 refractiveindex.info 数据库（CC0）里的 Ohara 光学玻璃 YAML 汇编成一个紧凑的目录：
-#   blenderlens/glass/ohara.json  {牌号: {code, nd, vd, formula, c, range}}
+# 把 refractiveindex.info 数据库（CC0）里某个厂商的光学玻璃 YAML 汇编成一个紧凑的目录：
+#   blenderlens/glass/<厂商>.json  {牌号: {code, nd, vd, formula, c, range}}（目前 ohara、schott）
 # formula 2（Sellmeier）：n² − 1 = Σ Bᵢ λ² / (λ² − Cᵢ)，c = [0, B1, C1, B2, C2, B3, C3]
 # formula 3（多项式）：n² = c0 + Σ c₂ₖ₋₁ λ^c₂ₖ（c = [c0, c1, p1, c2, p2, …]）
-# 运行：python3 tools/glass_catalog.py <YAML 目录>
+# 运行：python3 tools/glass_catalog.py <YAML 目录> [ohara|schott]
 import json, math, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "blenderlens", "glass", "ohara.json")
+GLASS_DIR = os.path.join(ROOT, "blenderlens", "glass")
 
 
 def parse(path):
@@ -38,7 +38,8 @@ def index(rec, lam_um):
     raise ValueError(rec["formula"])
 
 
-def main(src):
+def main(src, vendor="ohara"):
+    OUT = os.path.join(GLASS_DIR, vendor + ".json")
     cat = {}
     for fn in sorted(os.listdir(src)):
         if not fn.endswith(".yml"):
@@ -53,7 +54,7 @@ def main(src):
         rec["check_vd"] = round((nd - 1) / (nF - nC) - rec.get("vd", (nd - 1) / (nF - nC)), 4)
         cat[name] = rec
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    json.dump({"source": "refractiveindex.info database（CC0），OHARA Zemax catalog 2017-11-30", "glasses": cat},
+    json.dump({"source": f"refractiveindex.info database（CC0），{vendor.upper()} 目录（各文件 REFERENCES 字段注明版本）", "glasses": cat},
               open(OUT, "w"), indent=0, separators=(",", ":"))
     worst_nd = max(abs(r["check_nd"]) for r in cat.values())
     worst_vd = max(abs(r["check_vd"]) for r in cat.values())
@@ -61,4 +62,4 @@ def main(src):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "ohara")

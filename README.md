@@ -16,7 +16,7 @@
 > - a deterministic forward-traced flare pass, diffraction starbursts and veiling glare;
 > - metre-scale scenes, native 16:9 gates, a Python API with multi-machine frame rendering.
 >
-> Install `dist/blenderlens-0.6.1.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
+> Install `dist/blenderlens-0.7.0.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
 
 | C 系列风格 · 100 mm · f/2.3 | E 系列风格 · 100 mm · f/2.8 | G 系列风格 · 100 mm · f/3 |
 |---|---|---|
@@ -32,6 +32,13 @@
 
 ---
 
+## 0.7 新增
+
+- **GPU 相机端鬼影**：开 Ghosts / Flare 也能在 Metal 上渲染（与 CPU 能量差 0.6%，快 19 倍）。
+- **Schott 目录**：E/G 的 Isco 玻璃用 Schott 目录曲线，并精确通过专利给的 d / C / F 三条谱线（SF11 紫端折射率修正 0.007）。
+- **Neil 场曲研究**：模型算出的最佳聚焦面与专利设定的弯曲像面一致；平面传感器上 4K 角落约 6–12 px 弥散，属该设计本身的软角。
+- `bl.follow_camera`（0.6.1）：跟随场景相机并烘焙关键帧，保留相机运动模糊。
+
 ## 0.6 新增
 
 - **Neil 2× 现代变形三个预设**：
@@ -46,12 +53,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.6.1.zip`](dist/blenderlens-0.6.1.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.7.0.zip`](dist/blenderlens-0.7.0.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.6.1.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.7.0.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。
@@ -217,6 +224,7 @@ tests/run_all.sh
 | `tests/bl_gpu.py` | GPU 路径对 CPU / OSL：时间、噪点、亮度、整体位移、对焦关键帧、Geometry 回退 |
 | `tests/bl_dispersion.py` | Lateral in Post 与 Full 的彩边位置对比、三种色散模式的噪点 |
 | `tests/bl_frames.py` | 曝光差 API 对照实测；render_frames 的跳过、断点续渲、确定性、锁 |
+| `tests/bl_gpu_ghosts.py` | GPU 相机端鬼影对照 CPU / OSL：鬼影能量、模糊后逐像素差、时间 |
 | `tests/bl_follow.py` | follow_camera：子帧位置在两帧之间、对焦距离有关键帧、开运动模糊时拖影存在（且对焦关键帧不再打断相机运动模糊） |
 | `tests/bl_percentage.py` | resolution_percentage ≠ 100% 时后期步骤尺寸正确 |
 | `tests/bl_bench.py` | MessyRoom 合成基准（时间、三种噪点，结果追加进 bench.json） |
