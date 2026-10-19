@@ -21,6 +21,14 @@
 
 ---
 
+## 0.8.3 新增：成片输出（MessyRoom 片子里提出的需求）
+
+- **保留所有渲染层的多层 EXR**（`bl.render_still(path, passes="all")`、`bl.render_frames(..., passes="all")`）：视图层打开的渲染层全部保留；Lateral in Post 对每个颜色层做同样的色差（各光组相加仍等于 Combined），数据层不动；炫光与杂光是单独的层（`BL_Flare`、`BL_Veil`、`BL_Final`）。
+- **`BL_Vector` 运动矢量**：按真实镜头成像算（Cycles 自己的 Vector 对自定义相机没有意义）；约定同 Cycles，与实测位移差 0.2 px。Depth / Position 的洞（Cycles 只在第 0 个采样写，真实镜头的第 0 条光线常被挡）已补。
+- **对焦助手**：`bl.focus_on(cam, 物体 | 点 | (u, v))`、`bl.focus_pull(cam, A, B, 起, 止)`、`bl.dof_range(cam, coc_px)`、`bl.stop_for(cam, near_m, far_m)`；主体不在清晰范围时 `diagnose()` 会警告并说差多少米。
+- **闪烁检查**：`bl.temporal_check(scene, frame, n, variants=[...])` 锁住相机让时间走，测相邻帧差（整幅、最亮 2%、p99）并出热力图，变体给出相对百分比。
+- Render Region 可与 Lateral in Post 一起用；4K 内存基线写在 HANDOFF；横向色差后期快约 7 倍。
+
 ## 0.8.2 新增：Blender 5.3 兼容
 
 - **与 5.3 色散玻璃共用波长（GPU）**：Blender 5.3 给 Principled BSDF 加了色散（每条路径一个波长）。之前我们的镜头和这种玻璃各抽一个波长、颜色加权两次——透过色散玻璃看白天空会明显偏黄（偏色 14%）。现在 GPU 路径让两者用同一个随机数和映射，共用一个波长（偏色 0.2%）；场景里没有色散材质时仍用 0.8 的低噪采样。CPU / OSL 路径做不到，`bl.diagnose()` 会警告并给出修法。
@@ -70,12 +78,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.8.2.zip`](dist/blenderlens-0.8.2.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.8.3.zip`](dist/blenderlens-0.8.3.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.2.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.3.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。

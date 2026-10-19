@@ -9,6 +9,8 @@
 #   python3 tools/blcli.py render --preset c_series_style --scene demo --variants '[{"f_number":2.3},{"f_number":8}]' --out renders/cli/ab.png
 #   python3 tools/blcli.py render --blend my_shot.blend --quality standard --out renders/cli/shot.png
 #   python3 tools/blcli.py diagnose --blend my_shot.blend
+#   python3 tools/blcli.py focus --blend film.blend --frame 120 --target Room --near 19 --far 38      # 0.8.3 对焦助手
+#   python3 tools/blcli.py temporal --blend film.blend --frame 120 --n 8 --gpu --variants FILE.json     # 0.8.3 闪烁检查
 #   python3 tools/blcli.py test quick                    # = python3 tests/run.py quick
 #
 # Blender 路径：环境变量 BLENDER，默认 /Applications/Blender.app/Contents/MacOS/Blender。
@@ -178,6 +180,38 @@ def cmd_render(a):
     return _blender("import bpy\n" + "\n".join(s) + "\n")
 
 
+def cmd_focus(a):
+    """对焦助手（0.8.3）：在 .blend 的某一帧求目标物距、景深范围，可选求保住两个距离的光圈。"""
+    tgt = a.target
+    if tgt and "," in tgt:
+        tgt = tuple(float(v) for v in tgt.split(","))
+    s = [f"import bpy\nbpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})",
+         "sc = bpy.context.scene; cam = bl.camera()"]
+    if a.frame is not None:
+        s.append(f"sc.frame_set({a.frame})")
+    s.append("res = {}")
+    if tgt:
+        s.append(f"res['target_m'] = bl.focus_on(cam, {tgt!r}, apply={bool(a.apply)!r})")
+    s.append(f"res['dof'] = bl.dof_range(cam, coc_px={a.coc})")
+    if a.near and a.far:
+        s.append(f"res['stop_for'] = bl.stop_for(cam, {a.near}, {a.far}, coc_px={a.coc})")
+    s.append(f"print({MARK!r} + dump(res))")
+    return _blender("\n".join(s) + "\n")
+
+
+def cmd_temporal(a):
+    """闪烁检查（0.8.3）：相机锁在 --frame，时间走 --n 帧。"""
+    raw = a.variants or "[]"
+    variants = json.loads(open(raw).read() if os.path.exists(raw) else raw)
+    s = [f"import bpy\nbpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})"]
+    if a.gpu:
+        s.append("bl.enable_gpu(use_gpu=True)")
+    s.append(f"res = bl.temporal_check(frame={a.frame}, n={a.n}, height={a.height}, variants={variants!r}, "
+             f"out_dir={os.path.abspath(a.out)!r})")
+    s.append(f"print({MARK!r} + dump(res))")
+    return _blender("\n".join(s) + "\n", timeout=6 * 3600)
+
+
 def cmd_diagnose(a):
     return _blender(f"import bpy\nbpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})\n"
                     f"res = dict(issues=bl.diagnose(), state=bl.state() if bl.camera() else None)\n"
@@ -203,6 +237,13 @@ def main():
     p.add_argument("--gpu", action="store_true"); p.add_argument("--no-flare", action="store_true")
     p.add_argument("--out", default="renders/cli/preview.png")
     p = sub.add_parser("diagnose"); p.add_argument("--blend", required=True)
+    p = sub.add_parser("focus"); p.add_argument("--blend", required=True); p.add_argument("--frame", type=int)
+    p.add_argument("--target", help="物体名，或 u,v（画面坐标，0–1，原点左下）"); p.add_argument("--apply", action="store_true")
+    p.add_argument("--coc", type=float, default=1.0); p.add_argument("--near", type=float); p.add_argument("--far", type=float)
+    p = sub.add_parser("temporal"); p.add_argument("--blend", required=True); p.add_argument("--frame", type=int, required=True)
+    p.add_argument("--n", type=int, default=8); p.add_argument("--height", type=int, default=1080)
+    p.add_argument("--variants", help="JSON 列表或文件")
+    p.add_argument("--gpu", action="store_true"); p.add_argument("--out", default="renders/temporal")
     p = sub.add_parser("test"); p.add_argument("args", nargs=argparse.REMAINDER)
     argv = sys.argv[1:]
     pretty = "--pretty" in argv and argv[0] != "test"
@@ -210,7 +251,8 @@ def main():
     a.pretty = a.pretty or pretty
     if a.cmd == "test":
         sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, "tests", "run.py")] + a.args))
-    res = dict(presets=cmd_presets, info=cmd_info, describe=cmd_describe, render=cmd_render, diagnose=cmd_diagnose)[a.cmd](a)
+    res = dict(presets=cmd_presets, info=cmd_info, describe=cmd_describe, render=cmd_render, diagnose=cmd_diagnose,
+               focus=cmd_focus, temporal=cmd_temporal)[a.cmd](a)
     print(json.dumps(res, ensure_ascii=False, indent=1 if a.pretty else None, default=str))
     sys.exit(1 if isinstance(res, dict) and "error" in res else 0)
 

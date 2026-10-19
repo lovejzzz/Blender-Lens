@@ -1,6 +1,6 @@
-# BlenderLens 0.8.2 交接说明（给接手的 AI）
+# BlenderLens 0.8.3 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.8.2**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.8.3**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -16,11 +16,11 @@ Panavision 的 C/E/G/T/Primo 量产处方从未公开。除「Panavision 后置�
 
 要求：Blender **5.0 及以上**（开发和测试都在 macOS / Apple M2 Max / Blender 5.3 beta 上完成；Windows、Linux、5.0–5.2 未实测）。不依赖第三方 Python 包。
 
-- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.8.2.zip`。
+- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.8.3.zip`。
 - 命令行：
 
 ```bash
-blender --command extension install-file -r user_default -e blenderlens-0.8.2.zip
+blender --command extension install-file -r user_default -e blenderlens-0.8.3.zip
 ```
 
 装好后的 Python 模块路径是 `bl_ext.user_default.blenderlens`（仓库名 `user_default` 取决于安装到哪个仓库）。启用后插件会把自己同时登记为 `blenderlens`，脚本里直接写 `import blenderlens.api as bl` 即可，不用管仓库名。
@@ -253,6 +253,46 @@ blender -b shot.blend --python-expr "import blenderlens.api as bl; bl.enable_gpu
   - 用 **`bl.follow_camera(cam, source, frame_start, frame_end, substeps=1, focus=True)`**：逐帧（`substeps` > 1 时含子帧）把源相机的位置 / 旋转烘焙成关键帧，`focus=True` 时同时烘焙源相机景深的对焦距离（或对焦物体的距离）。烘焙后再 `render_frames`。
   - 实测：横移镜头开运动模糊，烘焙后点光源拖影 28 px，只拷贝矩阵时 4 px。
   - **0.6.0 及以前的缺陷**：只要 BlenderLens 相机的对焦 / 光圈有关键帧，相机运动模糊就会丢失。原因是每帧同步的回调在运动模糊的子帧也会写相机参数，打断了相机运动的导出。0.6.1 起回调跳过子帧，`apply_settings` 只写变化了的值。
+
+## 6.7 多层 EXR、对焦助手、闪烁检查（0.8.3，MessyRoom Day 4 的需求）
+
+**多层 EXR**（`bl.render_still(path, passes="all")`、`bl.render_frames(..., passes="all")`；也可给渲染层名列表）：
+- 写多部分 EXR（Blender 5.x 的多层格式：每个渲染层一个部分，名为「视图层.渲染层」），保留视图层打开的所有渲染层。
+- **颜色层**（Combined、各光组 `Combined_<名>`、Emit、Diffuse / Glossy / Transmission / Volume、AO、颜色 AOV、Noisy Image、Denoising Albedo）做与 Combined 相同的横向色差（Lateral in Post 时）→ 各光组相加仍等于 Combined（实测相对差 0.0）。
+- **数据层**（Depth、Normal、Position、UV、Index、Cryptomatte、数值 AOV、Denoising Normal / Depth）原样。
+- 插件加的层：`BL_Flare`（正向炫光 + 星芒）、`BL_Veil`（杂光，差值层，可为负）、`BL_Final`（= Combined + BL_Flare + BL_Veil，即单层输出的成片）、`BL_Vector`。**Combined 本身不含炫光与杂光。**
+- **运动矢量用 `BL_Vector`，不要用 Cycles 的 `Vector`**：Cycles 对自定义相机还没有反向映射（源码 `camera.h` 的 TODO，退回相机坐标），实测数值约 0.003 px、毫无意义（原样保留在文件里）。`BL_Vector` 按本镜头的真实成像算（主光线、每帧的对焦状态），约定与 Cycles 相同：像素单位、y 向上，**X,Y = 上一帧位置 − 当前位置，Z,W = 当前位置 − 下一帧位置**。计入相机运动与刚体物体运动（按 Cryptomatte 识别物体）；骨骼 / 形状键形变不计。实测：运动物体上一个点三帧的实际位移与矢量差 0.2 px。
+- **Depth / Position 的洞已补**：Cycles 只在第 0 个采样写 Depth、Position、物体 / 材质索引；真实镜头的第 0 条光线常被光阑挡掉，约一半像素这些层是 0（纯发光表面则完全不写）。插件用同一物体的相邻像素补洞，补不上的沿主光线 ray_cast；Depth 按 Cycles 对自定义相机的定义（到相机原点的距离）重算这些像素。统计写在 Combined 头的 `blenderlens/fill`。
+- 渲染时会临时关闭合成（输出原始渲染层）、临时打开 Position 与 Cryptomatte Object（用户没开的不写出）。
+- Render Region + Crop 可以和 Lateral in Post / 炫光一起用了：按裁切区域在整幅里的坐标做（杂光是整幅卷积，裁切后只能近似）。
+
+**对焦助手**（距离都与镜头对焦相同：从像面沿光轴的物距，米）：
+```python
+bl.focus_on(cam, "Room")                  # 物体（原点）、(x, y, z) 世界点、或 (u, v) 画面坐标（沿主光线 ray_cast）；返回米
+bl.focus_pull(cam, "Room", "Sign", 100, 148)   # 逐帧关键帧：A → B（按 1/距离 插值，缓入缓出）；b=None 时一直跟住 A
+bl.dof_range(cam, coc_px=1.0)             # 清晰范围 near_m / far_m、超焦距 hyperfocal_m（输出像素，解挤压后，两向取大）
+bl.stop_for(cam, 19, 38, coc_px=1.0)      # 同时保住两个距离的 f 值与对焦距离（apply=True 写到相机）
+cam["bl_subject"] = "Room"                # diagnose 会检查主体是否在清晰范围内（没设就看画面中心）
+```
+景深用每个截面的近轴离焦弥散（相对对焦面的像，与 DoF 计算器同一定义）；`astigmatic_floor_px` 另给出该设计在对焦面上两向焦点不重合造成的底（C 风格 4K f/2.8 约 2.5 px，Neil 约 5.5 px）。C 风格 3 m f/2.8 4K：清晰 2.90–3.11 m，超焦距 78.2 m（薄透镜估算 78.1 m）。
+
+**闪烁检查**：
+```python
+bl.temporal_check(scene, frame=120, n=8, height=1080,
+                  variants=[{"spp": 1024}, {"denoise": False}, {"hide": ["haze"]}])
+```
+相机锁在第 120 帧（动画暂时摘掉，测完恢复），时间照常走 8 帧，测 x/(1+x) 亮度的相邻帧差：整幅平均、最亮 2% 像素平均、p99；每个变体给出相对原设置的百分比，另存闪烁热力图 PNG。命令行：`python3 tools/blcli.py temporal --blend film.blend --frame 120 --variants v.json`。
+
+**内存基线**（M2 Max 96 GB、Blender 5.3 beta、简单测试场景、3840×2160、GPU、Lateral in Post，`/usr/bin/time -l`）：
+
+| 输出 | 用时 | 常驻内存峰值 | 内存占用峰值（含 Metal） |
+|---|---|---|---|
+| 只出成片（0.5.1 / Day 4 的用法） | 14 s（64 spp） | 2.6 GB | 7.0 GB |
+| `passes="all"`（深度、法线、矢量、漫射 / 光泽、两个光组、去噪数据） | 41 s（64 spp） | 9.2 GB | 12.6 GB |
+
+真实场景的几何、纹理、体积另外加上去；内存占用峰值出现在 Cycles 渲染阶段（4K 的每个渲染层都有胶片缓冲）。同时跑两个 4K 全渲染层的 Blender，按 2 × 12.6 GB 加场景本身估算。
+
+**从 0.5.1 换到 0.8.3 的画面变化**（C 风格、16:9 Native、GPU、Lateral in Post、无炫光、对焦 19 m、f/2.8，同场景 512 spp 对比）：曝光 −0.0016 EV（0.1%）；几何整体平移 0.05 px、局部最大 0.18 px（噪点水平）；对焦面锐度 99.75%（不变）；逐像素差 6.7% 是采样噪点。0.8 的发腮补偿在 19 m 处几乎不起作用。
 
 ## 7. 输出与解挤压
 

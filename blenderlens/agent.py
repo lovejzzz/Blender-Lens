@@ -258,6 +258,25 @@ def diagnose(scene=None):
             out.append(_issue("info", "working_space", f"工作色彩空间是 {ws}：镜头色散按它换算；后期炫光颜色与横向色差映射仍按 Rec.709 原色近似", ""))
     except Exception:                                    # noqa: BLE001
         pass
+    # 0.8.3：主体是否在清晰范围内（cam["bl_subject"] = 物体名；没有就取画面中心沿主光线 ray_cast）
+    try:
+        from . import focus as FO
+        subj = cam.get("bl_subject")
+        pt = FO.target_point(cam, subj if subj else (0.5, 0.5))
+        if pt is not None:
+            d_m = FO.axial_mm(cam, pt) / 1000.0
+            rng = FO.dof_range(cam, coc_px=1.0)
+            if d_m < rng["near_m"] or d_m > rng["far_m"]:
+                off = rng["near_m"] - d_m if d_m < rng["near_m"] else d_m - rng["far_m"]
+                what = f"主体 {subj}" if subj else "画面中心"
+                out.append(_issue("warning", "subject_out_of_focus",
+                                  f"{what}在 {d_m:.2f} m，清晰范围（1 px 弥散）是 {rng['near_m']:.2f}–{rng['far_m']} m，差 {off:.2f} m（对焦 {rng['focus_m']} m、f/{rng['f_number']:.2g}）",
+                                  f"bl.focus_on(cam, {repr(subj) if subj else '(0.5, 0.5)'}) 或 bl.stop_for(cam, near_m, far_m)"))
+    except Exception:                                    # noqa: BLE001 — 诊断本身不能报错
+        pass
+    if p.dispersion and p.dispersion_mode == 'FULL' and sc.render.use_motion_blur:
+        out.append(_issue("info", "dispersion_motion_blur", "全色散 + 运动模糊：GPU 的波长分层采样会退回非分层（time 维被运动模糊占用），CPU 本来就是哈希——色噪会多一些",
+                          "dispersion_mode='LATERAL_POST'（不受影响）或提高采样"))
     us = rig.mm_per_unit(sc)
     try:
         bpy.context.view_layer.update()                  # 刚建 / 刚缩放的物体 dimensions 要更新后才对

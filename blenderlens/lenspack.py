@@ -130,11 +130,50 @@ def _upsample(field, nx, ny, W_px, H_px):
 def _bilinear(img, u, v):
     """img[H, W, C]，u/v 为像素坐标（列 / 行，像素中心 = 整数），边界夹紧。"""
     H, W = img.shape[:2]
-    u = np.clip(u, 0, W - 1.000001); v = np.clip(v, 0, H - 1.000001)
-    i0 = np.floor(u).astype(int); j0 = np.floor(v).astype(int)
+    u = np.clip(u, 0, W - 1); v = np.clip(v, 0, H - 1)
+    i0 = np.minimum(np.floor(u).astype(int), W - 2); j0 = np.minimum(np.floor(v).astype(int), H - 2)   # float32 时 W − 1.000001 会舍入成 W − 1
     fu = (u - i0)[..., None]; fv = (v - j0)[..., None]
     return ((img[j0, i0] * (1 - fu) + img[j0, i0 + 1] * fu) * (1 - fv) +
             (img[j0 + 1, i0] * (1 - fu) + img[j0 + 1, i0 + 1] * fu) * fv)
+
+class LazyMaps(dict):
+    """与 pixel_maps 同样的映射，但只存粗网格位移，取某个波长时才放大到像素（float32）。
+    4K 下完整的 11 个波长 × (u, v) 映射在 float64 时约 1.5 GB；这样常驻内存只有几十 KB。"""
+
+    def __init__(self, rx, W_px, H_px, focus_dist=math.inf, lambdas_nm=LAMBDAS_NM, nx=33, ny=19, crop=None):
+        super().__init__()
+        self.L = lateral_ca_offsets(rx, focus_dist, nx, ny, lambdas_nm)
+        self.W_px, self.H_px, self.nx, self.ny = W_px, H_px, nx, ny
+        self.crop = crop                                   # (x0, y0_top, w, h)：只取整幅里的这一块
+        self._keys = list(lambdas_nm)
+
+    def keys(self):
+        return list(self._keys)
+
+    def __contains__(self, k):
+        return k in self._keys
+
+    def __getitem__(self, nm):
+        W, H = self.L["sensor"]
+        dx, dy = self.L["offsets"][nm]
+        u = (np.arange(self.W_px, dtype=np.float32)[None, :] + 0.0 * np.arange(self.H_px, dtype=np.float32)[:, None]
+             + (_upsample(dx[::-1], self.nx, self.ny, self.W_px, self.H_px) / W * self.W_px).astype(np.float32))
+        v = (np.arange(self.H_px, dtype=np.float32)[:, None] + 0.0 * np.arange(self.W_px, dtype=np.float32)[None, :]
+             - (_upsample(dy[::-1], self.nx, self.ny, self.W_px, self.H_px) / H * self.H_px).astype(np.float32))
+        if self.crop:
+            x0, y0, w, h = self.crop
+            return u[y0:y0 + h, x0:x0 + w] - x0, v[y0:y0 + h, x0:x0 + w] - y0
+        return u, v
+
+    def items(self):
+        return ((k, self[k]) for k in self._keys)
+
+    def __bool__(self):                                  # dict 子类：没存条目也不能算「空」
+        return True
+
+    def __len__(self):
+        return len(self._keys)
+
 
 def pixel_maps(rx, W_px, H_px, focus_dist=math.inf, lambdas_nm=LAMBDAS_NM, nx=33, ny=19):
     """每个波长的源像素坐标（u, v）：输出像素 → 在 d 线渲染图里取值的位置。图像行 0 = 顶部。
@@ -151,23 +190,47 @@ def pixel_maps(rx, W_px, H_px, focus_dist=math.inf, lambdas_nm=LAMBDAS_NM, nx=33
         maps[nm] = (base_u + dxp, base_v + dyp)
     return maps
 
+def apply_lateral_ca_many(imgs, maps, lambdas_nm=LAMBDAS_NM, w_min=2e-3):
+    """多张同尺寸图像（H×W×3，行 0 = 顶部）一起加横向色差：每个波长的采样位置与双线性权重只算一次，用于所有图像；
+    每个通道只取权重 ≥ w_min 的波长（重新归一化，亮度守恒）。0.8.3：4K 七个颜色层从 97 s 降到十几秒。
+    maps：pixel_maps / LazyMaps（键 = 波长 nm，值 = (u, v)）。返回新图像列表（float32）。"""
+    if not imgs:
+        return []
+    H, W = imgs[0].shape[:2]
+    wts = _channel_weights(lambdas_nm)
+    keep = wts >= w_min
+    wts = np.where(keep, wts, 0.0)
+    wts = wts / wts.sum(axis=1, keepdims=True)
+    planes = [[np.ascontiguousarray(im[..., c], dtype=np.float32).ravel() for c in range(3)] for im in imgs]
+    outs = [[np.zeros(H * W, np.float32) for _ in range(3)] for _ in imgs]
+    for k, nm in enumerate(lambdas_nm):
+        chans = [c for c in range(3) if keep[c, k]]
+        if not chans:
+            continue
+        u, v = maps[nm]
+        u = np.clip(np.asarray(u, np.float32), 0, W - 1).ravel(); v = np.clip(np.asarray(v, np.float32), 0, H - 1).ravel()
+        i0 = np.minimum(u.astype(np.int32), W - 2); j0 = np.minimum(v.astype(np.int32), H - 2)
+        fu = u - i0; fv = v - j0
+        idx = j0 * W + i0
+        w00 = (1 - fu) * (1 - fv); w01 = fu * (1 - fv); w10 = (1 - fu) * fv; w11 = fu * fv
+        del u, v, i0, j0, fu, fv
+        for pl, out in zip(planes, outs):
+            for c in chans:
+                s = pl[c]
+                out[c] += np.float32(wts[c, k]) * (s[idx] * w00 + s[idx + 1] * w01 + s[idx + W] * w10 + s[idx + W + 1] * w11)
+    return [np.stack([o[c].reshape(H, W) for c in range(3)], axis=-1) for o in outs]
+
+
 def apply_lateral_ca(img, rx, focus_dist=math.inf, lambdas_nm=LAMBDAS_NM, strength=1.0, maps=None):
     """对关色散渲染的线性图像（H×W×3，行 0 = 顶部）加上横向色差。每个通道 = Σ_λ w_c(λ) · d 线图像在 map_λ 处的值。
     白色（中性）且无色差的区域保持不变；亮度守恒（每通道权重和为 1）。"""
     H_px, W_px = img.shape[:2]
-    maps = maps or pixel_maps(rx, W_px, H_px, focus_dist, lambdas_nm)
-    wts = _channel_weights(lambdas_nm)
-    out = np.zeros_like(img)
-    base_u = np.arange(W_px)[None, :] + 0.0 * np.arange(H_px)[:, None]
-    base_v = np.arange(H_px)[:, None] + 0.0 * np.arange(W_px)[None, :]
-    for k, nm in enumerate(lambdas_nm):
-        u, v = maps[nm]
-        if strength != 1.0:
-            u = base_u + strength * (u - base_u); v = base_v + strength * (v - base_v)
-        s = _bilinear(img, u, v)
-        for c in range(3):
-            out[..., c] += wts[c, k] * s[..., c]
-    return out
+    maps = maps if maps is not None else pixel_maps(rx, W_px, H_px, focus_dist, lambdas_nm)
+    if strength != 1.0:
+        base_u = np.arange(W_px)[None, :] + 0.0 * np.arange(H_px)[:, None]
+        base_v = np.arange(H_px)[:, None] + 0.0 * np.arange(W_px)[None, :]
+        maps = {nm: (base_u + strength * (maps[nm][0] - base_u), base_v + strength * (maps[nm][1] - base_v)) for nm in lambdas_nm}
+    return apply_lateral_ca_many([img], maps, lambdas_nm)[0].astype(img.dtype, copy=False)
 
 def vignette_map(rx, W_px, H_px, f_number=None, focus_dist=math.inf, nx=17, ny=11, n=21):
     """相对照度（光瞳通过率 × cos⁴，中心归一化），H×W，行 0 = 顶部。"""
@@ -209,3 +272,61 @@ def lens_info(rx, focus_dists=(math.inf,)):
                          efl_x=O.paraxial_infinity(S, "Rx")[0], efl_y=O.paraxial_infinity(S, "Ry")[0]))
     return dict(name=rx["meta"]["name"], sensor_mm=[rx["sensor"]["width"], rx["sensor"]["height"]],
                 desqueeze=O.desqueeze(rx), by_focus=rows)
+
+
+class LensProjector:
+    """3D 点（镜头坐标 mm，物方 +Z）→ 传感器点（mm）：求主光线（过出瞳中心、d 线）穿过该点的传感器位置。
+    主光线在深度 z 处的横向位置 = A(s) + z·B(s)（A、B 在传感器上平滑），先在网格上追迹 A、B，
+    之后每个点只做向量化的二维牛顿（双线性插值 + 解析雅可比），不再逐像素追迹。0.8.3：BL_Vector（运动矢量）用。"""
+
+    def __init__(self, rx, focus_dist=math.inf, nx=161, ny=121, margin=1.25):
+        M = LensMap(rx, focus_dist)
+        self.W, self.H = M.W, M.H
+        self.gx = np.linspace(-margin * M.W / 2, margin * M.W / 2, nx)
+        self.gy = np.linspace(-margin * M.H / 2, margin * M.H / 2, ny)
+        SX, SY = np.meshgrid(self.gx, self.gy)                       # [iy, ix]
+        n = SX.size
+        P = np.column_stack([SX.ravel(), SY.ravel(), np.zeros(n)])
+        D = np.column_stack([-SX.ravel(), -SY.ravel(), np.full(n, M.z_exp)])
+        D /= np.linalg.norm(D, axis=1)[:, None]
+        Po, Do = _trace_out(M.S, M.z_stop, M.r_stop, P, D, O.LAMBDA_D)
+        tx, ty = Do[:, 0] / Do[:, 2], Do[:, 1] / Do[:, 2]
+        self.Ax = (Po[:, 0] - Po[:, 2] * tx).reshape(SX.shape); self.Bx = tx.reshape(SX.shape)
+        self.Ay = (Po[:, 1] - Po[:, 2] * ty).reshape(SX.shape); self.By = ty.reshape(SX.shape)
+        self.ok = np.isfinite(self.Ax).all() and np.isfinite(self.Ay).all()
+
+    def _interp(self, F, sx, sy):
+        fx = (sx - self.gx[0]) / (self.gx[1] - self.gx[0]); fy = (sy - self.gy[0]) / (self.gy[1] - self.gy[0])
+        ix = np.clip(np.floor(fx).astype(int), 0, len(self.gx) - 2); iy = np.clip(np.floor(fy).astype(int), 0, len(self.gy) - 2)
+        tx, ty = fx - ix, fy - iy
+        f00, f10, f01, f11 = F[iy, ix], F[iy, ix + 1], F[iy + 1, ix], F[iy + 1, ix + 1]
+        v = (f00 * (1 - tx) + f10 * tx) * (1 - ty) + (f01 * (1 - tx) + f11 * tx) * ty
+        dx = ((f10 - f00) * (1 - ty) + (f11 - f01) * ty) / (self.gx[1] - self.gx[0])
+        dy = ((f01 - f00) * (1 - tx) + (f11 - f10) * tx) / (self.gy[1] - self.gy[0])
+        return v, dx, dy
+
+    def project(self, Q, s0=None, iters=6):
+        """Q：N×3（镜头坐标 mm）。返回 (sx, sy, valid)。s0：初值（如当前像素的传感器坐标），缺省用小孔近似。"""
+        Q = np.asarray(Q, np.float64)
+        z = Q[:, 2]
+        if s0 is None:
+            bx = self._interp(self.Bx, np.zeros(1), np.zeros(1))[1][0]
+            sx = np.zeros(len(Q)); sy = np.zeros(len(Q))
+        else:
+            sx, sy = (np.array(s0[0], np.float64), np.array(s0[1], np.float64))
+        for _ in range(iters):
+            ax, axx, axy = self._interp(self.Ax, sx, sy); bx_, bxx, bxy = self._interp(self.Bx, sx, sy)
+            ay, ayx, ayy = self._interp(self.Ay, sx, sy); by_, byx, byy = self._interp(self.By, sx, sy)
+            fx = ax + z * bx_ - Q[:, 0]; fy = ay + z * by_ - Q[:, 1]
+            j11, j12 = axx + z * bxx, axy + z * bxy
+            j21, j22 = ayx + z * byx, ayy + z * byy
+            det = j11 * j22 - j12 * j21
+            det = np.where(np.abs(det) < 1e-12, 1e-12, det)
+            sx = sx - (j22 * fx - j12 * fy) / det
+            sy = sy - (-j21 * fx + j11 * fy) / det
+            sx = np.clip(sx, self.gx[0], self.gx[-1]); sy = np.clip(sy, self.gy[0], self.gy[-1])
+        ax = self._interp(self.Ax, sx, sy)[0] + z * self._interp(self.Bx, sx, sy)[0]
+        ay = self._interp(self.Ay, sx, sy)[0] + z * self._interp(self.By, sx, sy)[0]
+        resid = np.hypot(ax - Q[:, 0], ay - Q[:, 1])
+        valid = (z > 0) & (resid < 1e-3 * np.maximum(1.0, np.abs(z)) )
+        return sx, sy, valid

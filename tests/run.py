@@ -58,6 +58,8 @@ TESTS = [
     ("bl_spectral", "standard", "bl", ["tests/bl_spectral.py"], "SPECTRAL", None),
     ("bl_spectral_glass", "standard", "bl", ["tests/bl_spectral_glass.py"], "SPECGLASS", None),
     ("bl_colorspace", "standard", "bl", ["tests/bl_colorspace.py"], "COLORSPACE", None),
+    ("bl_layers", "standard", "bl", ["tests/bl_layers.py"], "LAYERS", None),
+    ("bl_focus_temporal", "standard", "bl", ["tests/bl_focus_temporal.py"], "FOCUSTEMP", None),
     ("bl_ghosts_broadband", "full", "bl", ["tests/bl_gpu_ghosts.py", "--", "BROADBAND"], "GHOSTS", None),
     ("bl_mumps_e", "full", "bl", ["tests/bl_mumps.py", "--", "e_series_style.json"], "MUMPS", None),
     ("bl_sampling", "full", "bl", ["tests/bl_sampling.py"], "SAMPLING", None),
@@ -75,7 +77,7 @@ TESTS = [
     ("package_install", "full", "sh", ["tests/package_install.sh"], "INSTALLED_GPU", None),
 ]
 
-SKIP_METRIC = re.compile(r"(second|time|speedup|_s$|path|file|seed|resolution|px\b)", re.I)
+SKIP_METRIC = re.compile(r"(second|time|speedup|\bt_(on|off)$|\.t_(on|off)$|_s$|path|file|seed|resolution|px\b)", re.I)
 
 
 def flatten(d, prefix=""):

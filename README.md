@@ -29,6 +29,14 @@ Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same cam
 
 ---
 
+## What's new in 0.8.3: production output (requests from the MessyRoom film)
+
+- **Multilayer EXR with every pass** (`bl.render_still(path, passes="all")`, `bl.render_frames(..., passes="all")`): all view-layer passes are kept; Lateral in Post is applied identically to every colour pass (light groups still sum to Combined), data passes are untouched; the flare and veiling glare are separate layers (`BL_Flare`, `BL_Veil`, `BL_Final`).
+- **`BL_Vector` motion vectors** computed through the real lens (Cycles' own Vector pass is meaningless for custom cameras); Cycles convention, verified to 0.2 px against measured motion. Depth / Position holes (Cycles writes them from sample 0 only, which a real lens often vignettes) are filled.
+- **Focus helpers**: `bl.focus_on(cam, object | point | (u, v))`, `bl.focus_pull(cam, A, B, start, end)`, `bl.dof_range(cam, coc_px)`, `bl.stop_for(cam, near_m, far_m)`, and a `diagnose()` warning when the subject is outside the sharp range.
+- **Flicker check**: `bl.temporal_check(scene, frame, n, variants=[...])` locks the camera, lets time run, and reports frame-to-frame differences (whole frame, brightest 2%, p99) plus a heatmap, with variants compared as a percentage.
+- Render Region works with Lateral in Post; 4K memory baseline documented in HANDOFF; lateral-colour post is ~7× faster.
+
 ## What's new in 0.8.2: Blender 5.3 compatibility
 
 - **Shared wavelength with 5.3 dispersive glass (GPU)**: Blender 5.3 added dispersion to the Principled BSDF, sampling one wavelength per path. Previously our lens and such glass each sampled their own wavelength and weighted the colour twice — a white sky seen through dispersive glass turned visibly yellow (14% tint). The GPU path now gives both the same random number and mapping, so they share one wavelength (tint 0.2%). Scenes without dispersive materials keep the lower-noise 0.8 sampler. The CPU / OSL path can't do this; `bl.diagnose()` warns and suggests fixes.
@@ -78,12 +86,12 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.8.2.zip`](dist/blenderlens-0.8.2.zip) from this repository.
+1. Download [`dist/blenderlens-0.8.3.zip`](dist/blenderlens-0.8.3.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.2.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.3.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.

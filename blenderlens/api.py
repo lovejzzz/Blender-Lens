@@ -10,11 +10,15 @@ import bpy
 
 from . import optics, rig
 from .agent import describe, state, configure, diagnose, preview, contact_sheet, version   # noqa: F401  AI 原生接口
+from .focus import focus_on, focus_pull, dof_range, stop_for                                # noqa: F401  对焦助手
+from .temporal import temporal_check                                                        # noqa: F401  闪烁检查
 
 __all__ = ["presets", "build", "set_focus", "set_stop", "set_mumps_correction", "lens_info", "render_still", "camera",
            "enable_gpu", "gpu_status", "remove_gpu_cache", "exposure_vs_pinhole", "render_frames", "follow_camera",
            # 0.8.1 AI 原生接口（agent.py）
-           "describe", "state", "configure", "diagnose", "preview", "contact_sheet", "version"]
+           "describe", "state", "configure", "diagnose", "preview", "contact_sheet", "version",
+           # 0.8.3 对焦助手（focus.py）与时间稳定性检查
+           "focus_on", "focus_pull", "dof_range", "stop_for", "temporal_check"]
 
 
 def presets():
@@ -101,12 +105,14 @@ def lens_info(cam_ob):
                 mumps_correction=(optics.compensator(rx) or {}).get("level"))
 
 
-def render_still(filepath, scene=None, flare=True, n_grid=260):
-    """渲染当前帧。flare=True：叠加正向追迹的炫光层（Render with Flare）。返回写出的路径。"""
+def render_still(filepath, scene=None, flare=True, n_grid=260, passes=None, vectors=True):
+    """渲染当前帧。flare=True：叠加正向追迹的炫光层（Render with Flare）。返回写出的路径。
+    passes（0.8.3）："all" 或渲染层名列表 → 写多层 EXR（保留所有渲染层、BL_Flare / BL_Veil / BL_Final / BL_Vector，
+    见 rig.render_frame_multilayer）；None = 只写成片（旧行为）。"""
     scene = scene or bpy.context.scene
     if rig.gpu_unsupported(scene):
         scene.cycles.device = 'CPU'
-    rig.render_frame(scene, filepath, flare=flare, n_grid=n_grid)    # 含 LATERAL_POST 的横向色差
+    rig.render_frame(scene, filepath, flare=flare, n_grid=n_grid, passes=passes, vectors=vectors)    # 含 LATERAL_POST 的横向色差
     return bpy.path.abspath(filepath)
 
 
@@ -162,7 +168,7 @@ def exposure_vs_pinhole(cam_ob, n=25):
 
 
 def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", seed=0, animated_seed=True,
-                  flare=False, skip_existing=True, lock=True, stale_hours=12.0, file_ext=".exr"):
+                  flare=False, skip_existing=True, lock=True, stale_hours=12.0, file_ext=".exr", passes=None, vectors=True):
     """逐帧渲染（命令行 -b 用）：确定性、可断点续渲、跳过已有帧、多机分帧。
     · 种子：seed + 帧号（animated_seed=False 时恒为 seed），同一帧任何机器渲染结果相同；
     · 断点续渲：先写 <名>.partial，完成后原子改名；已存在的帧跳过；
@@ -170,6 +176,7 @@ def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", see
       （内容为主机名 / 进程 / 时间），别的机器看到未过期（< stale_hours）的锁就跳过；
       也可以显式分：frames=range(1, 145, 2) 与 range(2, 145, 2)。
     · 每帧都会按关键帧更新对焦 / 光圈（frame_set → apply_settings），GPU 路径同样生效。
+    · passes（0.8.3）："all" 或渲染层名列表 → 每帧写多层 EXR（所有渲染层 + BL_Flare / BL_Veil / BL_Final / BL_Vector）。
     返回本次渲染的帧号列表。"""
     import socket, time as _time
     scene = scene or bpy.context.scene
@@ -203,7 +210,7 @@ def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", see
             if rig.gpu_unsupported(scene):
                 scene.cycles.device = 'CPU'
             tmp = path + ".partial" + file_ext
-            rig.render_frame(scene, tmp, flare=flare)
+            rig.render_frame(scene, tmp, flare=flare, passes=passes, vectors=vectors)
             os.replace(tmp, path)
             done.append(fr)
         finally:

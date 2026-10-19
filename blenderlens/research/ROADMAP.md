@@ -32,6 +32,10 @@
 | 8.6 | **Geometry 模式亚像素平移**（旧问题 §7.2） | 单片透镜复现 → 查像素中心约定 | 偏移 < 0.05 px | 小 |
 | 8.7 | **外部数据回归** | 新测试 `test_reference.py`：前置预设的散景高宽比随离焦趋向挤压比；后置 PV 1.34× 散景接近圆（ASC / FDTimes 的定性结论）；呼吸方向以垂直为主（E 系列、Hawk 的描述）；最近对焦距离与 Panavision 公布值比对 | 全部通过或在文档里解释差异 | 小 |
 
+## 0.8.3 —— 成片输出（2026-10-19 完成，MessyRoom Day 4 的 R1–R4，见 RESEARCH.md §6.13、HANDOFF §6.7）
+
+R1 ✅ 多层 EXR（所有渲染层、颜色层统一色差、BL_Flare / BL_Veil / BL_Final、BL_Vector、补 Depth / Position 的洞）。R2 ✅ 对焦助手 + diagnose。R3 ✅ temporal_check + blcli。R4 ✅ Render Region + Lateral in Post、运动模糊提示、4K 内存基线、0.5.1 → 0.8.3 画面对比。
+
 ## 0.8.2 —— Blender 5.3 兼容修正（2026-10-19 完成，见 RESEARCH.md §6.12）
 
 B1 ✅ GPU 与色散材质共用波长（偏色 14% → 0.2%）；CPU / OSL 只能警告。B2 ✅ 传感器响应按工作色彩空间换算（GPU / OSL）。B3 ✅ `tests/test_kernel_patch.py`。原计划：

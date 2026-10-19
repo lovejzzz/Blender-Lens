@@ -41,7 +41,8 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `blenderlens/flare.py` | 正向追迹炫光（鬼影）、衍射星芒、杂光（ISO 9358 标定） | 否 |
 | `blenderlens/lenspack.py` | 后期横向色差、ST 图、渐晕图 | 否 |
 | `blenderlens/meshgen.py` | Geometry 模式的镜片 / 光圈 / 镜筒网格 | 否 |
-| `blenderlens/rig.py` | 在场景里搭镜头、每帧同步（`apply_settings`）、渲染后期 | 是 |
+| `blenderlens/rig.py` | 在场景里搭镜头、每帧同步（`apply_settings`）、渲染后期、多层 EXR（`render_frame_multilayer`、`bl_vector`） | 是 |
+| `blenderlens/passes.py` / `focus.py` / `temporal.py` | 多层 EXR 读写与分类 / 对焦助手与景深 / 闪烁检查（0.8.3） | 部分 |
 | `blenderlens/agent.py` / `api.py` / `ui.py` | AI 接口 / 稳定脚本接口 / 面板与属性 | 是 |
 | `tools/build_presets.py` | 从专利转录数据生成 E/G/Panavision/Neil 处方，并给 C/E/G 加补偿板 | 否 |
 | `tools/build_pupil_tables.py` | 预设出瞳表（改了处方的光学部分或 `pupil.py` 后必须重跑） | 否 |
@@ -66,6 +67,9 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 - 美国专利公报可能印错（US 11,287,618）：一份对不上先找同族（CN 111562632 B）。
 - Blender 5.3 的 Principled 色散每条路径一个波长：GPU 路径已与它共用（「共用模式」，见 RESEARCH §6.12）；CPU / OSL 做不到，`diagnose()` 会警告。
 - 改了 `gpukernel.py` 里任何补丁文本：内核拷贝目录名含补丁哈希，会自动重新拷贝；Blender 升级先跑 `tests/test_kernel_patch.py`。
+- Blender 5.x 多层 EXR 是多部分文件：读要遍历 `parts`（`blenderlens/passes.py`）；Cryptomatte 通道是小写 r g b a。
+- Cycles 的 Depth / Position 只在第 0 个采样写，真实镜头会留洞（已在后期补）；Cycles 的 Vector 对自定义相机无效 → 用 `BL_Vector`。
+- 4K 后期注意内存：不要缓存整幅的 float64 映射（`lenspack.LazyMaps`）；dict 子类做「惰性容器」时要实现 `__bool__`，否则 `x or default` 会把它当空。
 - 跑长任务（Blender 测试、整套测试）放后台；Geometry 模式 CPU 渲染很慢。
 
 ## 看图
