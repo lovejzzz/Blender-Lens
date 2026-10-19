@@ -11,7 +11,7 @@ except ImportError:                       # Blender 外：只提供纯 Python �
     bpy = None
 
 _ALIAS = "blenderlens"
-_SUBMODULES = ("optics", "oslgen", "flare", "pupil", "meshgen", "gpukernel", "rig", "api", "ui")
+_SUBMODULES = ("optics", "oslgen", "flare", "pupil", "meshgen", "lenspack", "gpukernel", "rig", "agent", "api", "ui")
 
 
 def _install_alias():

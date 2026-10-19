@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+# BlenderLens 命令行（0.8.1，给 AI 与脚本用）：所有命令的输出都是一个 JSON 对象（--pretty 缩进）。
+#
+#   python3 tools/blcli.py presets                       # 预设清单（纯 Python，不启动 Blender，< 1 秒）
+#   python3 tools/blcli.py info neil_2x_50 --focus-m 2   # 某个预设的光学数字：焦距、压缩比、焦外、呼吸、发腮
+#   python3 tools/blcli.py describe                      # 启动 Blender：完整的设置模式与 API（bl.describe()）
+#   python3 tools/blcli.py render --preset c_series_style --scene demo --focus-m 3 --stop 2.8 \
+#           --set coating_type=BROADBAND --quality draft --gpu --out renders/cli/c.png
+#   python3 tools/blcli.py render --preset c_series_style --scene demo --variants '[{"f_number":2.3},{"f_number":8}]' --out renders/cli/ab.png
+#   python3 tools/blcli.py render --blend my_shot.blend --quality standard --out renders/cli/shot.png
+#   python3 tools/blcli.py diagnose --blend my_shot.blend
+#   python3 tools/blcli.py test quick                    # = python3 tests/run.py quick
+#
+# Blender 路径：环境变量 BLENDER，默认 /Applications/Blender.app/Contents/MacOS/Blender。
+# 用的是这个源码树里的 blenderlens（不是已安装的扩展），改了代码马上生效。
+import argparse, json, math, os, subprocess, sys, tempfile, time
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+BLENDER = os.environ.get("BLENDER", "/Applications/Blender.app/Contents/MacOS/Blender")
+MARK = "BLJSON "
+
+
+def _preset_file(name):
+    import blenderlens.optics as O
+    fn = name if name.endswith(".json") else name + ".json"
+    if os.path.exists(fn):
+        return os.path.abspath(fn)
+    p = os.path.join(O.PRESCRIPTION_DIR, fn)
+    if not os.path.exists(p):
+        raise SystemExit(json.dumps({"error": f"没有预设 {name}", "presets": [f for f, _, _ in O.list_presets()]}, ensure_ascii=False))
+    return p
+
+
+def cmd_presets(a):
+    import blenderlens.optics as O
+    return {"presets": [dict(file=f, name=n, tagline=t) for f, n, t in O.list_presets()]}
+
+
+def cmd_info(a):
+    """纯 Python 光学摘要（与 Blender 里的 lens_info 同一套计算）。"""
+    import copy
+    import blenderlens.optics as O
+    rx = O.load(_preset_file(a.preset))
+    if a.focal_mm:
+        rx = O.rescale_to_vertical_efl(rx, a.focal_mm)
+    if a.gate:
+        rx = O.apply_gate(rx, a.gate)
+    S = O.layout(rx)
+    mfd = rx.get("focus", {}).get("min_distance_mm") or rx.get("look", {}).get("min_focus_mm")
+    out = dict(preset=rx["meta"].get("short_name", rx["meta"]["name"]), file=os.path.basename(_preset_file(a.preset)),
+               efl_x_mm=round(O.paraxial_infinity(S, "Rx")[0], 4), efl_y_mm=round(O.paraxial_infinity(S, "Ry")[0], 4),
+               bfl_y_mm=round(O.paraxial_infinity(S, "Ry")[1], 4), f_number_max=O.nominal_f_number(rx),
+               sensor_mm=[rx["sensor"]["width"], rx["sensor"]["height"]], desqueeze=O.desqueeze(rx), min_focus_mm=mfd,
+               look=rx.get("look", {}), sources=[g["source"]["patent"] for g in rx["groups"] if "source" in g])
+    levels = [None]
+    if O.compensator(rx):
+        levels = [rx["focus"]["compensator"].get("level", 0.0), 0.0, 1.0]
+        levels = list(dict.fromkeys(levels))
+    dists = [a.focus_m * 1000.0] if a.focus_m else [math.inf] + ([mfd, 2 * mfd, 5 * mfd] if mfd else [])
+    table = []
+    for lev in levels:
+        r = copy.deepcopy(rx)
+        if lev is not None:
+            r["focus"]["compensator"]["level"] = lev
+        for dd in dists:
+            row = dict(focus_mm=None if math.isinf(dd) else dd, squeeze=round(O.squeeze_at(r, dd), 4))
+            if lev is not None:
+                row["mumps_correction"] = lev
+            if not math.isinf(dd):
+                d1, d2 = O.solve_focus(r, dd)
+                row["focus_travel_mm"] = [round(d1, 4), round(d2, 4)]
+                row["bokeh_aspect_background"] = round(O.bokeh_aspect(r, dd, 1e7)["aspect_desqueezed"], 3)
+            table.append(row)
+    out["focus_table"] = table
+    return out
+
+
+def _blender(script, timeout=3600):
+    """在 Blender 里跑一段脚本（源码树的 blenderlens 已注册），取回 MARK 行的 JSON。"""
+    prelude = f"import sys, json\nsys.path.insert(0, {ROOT!r})\nimport blenderlens\nblenderlens.register()\nimport blenderlens.api as bl\nfrom blenderlens.agent import dump\n"
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as f:
+        f.write(prelude + script)
+        path = f.name
+    try:
+        t = time.time()
+        pr = subprocess.run([BLENDER, "-b", "--factory-startup", "--python", path], capture_output=True, text=True, timeout=timeout)
+        text = pr.stdout + pr.stderr
+        for line in text.splitlines():
+            if line.startswith(MARK):
+                res = json.loads(line[len(MARK):])
+                if isinstance(res, dict):
+                    res.setdefault("wall_seconds", round(time.time() - t, 1))
+                return res
+        return {"error": "Blender 没有返回结果", "returncode": pr.returncode, "tail": text[-3000:]}
+    finally:
+        os.unlink(path)
+
+
+def cmd_describe(a):
+    return _blender(f"print({MARK!r} + dump(bl.describe()))\n")
+
+
+DEMO_SCENE = r'''
+# 内置演示场景（毫米）：棋盘地面 + 远近几个发光小球（焦外 / 星芒）+ 一个强光源（炫光）+ 暗天空
+import bpy, math
+from blenderlens import rig
+sc = bpy.context.scene
+for o in list(sc.objects):
+    bpy.data.objects.remove(o)
+def emit(name, strength, color=(1, 1, 1)):
+    m = bpy.data.materials.new(name)
+    if m.node_tree is None: m.use_nodes = True
+    nt = m.node_tree; nt.nodes.clear()
+    o = nt.nodes.new("ShaderNodeOutputMaterial"); e = nt.nodes.new("ShaderNodeEmission")
+    e.inputs[0].default_value = (*color, 1); e.inputs[1].default_value = strength; nt.links.new(e.outputs[0], o.inputs[0])
+    return m
+ground = bpy.data.materials.new("ground")
+if ground.node_tree is None: ground.use_nodes = True
+nt = ground.node_tree; bsdf = nt.nodes.get("Principled BSDF")
+chk = nt.nodes.new("ShaderNodeTexChecker"); chk.inputs["Scale"].default_value = 40.0
+chk.inputs["Color1"].default_value = (0.8, 0.8, 0.8, 1); chk.inputs["Color2"].default_value = (0.08, 0.08, 0.08, 1)
+nt.links.new(chk.outputs[0], bsdf.inputs["Base Color"])
+bpy.ops.mesh.primitive_plane_add(size=60000, location=(0, 20000, 0)); bpy.context.object.data.materials.append(ground)
+bpy.ops.object.light_add(type='SUN', rotation=(math.radians(55), 0, math.radians(150))); bpy.context.object.data.energy = 3.0
+# 相机在 (0, 0, 1500) 看 +Y；发光小球：近 / 中 / 远（焦外大小不同），一个在画面边缘（彗差、猫眼）
+for i, (x, y, z) in enumerate([(-700, 2500, 1300), (500, 6000, 1700), (-1500, 12000, 2200), (1300, 3500, 1200), (200, 30000, 1500)]):
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=12 + 0.0015 * y, location=(x, y, z))
+    bpy.context.object.data.materials.append(emit(f"pt{i}", 300.0, [(1, .6, .3), (.4, .7, 1), (1, 1, 1), (1, .3, .3), (.8, 1, .6)][i]))
+bpy.ops.mesh.primitive_cube_add(size=600, location=(-400, 4000, 300)); bpy.context.object.data.materials.append(ground)
+bpy.ops.mesh.primitive_uv_sphere_add(radius=40, location=(2300, 14000, 2600)); sun = bpy.context.object
+sun.data.materials.append(emit("lamp", 3.0e4, (1, .95, .85))); sun[rig.FLARE_PROP] = 1
+w = bpy.data.worlds.new("W"); sc.world = w
+if w.node_tree is None: w.use_nodes = True
+w.node_tree.nodes["Background"].inputs[0].default_value = (0.02, 0.025, 0.04, 1)
+w.node_tree.nodes["Background"].inputs[1].default_value = 1.0
+'''
+
+
+def cmd_render(a):
+    s = []
+    if a.gpu:
+        s.append("print('gpu', bl.enable_gpu(use_gpu=True))")
+    if a.blend:
+        s.append(f"bpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})")
+        s.append("cam = bl.camera()")
+        if a.preset:
+            s.append(f"cam = bl.build({_preset_file(a.preset)!r}, units='SCENE', focal_mm={a.focal_mm or 0.0}, gate={a.gate or 'FULL'!r})")
+    else:
+        s.append(DEMO_SCENE)
+        s.append(f"cam = bl.build({_preset_file(a.preset or 'c_series_style')!r}, units='MM', focal_mm={a.focal_mm or 0.0}, gate={a.gate or 'FULL'!r})")
+        s.append("import math; cam.location = (0, 0, 1500); cam.rotation_euler = (math.pi / 2, 0, 0)")
+    if a.gpu:
+        s.append("print('gpu2', bl.enable_gpu(use_gpu=True))")
+    settings = {}
+    if a.focus_m is not None:
+        settings["focus_m"] = a.focus_m
+    if a.stop is not None:
+        settings["f_number"] = a.stop
+    for kv in a.set or []:
+        k, v = kv.split("=", 1)
+        try:
+            settings[k] = json.loads(v)
+        except json.JSONDecodeError:
+            settings[k] = v
+    s.append(f"changed = bl.configure(cam, **{settings!r})")
+    out = os.path.abspath(a.out)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    common = f"quality={a.quality!r}, samples={a.samples!r}, height={a.height!r}, flare={not a.no_flare!r}"
+    if a.variants:
+        variants = json.loads(open(a.variants).read() if os.path.exists(a.variants) else a.variants)
+        s.append(f"res = bl.contact_sheet({out!r}, {variants!r}, {common})")
+    else:
+        s.append(f"res = bl.preview({out!r}, {common})")
+    s.append("res['configured'] = changed")
+    s.append("res['diagnose'] = bl.diagnose()")
+    s.append(f"print({MARK!r} + dump(res))")
+    return _blender("import bpy\n" + "\n".join(s) + "\n")
+
+
+def cmd_diagnose(a):
+    return _blender(f"import bpy\nbpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})\n"
+                    f"res = dict(issues=bl.diagnose(), state=bl.state() if bl.camera() else None)\n"
+                    f"print({MARK!r} + dump(res))\n")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="BlenderLens 命令行（输出 JSON）")
+    ap.add_argument("--pretty", action="store_true")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("presets")
+    p = sub.add_parser("info"); p.add_argument("preset"); p.add_argument("--focus-m", type=float)
+    p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
+    sub.add_parser("describe")
+    p = sub.add_parser("render")
+    p.add_argument("--preset"); p.add_argument("--blend"); p.add_argument("--scene", default="demo", choices=["demo"])
+    p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
+    p.add_argument("--focus-m", type=float); p.add_argument("--stop", type=float)
+    p.add_argument("--set", action="append", help="设置=值（值按 JSON 解析，如 coating_type=BROADBAND、mumps_correction=0.5）")
+    p.add_argument("--variants", help="对比图：JSON 列表或 JSON 文件，每项一组设置")
+    p.add_argument("--quality", default="draft", choices=["draft", "standard", "final"])
+    p.add_argument("--samples", type=int); p.add_argument("--height", type=int)
+    p.add_argument("--gpu", action="store_true"); p.add_argument("--no-flare", action="store_true")
+    p.add_argument("--out", default="renders/cli/preview.png")
+    p = sub.add_parser("diagnose"); p.add_argument("--blend", required=True)
+    p = sub.add_parser("test"); p.add_argument("args", nargs=argparse.REMAINDER)
+    argv = sys.argv[1:]
+    pretty = "--pretty" in argv and argv[0] != "test"
+    a = ap.parse_args([x for x in argv if x != "--pretty"] if pretty else argv)
+    a.pretty = a.pretty or pretty
+    if a.cmd == "test":
+        sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, "tests", "run.py")] + a.args))
+    res = dict(presets=cmd_presets, info=cmd_info, describe=cmd_describe, render=cmd_render, diagnose=cmd_diagnose)[a.cmd](a)
+    print(json.dumps(res, ensure_ascii=False, indent=1 if a.pretty else None, default=str))
+    sys.exit(1 if isinstance(res, dict) and "error" in res else 0)
+
+
+if __name__ == "__main__":
+    main()

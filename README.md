@@ -16,7 +16,7 @@
 > - a deterministic forward-traced flare pass, diffraction starbursts and veiling glare;
 > - metre-scale scenes, native 16:9 gates, a Python API with multi-machine frame rendering.
 >
-> Install `dist/blenderlens-0.8.0.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
+> Install `dist/blenderlens-0.8.1.zip` via *Preferences → Get Extensions → Install from Disk*, then *N-panel → BlenderLens → Build Lens*. The documentation below is in Chinese; `blenderlens/HANDOFF.md` is the full user guide.
 
 | C 系列风格 · 100 mm · f/2.3 | E 系列风格 · 100 mm · f/2.8 | G 系列风格 · 100 mm · f/3 |
 |---|---|---|
@@ -31,6 +31,14 @@
 > Panavision 的 C / E / G / T / Primo 变形系列量产处方从未公开。C / E / G 三个选项是「同年代、同结构的公开专利 + 按 Panavision 公布的规格设定观感参数」，**不是复刻**。唯一公开的真 Panavision 处方是 US 7,085,066（后置 1.34× 变形组），原样收录为两个预设。
 
 ---
+
+## 0.8.1 新增：AI 原生
+
+让 AI（以及脚本）不用看界面就能使用、测试、改进 BlenderLens：
+- **自描述接口**：`bl.describe()`（全部设置的模式直接从 Blender 属性读出）、`bl.state()`、带校验的 `bl.configure()`、`bl.diagnose()`（问题 + 可执行的修法）、`bl.preview()`、`bl.contact_sheet()`（A/B 对比图）。
+- **命令行** `tools/blcli.py`：`presets` / `info`（不启动 Blender 的光学数字）/ `describe` / `render`（内置演示场景，`--variants` 出对比图）/ `diagnose` / `test`，输出都是 JSON。
+- **分级测试** `tests/run.py quick | standard | full`：并行、JSON 报告（`renders/test_report.json`）、指标基线对比（`tests/baseline.json`），能发现「测试仍通过但数值变差」。
+- **`AGENTS.md`**：给接手的 AI 的代码地图、不能破坏的约定、发版流程、踩过的坑。
 
 ## 0.8 新增
 
@@ -67,12 +75,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.8.0.zip`](dist/blenderlens-0.8.0.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.8.1.zip`](dist/blenderlens-0.8.1.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.0.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.1.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。
@@ -130,6 +138,29 @@ Cycles 原生的 OSL 自定义相机只在 CPU 和 NVIDIA OptiX 上运行，Meta
 - 4K 一帧（GPU、Lateral in Post、16:9 Native、256 spp + OIDN）在 M4 Max 上约 3 分钟。
 
 ## 4. 用 Python 与命令行
+
+**AI 原生接口（0.8.1）**——不看界面也能完整发现、设置、检查、预览：
+
+```python
+import blenderlens.api as bl
+info = bl.describe()          # 版本、预设（焦距 / 压缩比 / 最近对焦）、全部设置的模式（类型 / 范围 / 枚举 / 说明）、API 签名
+cam = bl.build("c_series_style.json", units="SCENE")
+bl.configure(cam, focus_m=3, f_number=2.8, coating_type="BROADBAND", mumps_correction=1.0)   # 先校验再写；错了抛 ValueError 并列出可选值，什么都不改
+print(bl.state(cam))          # 当前全部设置 + 光学信息 + 渲染设置 + GPU 状态（JSON 可序列化）
+print(bl.diagnose())          # 问题清单：level / code / message / fix
+bl.preview("//p.png", quality="draft")                       # 低清快速出图 + 图像统计（渲完恢复设置）
+bl.contact_sheet("//ab.png", [dict(f_number=2.3), dict(f_number=8)])   # 多组设置并排（A/B）
+```
+
+命令行（源码树里，输出 JSON；见 `AGENTS.md`）：
+
+```bash
+python3 tools/blcli.py info c_series_style
+```
+
+```bash
+python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --variants '[{"f_number":2.3},{"f_number":8}]' --out renders/cli/ab.png
+```
 
 启用扩展后，脚本里直接用稳定入口（不用管安装仓库名）。距离一律用米：
 
@@ -218,15 +249,18 @@ O.bokeh_aspect(rx, 1200.0, 20000.0)      # 焦外高宽比（解挤压后）
 ## 7. 测试
 
 ```bash
-python3 tests/test_optics.py
+python3 tests/run.py quick
 ```
 
 ```bash
-tests/run_all.sh
+python3 tests/run.py full
 ```
+
+`quick` 约 2 分钟、`standard` 约 15–20 分钟、`full`（含打包与干净环境安装）约 1 小时；报告写到 `renders/test_report.json`，数值指标对照 `tests/baseline.json`。`tests/run_all.sh` 等于 `full`。
 
 | 测试 | 内容 |
 |---|---|
+| `tests/bl_agent.py`（0.8.1） | AI 接口：describe / state / configure（含拒绝错误输入且不改动）/ diagnose / preview / contact_sheet |
 | `tests/test_optics.py` | Cauchy、解析梯度、近轴对照专利、真实 vs 近轴、对焦求解 |
 | `tests/test_flare.py` | 炫光通道：能量守恒、镀膜强度与颜色、一字拉丝集中度 |
 | `tests/test_pupil.py` | 出瞳采样表覆盖所有能穿过镜头的光线（随机视场 × 波长 × 对焦距离，无偏的前提）；光谱表白平衡 |

@@ -1,6 +1,6 @@
-# BlenderLens 0.8.0 交接说明（给接手的 AI）
+# BlenderLens 0.8.1 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.8.0**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.8.1**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -16,11 +16,11 @@ Panavision 的 C/E/G/T/Primo 量产处方从未公开。除「Panavision 后置�
 
 要求：Blender **5.0 及以上**（开发和测试都在 macOS / Apple M2 Max / Blender 5.3 beta 上完成；Windows、Linux、5.0–5.2 未实测）。不依赖第三方 Python 包。
 
-- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.8.0.zip`。
+- 图形界面：Edit → Preferences → Get Extensions → 右上角 ⌄ → **Install from Disk…** → 选 `blenderlens-0.8.1.zip`。
 - 命令行：
 
 ```bash
-blender --command extension install-file -r user_default -e blenderlens-0.8.0.zip
+blender --command extension install-file -r user_default -e blenderlens-0.8.1.zip
 ```
 
 装好后的 Python 模块路径是 `bl_ext.user_default.blenderlens`（仓库名 `user_default` 取决于安装到哪个仓库）。启用后插件会把自己同时登记为 `blenderlens`，脚本里直接写 `import blenderlens.api as bl` 即可，不用管仓库名。
@@ -100,6 +100,19 @@ blender --command extension install-file -r user_default -e blenderlens-0.8.0.zi
 5. **Recompute Apertures**：改了处方后重新估算口径。**Export JSON**：导出当前处方。
 
 ## 6. 用 Python 驱动（推荐给 AI 用）
+
+**AI 原生接口（0.8.1）**——不看界面也能完整发现、设置、检查、预览：
+
+```python
+import blenderlens.api as bl
+info = bl.describe()          # 版本、预设（焦距 / 压缩比 / 最近对焦）、全部设置的模式（类型 / 范围 / 枚举 / 说明）、API 签名
+cam = bl.build("c_series_style.json", units="SCENE")
+bl.configure(cam, focus_m=3, f_number=2.8, coating_type="BROADBAND", mumps_correction=1.0)   # 先校验再写；错了抛 ValueError 并列出可选值，什么都不改
+print(bl.state(cam))          # 当前全部设置 + 光学信息 + 渲染设置 + GPU 状态（JSON 可序列化）
+print(bl.diagnose())          # 问题清单：level / code / message / fix
+bl.preview("//p.png", quality="draft")                       # 低清快速出图 + 图像统计（渲完恢复设置）
+bl.contact_sheet("//ab.png", [dict(f_number=2.3), dict(f_number=8)])   # 多组设置并排（A/B）
+```
 
 稳定入口 `blenderlens.api`（0.4 起；距离用米，与场景单位无关）：
 

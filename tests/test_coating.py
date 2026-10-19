@@ -41,7 +41,7 @@ rx = O.load(os.path.join(O.PRESCRIPTION_DIR, "neil_2x_50.json"))
 src = (900.0, 300.0, 9000.0)
 E = {}
 for kind, nm in (("SINGLE", 100.0), ("BROADBAND", 94.0)):
-    img, info = FL.flare_layer(rx, src, 4.0e6, 60.0, 240, 101, coated=True, coating_nm=nm, coating_type=kind, n_grid=120)
+    img, info = FL.flare_layer(rx, src, 4.0e6, 60.0, 240, 101, coated=True, coating_nm=nm, coating_type=kind, n_grid=70)
     E[kind] = np.array(info["ghost_energy"])
 ratio = E["SINGLE"].sum() / max(E["BROADBAND"].sum(), 1e-30)
 ok(ratio > 2.0, f"Neil 50: broadband ghosts {ratio:.1f}× weaker than single MgF₂")

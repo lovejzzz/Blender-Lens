@@ -9,9 +9,12 @@ from types import SimpleNamespace
 import bpy
 
 from . import optics, rig
+from .agent import describe, state, configure, diagnose, preview, contact_sheet, version   # noqa: F401  AI 原生接口
 
-__all__ = ["presets", "build", "set_focus", "set_stop", "lens_info", "render_still", "camera",
-           "enable_gpu", "gpu_status", "remove_gpu_cache", "exposure_vs_pinhole", "render_frames", "follow_camera"]
+__all__ = ["presets", "build", "set_focus", "set_stop", "set_mumps_correction", "lens_info", "render_still", "camera",
+           "enable_gpu", "gpu_status", "remove_gpu_cache", "exposure_vs_pinhole", "render_frames", "follow_camera",
+           # 0.8.1 AI 原生接口（agent.py）
+           "describe", "state", "configure", "diagnose", "preview", "contact_sheet", "version"]
 
 
 def presets():
