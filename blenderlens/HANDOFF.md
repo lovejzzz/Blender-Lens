@@ -1,6 +1,6 @@
-# BlenderLens 0.8.4 交接说明（给接手的 AI）
+# BlenderLens 0.8.5 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.8.4**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.8.5**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -354,6 +354,36 @@ bl.render_shot(source_camera="CamHeli", frames=range(40, 57), out_dir="//shots/h
 | 0.8.3 的星芒，0.02°/帧 | — | — | 396% | 157 px |
 
 中速时的二阶差是光源扫过渐晕 / 画面的平滑变化，不是闪。端到端（`temporal_check(mode="moving", variants=[{"flare": True}])`）的 `flare_stability`：能量 0.48%、质心 0.13 px。**结论：0.8.4 起运动镜头可以直接用插件的炫光（flare=True）**；光晕的形状与强度不变；0.8.3 的星芒还在光源那一两个像素上重复叠了约 100 倍于直射像的能量（画面上被高光截掉，但在 BL_Flare 数据里），0.8.4 去掉了。注意鬼影绕画面中心反向运动，BL_Vector 对不上它们 → 开炫光会抬高运动补偿残差，这是运动不是闪，看 `flare_stability`；时间降噪只对 Combined、炫光原样加回。正向炫光的代价：每个光源每帧几秒（与分辨率无关；0.8.4 快了 5–6 倍）。
+
+## 6.9 透过玻璃的矢量、雨层、多镜头、曝光曲线、对焦跟随、倒影矢量（0.8.5，MessyRoom Day 5 便利店雨夜的需求）
+
+**矢量与深度穿过透射面（R1）**：橱窗、门、冷柜门后面的东西原来拿到的是玻璃的运动。现在自动识别「薄透射面」——材质是 Principled（Transmission ≥ 0.9、Roughness ≤ 0.1）或 Glass BSDF（Roughness ≤ 0.1），或物体自定义属性 `bl_pass_through = True`（设 False 可以关掉自动识别）。有这样的物体时，主渲染之后再渲一次只要数据层的辅助渲染（透射面隐藏，8 采样、0 次弹射，只取 Position / Depth / Cryptomatte），于是：
+- `BL_Vector`、`Depth`：透射面像素取它后面第一个非透射面（其余像素与不穿透时逐像素相同）；
+- `BL_VectorSurface`、`BL_DepthSurface`：第一个命中面（玻璃本身）的矢量与深度，给玻璃上的反射、雨滴用；
+- `BL_VectorConfidence` 多一项 glass：1 − 反射占比（光泽层 / Combined，即 Fresnel × 反射来的亮度 / 总亮度；为此临时打开光泽层）。
+实测（店内 + 橱窗、相机横移）：运动补偿残差 = Transparent + Glossy + pass_alpha_threshold 绕法的 0.99 倍；玻璃后的区域是关掉穿透时的 0.71 倍。不用改材质，折射玻璃照常渲。辅助渲染的代价约为一次 8 采样、无弹射的渲染。
+
+**排除层（R2）**：`render_shot(..., exclude_collections=["FX_rain"])`（`render_still`、`render_frames`、`render_sequence`、`temporal_check` 同名参数）：这些集合不进主渲染，另渲一次只有它们的 `BL_Exclude`（RGBA 预乘，其余物体 holdout → 被柜台等挡住的雨自动去掉，胶片透明）。Combined、矢量、置信度都是不含雨的场景层；`BL_Final = (BL_Exclude over Combined) + BL_Flare + BL_Veil`。`exclude_mode="hide"`（默认：主渲染里完全隐藏 → 场景层与「不渲雨」逐像素相同）或 `"camera"`（只对相机不可见，保留雨的阴影 / 反射）。`temporal_denoise` 只平均场景层，最后把 BL_Exclude 原样 over 回去；`temporal_check(mode="moving", layer="scene" | "exclude" | "final")`，`layer="exclude"` 用来检查雨是否帧间确定。实测：BL_Exclude 与「只渲雨」逐像素相同；场景层与不渲雨逐像素相同；降噪结果 = 「不渲雨降噪 + 雨 over」逐像素相同。**逐像素比对要用无损压缩**（`exr_codec="PIZ"`）：`temporal` 预设默认 DWAB，有损（平均 1e-4，雨的锐边几个百分点）。
+
+**一个 .blend 多支镜头（R3）**：
+```python
+bl.render_sequence([dict(source="S1_EXT", frames=(1, 72), focal_mm=21), dict(source="S2_AISLE", frames=(73, 156), focal_mm=32),
+                    dict(source="S3_COUNTER", frames=(157, 230), focal_mm=40, rack=[(190, "Oden"), (202, "CRT")])],
+                   out_dir="//day5", preset="c_series_style", passes="temporal", spp=128, exclude_collections=["FX_rain"])
+bl.shots_from_markers()     # 时间线上绑定相机的标记 → 镜头清单（每个标记到下一个标记的前一帧）
+```
+同一个进程依次搭镜头 → 跟随 → 渲染；GPU 内核随镜头改写，下一次渲染自动重新编译（每支镜头第一次约 10 秒，之后有缓存）。每个镜头写到 `<out_dir>/<name>/`（各自的 `f_log.json`），汇总在 `<out_dir>/sequence_log.json`。镜头项里可以给 `preset`、`focal_mm`、`settings`（同 `bl.configure`）、`focus_target`、`rack`、`spp`、`exposure` 等任何 `render_shot` 参数。实测（GPU，21 / 40 mm 两个镜头）：与每个镜头单独开进程渲相差 ≤ 2.4e-7（GPU 累加顺序的浮点差）。命令行：`blcli.py sequence --blend day5.blend --shots shots.json | --markers ...`。**0.8.4 的 render_shot 搭镜头时会把场景的渲染设置改掉**（设备改 CPU、弹射数、自适应采样、焦散——`render_preset`）；0.8.5 起 render_shot 搭完镜头会把这些换回场景原来的。
+
+**曝光曲线（R4）**：`exposure="pinhole"`（整幅平均）/ `"pinhole_centre"`（画面中心，中灰卡）把镜头相对针孔的补偿**乘到原有的 film_exposure 上**：有关键帧（按测光打的曝光、切点阶跃）就整条曲线乘，渲完恢复原样。实测（均匀中灰墙、−1.0 → −1.7 EV 阶跃）：与 Cycles 针孔相机差 0.011 EV（整幅）/ 0.002 EV（中心）；切点阶跃正好 −0.70 EV。
+
+**对焦跟随（R5）**：
+```python
+bl.focus_track(cam, "Door", frames=(1, 72))                         # 每帧按轴向距离烘焙（相机、目标在动都对）
+bl.focus_track(cam, frames=(157, 230), rack=[(190, "Oden"), (202, "CRT")])   # 拉焦：到 190 帧对在关东煮，202 帧对在 CRT
+```
+目标可以是物体、空物体或 (x, y, z)；两个 rack 点之间按 1/距离 缓入缓出，每帧两头都重新求距离。`render_shot` / `render_sequence` 的 `focus_target`、`rack` 参数直接用它。实测：主体处弥散 0.0 px（4K）；拉焦两端与沿射线实测的轴向距离相同。
+
+**倒影的运动矢量（R6）**：平面反射体（物体属性 `bl_reflector = True`，或自动：平面网格 + Principled 粗糙度 ≤ 0.4 或接了纹理，如噪声控制的湿地面）上，按视线的镜面反射在场景里 ray_cast 找到倒影里的点，上一帧 / 下一帧时让它随所属物体运动、对当时的平面取镜像（虚像点），再用当时的相机与对焦投影 → `BL_VectorReflection`；`BL_ReflectionShare` = 光泽层 / Combined。下游（`temporal_check` moving、`temporal_denoise`）在倒影为主（占比 > 0.5）的像素用倒影矢量，其余用 BL_Vector（`motion.effective_vectors`）；置信度对这些像素不再按镜面扣分。代价：每个反射体像素一次 ray_cast（约 4.6 µs，4K 下多于 150 万像素时隔点算）。实测（湿街、招牌和路灯的倒影、相机横移）：倒影区运动补偿残差 = 不补偿的 0.28 倍（只用地面矢量是 3.0 倍——比不补偿还差）。限制：只算一次镜面反射、只对平面；粗糙倒影的模糊不影响矢量（虚像点运动相同）。
 
 ## 7. 输出与解挤压
 

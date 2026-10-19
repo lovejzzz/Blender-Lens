@@ -71,15 +71,33 @@ def flare_stability(flares, veils=None):
     return out
 
 
-def _render_layers(scene, path, flare):
+def _pick(parts, layer):
+    """moving 模式测哪一层：scene = 场景层（Combined + 炫光 + 杂光，不含排除层）；exclude = BL_Exclude；final = BL_Final。"""
+    from . import passes as PS
+    ex = PS.find(parts, "BL_Exclude")
+    if layer == "final" or (layer == "scene" and ex is None):
+        return PS.rgb(PS.find(parts, "BL_Final"))
+    if layer == "exclude":
+        if ex is None:
+            raise ValueError("layer='exclude'：输出里没有 BL_Exclude（渲染时要给 exclude_collections）")
+        return PS.rgb(ex)
+    return PS.rgb(PS.find(parts, "Combined")) + PS.rgb(PS.find(parts, "BL_Flare")) + PS.rgb(PS.find(parts, "BL_Veil"))
+
+
+def _render_layers(scene, path, flare, layer="scene", exclude_collections=None):
     """moving 模式：一帧多层 EXR（只留 Combined + 插件层），→ (BL_Final H×W×3, BL_Vector H×W×4, BL_Flare, BL_Veil)，行 0 = 顶部。"""
     from . import rig, passes as PS
-    rig.render_frame_multilayer(scene, path, flare=flare, passes=["Combined"], vectors=True, exr_codec="ZIP", half_color=True)
+    rig.render_frame_multilayer(scene, path, flare=flare, passes=["Combined"], vectors=True, exr_codec="ZIP", half_color=True,
+                                exclude_collections=exclude_collections)
     parts = PS.read(path)
-    fin = PS.rgb(PS.find(parts, "BL_Final"))
+    fin = _pick(parts, layer)
     v = PS.find(parts, "BL_Vector")
     H, W = fin.shape[:2]
     vec = np.stack([v["channels"][c] for c in "XYZW"], -1) if v else np.zeros((H, W, 4), np.float32)
+    vr, sh = PS.find(parts, "BL_VectorReflection"), PS.find(parts, "BL_ReflectionShare")
+    if vr is not None and sh is not None:                 # 0.8.5：倒影为主的像素用倒影的矢量
+        from . import motion as MO
+        vec = MO.effective_vectors(vec, np.stack([vr["channels"][c] for c in "XYZW"], -1), sh["channels"]["X"])
     return fin, vec, PS.rgb(PS.find(parts, "BL_Flare")), PS.rgb(PS.find(parts, "BL_Veil"))
 
 
@@ -176,10 +194,12 @@ def _apply_variant(scene, cam_ob, v):
 
 
 def temporal_check(scene=None, frame=None, n=8, height=1080, variants=None, out_dir="//blenderlens_temporal", flare=False,
-                   mode="locked"):
+                   mode="locked", exclude_collections=None, layer="scene"):
     """→ dict(frame, n, mode, resolution, base={frame_mean, brightest2_mean, p99, heatmap}, variants=[{change, metrics, pct_of_base}])。
     pct_of_base：变体的指标 / 原设置的指标 × 100（< 100 = 闪烁更少）。
-    mode="locked"：相机锁在 frame；"moving"：真实运镜 + 运动补偿（另有 detail 指标与 motion：速度直方图、各速度区间闪烁）。"""
+    mode="locked"：相机锁在 frame；"moving"：真实运镜 + 运动补偿（另有 detail 指标与 motion：速度直方图、各速度区间闪烁）。
+    exclude_collections / layer（0.8.5，moving 模式）：排除集合（雨）单独成层；layer = "scene"（默认，不含排除层）/
+    "exclude"（只看排除层：检查雨是否帧间确定）/ "final"。"""
     if mode not in ("locked", "moving"):
         raise ValueError(f"mode 必须是 'locked' 或 'moving'，收到 {mode!r}")
     import bpy
@@ -210,7 +230,7 @@ def temporal_check(scene=None, frame=None, n=8, height=1080, variants=None, out_
                             sc.frame_set(frame + k)
                             rig.apply_settings(cam)
                             fin, vec, fl, ve = _render_layers(sc, os.path.join(out, f"{run['name']}_{frame + k:04d}.exr"),
-                                                              flare=fl_on)
+                                                              flare=fl_on, layer=layer, exclude_collections=exclude_collections)
                             imgs.append(fin); vecs.append(vec)
                             if fl_on:
                                 fls.append(fl); vls.append(ve)

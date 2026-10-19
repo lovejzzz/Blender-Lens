@@ -29,6 +29,15 @@ Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same cam
 
 ---
 
+## What's new in 0.8.5: a rainy convenience store (MessyRoom Day 5)
+
+- **Vectors and depth through glass**: shop windows, doors and fridge doors (Principled transmission ≥ 0.9 and roughness ≤ 0.1, Glass BSDF, or `bl_pass_through`) no longer give everything behind them the glass's motion. `BL_Vector` / `Depth` take the first non-transmissive hit; the glass itself goes to `BL_VectorSurface` / `BL_DepthSurface`; confidence behind glass drops by the reflection share.
+- **Exclude layer for rain and particles**: `exclude_collections=["FX_rain"]` renders those collections into a separate premultiplied `BL_Exclude` (occluded by the scene). Vectors, flicker checks and temporal denoising work on the rain-free scene, and the rain is laid back over unchanged.
+- **Several shots in one .blend**: `bl.render_sequence([...])` / `bl.shots_from_markers()` / `blcli.py sequence`, with a different focal length per shot, in one process. `render_shot` no longer overwrites the scene's render settings when it builds a lens.
+- **Exposure keyframes respected**: `exposure="pinhole"` / `"pinhole_centre"` multiply the existing `film_exposure` curve.
+- **Focus tracking**: `bl.focus_track(cam, target, frames, rack=[(frame, target), …])`.
+- **Reflection motion vectors**: on flat reflectors (wet streets, puddles) the reflected image gets its own vectors (`BL_VectorReflection`, `BL_ReflectionShare`), used automatically where the reflection dominates.
+
 ## What's new in 0.8.4: moving shots and temporal stability (MessyRoom's feedback after the Day 4 film)
 
 - **Smaller, lighter multilayer output**: `passes="temporal"` writes only what temporal denoising needs (Combined, Noisy, Volume, denoising albedo / specular / normal / roughness / depth, Depth, plus the BL layers); colour layers half + DWAB, data layers float32 + ZIP (`exr_codec`, `half_color`). Unrequested passes are switched off during the render, and post-processing streams layer by layer. 4K test frame: 555 MB → 97 MB.
@@ -95,12 +104,12 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.8.4.zip`](dist/blenderlens-0.8.4.zip) from this repository.
+1. Download [`dist/blenderlens-0.8.5.zip`](dist/blenderlens-0.8.5.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.4.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.5.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.

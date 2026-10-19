@@ -3,7 +3,8 @@
 #   一面镜子（倒影不跟表面走）。frame 2 写多层 EXR（passes="temporal"），frame 1 / 3 用来做真值。
 #   1. 天空：无穷远矢量让天空对齐（warp 残差 ≪ 矢量为 0 时）；
 #   2. 置信度能预测对齐误差：conf > 0.9 的像素平均误差 ≪ conf < 0.3 的像素；
-#   3. 去遮挡条带、镜子、灯的外圈置信度低；盒子正面、地面置信度高；
+#   3. 去遮挡条带、灯的外圈置信度低；盒子正面、地面置信度高；
+#      镜子（0.8.5 起是平面反射体）：有 BL_VectorReflection，用下游该用的矢量对齐时误差比表面矢量小；
 #   4. 发光体本身的矢量准（灯的质心实测位移 vs 灯中心的 BL_Vector，< 0.35 px）。
 # 运行：Blender -b --factory-startup --python tests/bl_vector_conf.py
 import os, sys, json, math
@@ -107,6 +108,12 @@ sa = PS.rgb(PS.find(P2, "Denoising Specular Albedo")).mean(-1); ro = PS.find(P2,
 mir = inner & (sa > 0.5) & (ro < 0.05)
 rep["mirror_frac"] = round(float(mir.mean()), 4)
 rep["mirror_conf"] = round(float(conf[mir].mean()), 3) if mir.any() else None
+# 0.8.5：镜子是平面反射体 → 有倒影矢量；用「下游该用的矢量」对齐，镜子上的误差应比用表面矢量小
+vr = PS.find(P2, "BL_VectorReflection"); sh = PS.find(P2, "BL_ReflectionShare")
+if vr is not None and sh is not None and mir.any():
+    eff = MO.effective_vectors(vec, np.stack([vr["channels"][c] for c in "XYZW"], -1), sh["channels"]["X"])
+    Ee = np.abs(t2 - MO.warp_prev(t1, eff))
+    rep["mirror_err"] = dict(surface=round(float(E[mir].mean()), 5), effective=round(float(Ee[mir].mean()), 5))
 # 灯：亮度 > 1.5；质心位移实测 vs 中心矢量
 def centroid(img):
     L = img.mean(-1); m = L > 1.5
@@ -127,6 +134,6 @@ ring &= ~hot & inner
 rep["lamp_ring_conf"] = round(float(conf[ring].mean()), 3) if ring.any() else None
 rep["PASS"] = bool(rep["has_conf"] and rep["sky_frac"] > 0.05 and rep["sky_err_with_vec"] < 0.3 * rep["sky_err_no_vec"]
                    and rep["err_ratio_lo_hi"] > 4 and rep["top1pct_err_conf_mean"] < 0.5
-                   and rep["mirror_conf"] is not None and rep["mirror_conf"] < 0.3 and rep["lamp_err_px"] < 0.35
+                   and rep.get("mirror_err") and rep["mirror_err"]["effective"] < rep["mirror_err"]["surface"] and rep["lamp_err_px"] < 0.35
                    and rep["lamp_ring_conf"] is not None and rep["lamp_ring_conf"] < 0.7 and rep["frac_hi"] > 0.4)
 print("VCONF", json.dumps(rep))

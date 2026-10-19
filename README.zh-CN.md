@@ -21,6 +21,15 @@
 
 ---
 
+## 0.8.5 新增：便利店雨夜（MessyRoom Day 5）
+
+- **矢量和深度穿过玻璃**：橱窗、门、冷柜门（Principled 透射 ≥ 0.9 且粗糙度 ≤ 0.1、Glass BSDF，或 `bl_pass_through`）后面的东西不再拿到玻璃的运动。`BL_Vector` / `Depth` 取第一个非透射面；玻璃自己的进 `BL_VectorSurface` / `BL_DepthSurface`；玻璃后的置信度按反射占比降。
+- **雨、粒子的排除层**：`exclude_collections=["FX_rain"]` 把这些集合单独渲成预乘的 `BL_Exclude`（被场景挡住的部分自动去掉）。矢量、闪烁检查、时间降噪都在不含雨的场景层上做，最后把雨原样叠回。
+- **一个 .blend 多支镜头**：`bl.render_sequence([...])` / `bl.shots_from_markers()` / `blcli.py sequence`，每个镜头焦距可以不同，同一个进程渲完。`render_shot` 搭镜头时不再改掉场景的渲染设置。
+- **保留曝光关键帧**：`exposure="pinhole"` / `"pinhole_centre"` 乘到原有的 `film_exposure` 曲线上。
+- **对焦跟随**：`bl.focus_track(cam, 目标, 帧, rack=[(帧, 目标), …])`。
+- **倒影的运动矢量**：平面反射体（湿地面、水洼）上的倒影有自己的矢量（`BL_VectorReflection`、`BL_ReflectionShare`），倒影为主的像素自动用它。
+
 ## 0.8.4 新增：运镜与时间稳定性（MessyRoom Day 4 成片后的反馈）
 
 - **多层输出更小、更省内存**：`passes="temporal"` 只写时间降噪需要的层（Combined、Noisy、体积、去噪 albedo / 镜面 / 法线 / 粗糙度 / 深度、Depth 和插件层）；颜色层 half + DWAB，数据层 float32 + ZIP（`exr_codec`、`half_color`）。没人要的渲染层渲染时关掉，后期逐层流式处理。4K 测试帧 555 MB → 97 MB。
@@ -87,12 +96,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.8.4.zip`](dist/blenderlens-0.8.4.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.8.5.zip`](dist/blenderlens-0.8.5.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.4.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.5.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。

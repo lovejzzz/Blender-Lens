@@ -12,6 +12,8 @@
 #   · vfade_px=(2, 8)：按速度淡出（1080 行等效 px/帧）：快到能盖住闪烁、再平均只会抹细节。
 # 输出（每帧一个多层 EXR，<name>_<帧>.exr）：BL_Final（稳定版，= 降噪后的 Combined + BL_Flare + BL_Veil）、
 #   BL_TemporalFrames（每像素实际用了几帧：1 + 可信样本数）、BL_TemporalWeight（混合强度 0–1）。
+# 0.8.5：有 BL_Exclude（render_* 的 exclude_collections，如雨）时只对场景层（Combined）做，最后
+#   BL_Final = (BL_Exclude over 降噪后的 Combined) + BL_Flare + BL_Veil —— 雨不被平均、不拖重影。
 import json, os
 import numpy as np
 
@@ -46,8 +48,9 @@ def _dilate(mask, r):
 class _Frames:
     """按需读帧、只留窗口里的。"""
 
-    def __init__(self, in_dir, name, ext):
+    def __init__(self, in_dir, name, ext, use_reflection=True):
         self.in_dir, self.name, self.ext, self.cache = in_dir, name, ext, {}
+        self.use_reflection = use_reflection
 
     def path(self, t):
         return os.path.join(self.in_dir, f"{self.name}_{t:04d}{self.ext}")
@@ -57,8 +60,8 @@ class _Frames:
         if key in self.cache:
             return self.cache[key]
         from . import passes as PS
-        want_basic = ("Combined", "BL_Vector", "BL_VectorConfidence")
-        want_full = want_basic + ("BL_Flare", "BL_Veil", "Denoising Specular Albedo", "Denoising Roughness")
+        want_basic = ("Combined", "BL_Vector", "BL_VectorConfidence", "BL_VectorReflection", "BL_ReflectionShare")
+        want_full = want_basic + ("BL_Flare", "BL_Veil", "BL_Exclude", "Denoising Specular Albedo", "Denoising Roughness")
         names = want_full if full else want_basic
         parts = PS.read(self.path(t), want=lambda ps: ps in names)
         d = {}
@@ -66,6 +69,10 @@ class _Frames:
             ch = p["channels"]
             if p["pass_"] == "BL_Vector":
                 d["vec"] = np.stack([ch[c] for c in "XYZW"], -1).astype(np.float32)
+            elif p["pass_"] == "BL_VectorReflection":
+                d["vrefl"] = np.stack([ch[c] for c in "XYZW"], -1).astype(np.float32)
+            elif p["pass_"] == "BL_ReflectionShare":
+                d["rshare"] = ch["X"].astype(np.float32)
             elif p["pass_"] == "BL_VectorConfidence":
                 d["conf"] = ch["X"].astype(np.float32)
             elif p["pass_"] == "Denoising Roughness":
@@ -75,6 +82,10 @@ class _Frames:
                 if p["pass_"] == "Combined":
                     d["alpha"] = ch.get("A")
                     d["header"] = p["header"]
+                if p["pass_"] == "BL_Exclude":
+                    d["exclude_a"] = ch["A"].astype(np.float32)
+        if self.use_reflection and "vec" in d and "vrefl" in d and "rshare" in d:   # 0.8.5：倒影为主的像素用倒影的矢量
+            d["vec"] = MO.effective_vectors(d["vec"], d.pop("vrefl"), d.pop("rshare"))
         if "Combined" not in d or "vec" not in d:
             raise RuntimeError(f"{self.path(t)}：需要 Combined 与 BL_Vector（render_frames / render_shot 的 passes 多层输出）")
         self.cache[key] = d
@@ -87,11 +98,13 @@ class _Frames:
 
 def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular", "emitters"), vfade_px=(2.0, 8.0),
                      radius=3, clamp=5, margin=0.25, fb_px=0.5, use_confidence=True, name="f", file_ext=".exr",
-                     out_name=None, half=True):
+                     out_name=None, half=True, exr_codec=None, use_reflection=True):
     """→ dict(frames, out_dir, per_frame=[{frame, frames_used_mean, weight_mean, file}], settings)。
     in_dir：多层 EXR 所在目录（<name>_<帧4位>.exr，需要 Combined、BL_Vector；最好有 BL_VectorConfidence、BL_Flare、BL_Veil，
     以及 protect 用的去噪数据层——passes="temporal" 全有）。frames：要输出的帧（窗口里缺的邻帧自动跳过）。
-    strength：0–1 混合强度上限。radius：每边用几帧。clamp / margin：钳制邻域与外扩比例。fb_px：前后一致性容差（1080 行等效）。"""
+    strength：0–1 混合强度上限。radius：每边用几帧。clamp / margin：钳制邻域与外扩比例。fb_px：前后一致性容差（1080 行等效）。
+    half / exr_codec：输出精度与压缩（默认 half + DWAB；要逐像素比对时用无损的 "PIZ" / "ZIP"）。
+    use_reflection（0.8.5）：有 BL_VectorReflection / BL_ReflectionShare 时，倒影为主（占比 > 0.5）的像素按倒影的运动对齐。"""
     try:
         import bpy
         in_dir, out_dir = bpy.path.abspath(in_dir), bpy.path.abspath(out_dir)
@@ -103,7 +116,7 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
             if os.path.exists(os.path.join(in_dir, f"{name}_{t:04d}{file_ext}"))}
     os.makedirs(out_dir, exist_ok=True)
     out_name = out_name or name
-    F = _Frames(in_dir, name, file_ext)
+    F = _Frames(in_dir, name, file_ext, use_reflection)
     Wk = {k: float(radius + 1 - k) for k in range(radius + 1)}           # 1-2-3-4-3-2-1
     v0, v1 = vfade_px
     rep = dict(in_dir=in_dir, out_dir=out_dir, frames=frames, per_frame=[],
@@ -168,7 +181,10 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
                 mirror = np.clip((spec - 0.08) / 0.12, 0, 1) * np.clip((0.35 - cur["rough"]) / 0.2, 0, 1)
                 w *= 1.0 - mirror
         stable = comb + w[..., None] * (tavg - comb)
-        final = stable + cur.get("BL_Flare", 0.0) + cur.get("BL_Veil", 0.0)
+        over = stable
+        if "BL_Exclude" in cur:                           # 0.8.5：排除层（雨、粒子）不平均，原样 over 回去
+            over = cur["BL_Exclude"] + (1.0 - cur["exclude_a"])[..., None] * stable
+        final = over + cur.get("BL_Flare", 0.0) + cur.get("BL_Veil", 0.0)
         alpha = cur["alpha"] if cur.get("alpha") is not None else np.ones((H, W), np.float32)
         tmpl = dict(name="ViewLayer.Combined", view_layer="ViewLayer", pass_="Combined", header={})
         hdr = {k: v for k, v in cur["header"].items() if isinstance(v, str) and k.startswith("blenderlens/")}
@@ -178,7 +194,7 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
                  PS.new_part(tmpl, "BL_TemporalFrames", dict(X=used)),
                  PS.new_part(tmpl, "BL_TemporalWeight", dict(X=w * (wsum - Wk[0] > 1e-6)))]
         path = os.path.join(out_dir, f"{out_name}_{t:04d}{file_ext}")
-        PS.write(path + ".partial" + file_ext, parts, half_color=half, codec="DWAB" if half else "ZIP")
+        PS.write(path + ".partial" + file_ext, parts, half_color=half, codec=exr_codec or ("DWAB" if half else "ZIP"))
         os.replace(path + ".partial" + file_ext, path)
         rep["per_frame"].append(dict(frame=t, file=path, frames_used_mean=round(float(used.mean()), 3),
                                      weight_mean=round(float(w.mean()), 3),

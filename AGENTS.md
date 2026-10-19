@@ -26,6 +26,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `bl.preview(path, quality='draft')` | 低清快速渲染 + 图像统计；渲完恢复分辨率与采样 |
 | `bl.contact_sheet(path, [ {...}, {...} ])` | 多组设置并排成一张图（A/B），渲完恢复原设置 |
 | `bl.temporal_check(mode="moving")` / `bl.temporal_denoise(in_dir, out_dir, frames)` / `bl.render_shot(source_camera, frames, out_dir, ...)` | 0.8.4：运镜闪烁 / 时间降噪 / 渲一个镜头（HANDOFF §6.8） |
+| `bl.render_sequence(shots)` / `bl.shots_from_markers()` / `bl.focus_track(cam, target, frames, rack)` / `exclude_collections=[...]` | 0.8.5：多镜头 / 对焦跟随 / 雨等排除层；透射面与倒影的矢量自动（HANDOFF §6.9） |
 | `bl.build / set_focus / set_stop / set_mumps_correction / lens_info / render_still / render_frames / follow_camera / enable_gpu` | 原有稳定接口，见 `blenderlens/HANDOFF.md` §6 |
 
 距离一律用米（`focus_m`）；镜头内部毫米；场景单位任意。GPU（Metal）必须在本进程第一次 GPU 渲染之前 `bl.enable_gpu()`。
@@ -75,6 +76,9 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 - Cryptomatte 像素里的 float 是哈希按规范转换过的（指数位 0 / 255 时翻第 23 位），比对清单前要先转换（`passes.crypto_object_ids`）。
 - 星芒 / 任何亚像素小的东西：按像素面积积分，别在像素中心点采样或硬挖（视频里会闪，RESEARCH §5 第 17 条）。改炫光后跑 `bl_flare_stability`。
 - 正向炫光每个光源每帧要几秒（与分辨率无关）；多线程追迹反而更慢（GIL），省时间靠复用共同的前半段光路。
+- `bl.build` 会套 `render_preset`（设备改 CPU、弹射数……）：在别人的生产场景里搭镜头后要把渲染设置换回去（render_shot 已处理）。
+- 辅助数据渲染至少 8 采样：Cryptomatte 按全部采样累积，1 采样时和 Position 一样有洞，补洞认不出物体。
+- 要逐像素比对的输出用无损压缩（PIZ / ZIP）；`temporal` 预设默认的 DWAB 有损。
 - 跑长任务（Blender 测试、整套测试）放后台；Geometry 模式 CPU 渲染很慢。
 
 ## 看图

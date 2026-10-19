@@ -15,6 +15,8 @@
 #   python3 tools/blcli.py shot --blend film.blend --source CamHeli --frames 40-56 --preset c_series_style \
 #           --passes temporal --spp 256 --gpu --out renders/shots/heli                                     # 0.8.4 渲一个镜头
 #   python3 tools/blcli.py denoise --in renders/shots/heli --frames 40-56 --out renders/shots/heli_stable # 0.8.4 时间降噪
+#   python3 tools/blcli.py sequence --blend day5.blend --shots shots.json --preset c_series_style --passes temporal \
+#           --exclude FX_rain --gpu --out renders/day5                                                        # 0.8.5 多镜头（--markers：按时间线标记）
 #   python3 tools/blcli.py test quick                    # = python3 tests/run.py quick
 #
 # Blender 路径：环境变量 BLENDER，默认 /Applications/Blender.app/Contents/MacOS/Blender。
@@ -240,11 +242,35 @@ def cmd_shot(a):
     s.append(f"res = bl.render_shot(source_camera={a.source!r}, frames={_frames(a.frames)!r}, out_dir={os.path.abspath(a.out)!r}, "
              f"preset={a.preset!r}, focal_mm={a.focal_mm or 0.0}, gate={a.gate or '16:9_NATIVE'!r}, passes={passes!r}, "
              f"spp={a.spp!r}, follow={not a.no_follow}, guard={not a.no_guard}, height={a.height!r}, flare={bool(a.flare)}, "
-             f"exposure={a.exposure!r}, guard_min_gb={a.guard_gb}, exr_codec={a.exr_codec!r})")
+             f"exposure={a.exposure!r}, guard_min_gb={a.guard_gb}, exr_codec={a.exr_codec!r}, "
+             f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, focus_target={a.focus_target!r})")
     s.append("res = dict(records=res['records'], summary=res.get('summary'), exposure=res.get('exposure'), "
              "stopped=res.get('stopped'), log=res['out_dir'])")
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=48 * 3600)
+
+
+def cmd_sequence(a):
+    """多镜头（0.8.5）：--shots JSON（列表，每项 source / frames / focal_mm / preset / name / settings / focus_target / rack …）
+    或 --markers（时间线上绑定相机的标记）；每个镜头写到 <out>/<name>/，汇总在 <out>/sequence_log.json。"""
+    if a.shots:
+        raw = open(a.shots).read() if os.path.exists(a.shots) else a.shots
+        shots = json.loads(raw)
+        for sh in shots:
+            sh["frames"] = tuple(sh["frames"])
+    elif not a.markers:
+        return {"error": "要给 --shots 或 --markers"}
+    else:
+        shots = None
+    s = [f"import bpy\nbpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})"]
+    if a.gpu:
+        s.append("bl.enable_gpu(use_gpu=True)")
+    passes = a.passes if a.passes in (None, "all", "temporal") else [x.strip() for x in a.passes.split(",")]
+    s.append(f"res = bl.render_sequence({shots!r}, out_dir={os.path.abspath(a.out)!r}, preset={a.preset!r}, passes={passes!r}, "
+             f"spp={a.spp!r}, guard={not a.no_guard}, flare={bool(a.flare)}, exposure={a.exposure!r}, height={a.height!r}, "
+             f"exclude_collections={a.exclude.split(',') if a.exclude else None!r})")
+    s.append(f"print({MARK!r} + dump(res))")
+    return _blender("\n".join(s) + "\n", timeout=96 * 3600)
 
 
 def cmd_denoise(a):
@@ -293,9 +319,15 @@ def main():
     p.add_argument("--preset"); p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
     p.add_argument("--passes", help="all / temporal / 逗号分隔的渲染层名"); p.add_argument("--spp", type=int)
     p.add_argument("--height", type=int); p.add_argument("--flare", action="store_true")
-    p.add_argument("--exposure", default="keep", choices=["keep", "pinhole"]); p.add_argument("--exr-codec")
+    p.add_argument("--exposure", default="keep", choices=["keep", "pinhole", "pinhole_centre"]); p.add_argument("--exr-codec")
     p.add_argument("--no-follow", action="store_true"); p.add_argument("--no-guard", action="store_true")
     p.add_argument("--guard-gb", type=float, default=4.0); p.add_argument("--gpu", action="store_true")
+    p.add_argument("--exclude", help="排除集合（逗号分隔，如 FX_rain）"); p.add_argument("--focus-target", help="对焦跟住的物体名")
+    p = sub.add_parser("sequence"); p.add_argument("--blend", required=True); p.add_argument("--out", required=True)
+    p.add_argument("--shots", help="JSON 列表或文件"); p.add_argument("--markers", action="store_true")
+    p.add_argument("--preset"); p.add_argument("--passes"); p.add_argument("--spp", type=int); p.add_argument("--height", type=int)
+    p.add_argument("--flare", action="store_true"); p.add_argument("--exposure", default="keep", choices=["keep", "pinhole", "pinhole_centre"])
+    p.add_argument("--exclude"); p.add_argument("--no-guard", action="store_true"); p.add_argument("--gpu", action="store_true")
     p = sub.add_parser("denoise"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True)
     p.add_argument("--frames", required=True); p.add_argument("--strength", type=float, default=1.0)
     p.add_argument("--radius", type=int, default=3); p.add_argument("--name", default="f")
@@ -307,7 +339,7 @@ def main():
     if a.cmd == "test":
         sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, "tests", "run.py")] + a.args))
     res = dict(presets=cmd_presets, info=cmd_info, describe=cmd_describe, render=cmd_render, diagnose=cmd_diagnose,
-               focus=cmd_focus, temporal=cmd_temporal, shot=cmd_shot, denoise=cmd_denoise)[a.cmd](a)
+               focus=cmd_focus, temporal=cmd_temporal, shot=cmd_shot, denoise=cmd_denoise, sequence=cmd_sequence)[a.cmd](a)
     print(json.dumps(res, ensure_ascii=False, indent=1 if a.pretty else None, default=str))
     sys.exit(1 if isinstance(res, dict) and "error" in res else 0)
 

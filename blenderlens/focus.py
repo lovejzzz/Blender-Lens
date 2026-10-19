@@ -240,6 +240,56 @@ def focus_pull(cam_ob, a, b=None, frame_start=None, frame_end=None, ease='SMOOTH
     return out
 
 
+def focus_track(cam_ob, target=None, frames=None, rack=None, ease='SMOOTH'):
+    """对焦跟住一个点，逐帧烘焙（0.8.5，MessyRoom 0.8.5 R5）。target：物体 / 物体名 / 空物体 / (x, y, z) 世界点；
+    frames：(起, 止) 或帧号序列（None = 场景起止帧）；每帧重新求轴向距离（相机、目标在动都对，配合 follow_camera）。
+    rack=[(帧, 目标), …]：拉焦。每一项「到这一帧时对在这个目标上」；相邻两项之间按 1/距离 缓入缓出地拉（每帧两头都重新求距离），
+    第一项之前跟住 target（没给 target 就跟第一项的目标），最后一项之后跟住最后一项。
+    → [(帧, 米, 当前目标)]。"""
+    from . import rig
+    scene = rig._cam_scene(cam_ob)
+    if frames is None:
+        frames = range(scene.frame_start, scene.frame_end + 1)
+    elif isinstance(frames, tuple) and len(frames) == 2:
+        frames = range(int(frames[0]), int(frames[1]) + 1)
+    frames = list(frames)
+    keys = sorted((int(f), t) for f, t in (rack or []))
+    if target is None and not keys:
+        raise ValueError("focus_track：要给 target 或 rack")
+    if target is not None:
+        keys = [(min(frames[0], keys[0][0]) if keys else frames[0], target)] + keys
+        if len(keys) > 1 and keys[0][0] == keys[1][0]:
+            keys = keys[1:]
+    label = lambda t: t if isinstance(t, str) else getattr(t, "name", str(tuple(round(x, 3) for x in t)))
+    cur = scene.frame_current
+    out = []
+    try:
+        for f in frames:
+            scene.frame_set(f)
+            dist = lambda t: axial_mm(cam_ob, target_point(cam_ob, t, scene))
+            if f <= keys[0][0] or len(keys) == 1:
+                k = 0 if f <= keys[0][0] else len(keys) - 1
+                d, who = dist(keys[k][1]), label(keys[k][1])
+            elif f >= keys[-1][0]:
+                d, who = dist(keys[-1][1]), label(keys[-1][1])
+            else:
+                i = max(j for j in range(len(keys)) if keys[j][0] <= f)
+                (fa, ta), (fb, tb) = keys[i], keys[i + 1]
+                da, db = dist(ta), dist(tb)
+                s = _ease((f - fa) / max(fb - fa, 1), ease)
+                d = 1.0 / ((1 - s) / da + s / db)
+                who = f"{label(ta)} → {label(tb)}"
+            if not (d > 0):
+                raise ValueError(f"focus_track：第 {f} 帧目标在镜头后面")
+            cam_ob.data.blenderlens.focus_distance = d / rig.mm_per_unit(scene)
+            cam_ob.data.keyframe_insert("blenderlens.focus_distance", frame=f)
+            out.append((f, round(d / 1000.0, 4), who))
+    finally:
+        scene.frame_set(cur)
+        rig.apply_settings(cam_ob)
+    return out
+
+
 def dof_range(cam_ob, coc_px=1.0):
     """当前光圈、对焦、输出分辨率与画幅下的清晰范围（米）：near_m、far_m（inf = 到无穷远）、hyperfocal_m，
     以及对焦面与无穷远处的弥散（像素）。弥散取水平 / 垂直较大者（输出像素，解挤压后）。"""

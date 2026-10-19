@@ -7,7 +7,7 @@ import numpy as np
 
 # 不做横向色差的渲染层：几何 / 数据类（深度、法线、位置、矢量、UV、索引、Cryptomatte、雾、去噪用的几何）
 DATA_PREFIXES = ("Crypto", "Depth", "Normal", "Position", "Vector", "UV", "IndexOB", "IndexMA", "Mist",
-                 "Denoising Normal", "Denoising Depth", "Denoising Roughness", "Sample Count", "Debug", "BL_Vector")   # BL_VectorConfidence 也算
+                 "Denoising Normal", "Denoising Depth", "Denoising Roughness", "Sample Count", "Debug", "BL_Vector", "BL_Depth")   # BL_VectorConfidence 也算
 PREFIX = "BL_"                                     # 插件加的层：BL_Flare、BL_Veil、BL_Final、BL_Vector
 
 

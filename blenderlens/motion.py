@@ -77,3 +77,10 @@ def speed_histogram(vecs, height, border=8, D=None):
         out["flicker_by_speed"] = [round(float(D[which == k].mean()), 6) if (which == k).any() else None
                                    for k in range(len(E) - 1)]
     return out
+
+
+def effective_vectors(vec, vrefl=None, share=None, thr=0.5):
+    """0.8.5：下游实际该用的矢量——反射占比 > thr 且有倒影矢量（BL_VectorReflection）的像素用倒影的，其余用 BL_Vector。"""
+    if vrefl is None or share is None:
+        return vec
+    return np.where((share > thr)[..., None], vrefl, vec)

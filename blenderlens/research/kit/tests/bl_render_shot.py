@@ -1,6 +1,6 @@
 # 一条命令渲一个镜头（0.8.4，MessyRoom R5）：bl.render_shot
 #   1. 跟随：BlenderLens 相机每帧与源相机重合，对焦距离与 f 值也跟着源相机（烘焙成关键帧）；
-#   2. exposure="pinhole"：film_exposure = 2^(−frame_mean_ev)；
+#   2. exposure="pinhole"：film_exposure 乘 2^(−frame_mean_ev)（0.8.5：渲完恢复原值）；
 #   3. 每帧一个多层 EXR + 日志（用时、各步用时、峰值内存、可用内存、文件大小）；
 #   4. 续渲：删掉一帧再跑，只渲那一帧，其余记为「已存在」，日志接着写；
 #   5. 内存守护：可用内存永远不够时（guard_min_gb 设得很大、不等待）不渲，日志写明原因。
@@ -52,7 +52,8 @@ rep["records"] = [dict(frame=r["frame"], rendered=r["rendered"], has_timing=bool
 rep["exposure"] = log["exposure"]
 sc.frame_set(1); rig.apply_settings(cam)                 # render_shot 按第一帧算（整镜一个常数）
 ev = bl.exposure_vs_pinhole(cam)["frame_mean_ev"]
-rep["film_exposure_ok"] = abs(sc.cycles.film_exposure - 2.0 ** (-ev)) < 0.02 * sc.cycles.film_exposure
+rep["film_exposure_ok"] = (abs(log["exposure"]["factor"] - 2.0 ** (-ev)) < 0.02 * 2.0 ** (-ev)   # 0.8.5：乘到原值上，渲完恢复
+                          and abs(sc.cycles.film_exposure - 1.0) < 1e-6)
 rep["log_on_disk"] = os.path.exists(os.path.join(OUT, "f_log.json"))
 rep["summary"] = log.get("summary")
 # 4. 续渲
