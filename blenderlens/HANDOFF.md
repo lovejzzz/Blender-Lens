@@ -372,7 +372,7 @@ bl.render_sequence([dict(source="S1_EXT", frames=(1, 72), focal_mm=21), dict(sou
                    out_dir="//day5", preset="c_series_style", passes="temporal", spp=128, exclude_collections=["FX_rain"])
 bl.shots_from_markers()     # 时间线上绑定相机的标记 → 镜头清单（每个标记到下一个标记的前一帧）
 ```
-同一个进程依次搭镜头 → 跟随 → 渲染；GPU 内核随镜头改写，下一次渲染自动重新编译（每支镜头第一次约 10 秒，之后有缓存）。每个镜头写到 `<out_dir>/<name>/`（各自的 `f_log.json`），汇总在 `<out_dir>/sequence_log.json`。镜头项里可以给 `preset`、`focal_mm`、`settings`（同 `bl.configure`）、`focus_target`、`rack`、`spp`、`exposure` 等任何 `render_shot` 参数。实测（GPU，21 / 40 mm 两个镜头）：与每个镜头单独开进程渲相差 ≤ 2.4e-7（GPU 累加顺序的浮点差）。命令行：`blcli.py sequence --blend day5.blend --shots shots.json | --markers ...`。**0.8.4 的 render_shot 搭镜头时会把场景的渲染设置改掉**（设备改 CPU、弹射数、自适应采样、焦散——`render_preset`）；0.8.5 起 render_shot 搭完镜头会把这些换回场景原来的。
+同一个进程依次搭镜头 → 跟随 → 渲染；GPU 内核随镜头改写，下一次渲染自动重新编译（每支镜头第一次约 10 秒，之后有缓存）。每个镜头写到 `<out_dir>/<name>/`（各自的 `f_log.json`），汇总在 `<out_dir>/sequence_log.json`。镜头项里可以给 `preset`、`focal_mm`、`settings`（同 `bl.configure`）、`focus_target`、`rack`、`spp`、`exposure` 等任何 `render_shot` 参数。实测（GPU，21 / 40 mm 两个镜头）：与每个镜头单独开进程渲平均差 < 1e-6、最大 3e-4——GPU 渲染本身就不逐位确定（Metal 原子累加的顺序每次不同），同一帧渲两次也是这个量级；CPU 逐位相同。命令行：`blcli.py sequence --blend day5.blend --shots shots.json | --markers ...`。**0.8.4 的 render_shot 搭镜头时会把场景的渲染设置改掉**（设备改 CPU、弹射数、自适应采样、焦散——`render_preset`）；0.8.5 起 render_shot 搭完镜头会把这些换回场景原来的。
 
 **曝光曲线（R4）**：`exposure="pinhole"`（整幅平均）/ `"pinhole_centre"`（画面中心，中灰卡）把镜头相对针孔的补偿**乘到原有的 film_exposure 上**：有关键帧（按测光打的曝光、切点阶跃）就整条曲线乘，渲完恢复原样。实测（均匀中灰墙、−1.0 → −1.7 EV 阶跃）：与 Cycles 针孔相机差 0.011 EV（整幅）/ 0.002 EV（中心）；切点阶跃正好 −0.70 EV。
 
