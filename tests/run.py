@@ -49,6 +49,7 @@ TESTS = [
     ("bl_smoke", "quick", "bl", ["tests/bl_smoke.py"], "SMOKE", _smoke_ok),
     ("bl_agent", "quick", "bl", ["tests/bl_agent.py"], "AGENT", None),
     ("pupil", "standard", "py", ["tests/test_pupil.py"], None, None),
+    ("format", "standard", "py", ["tests/test_format.py"], None, None),
     ("bl_presets", "standard", "bl", ["tests/bl_presets_smoke.py"], "PRESETS", _presets_ok),
     ("bl_gpu", "standard", "bl", ["tests/bl_gpu.py"], "GPU", None),
     ("bl_mumps_c", "standard", "bl", ["tests/bl_mumps.py", "--", "c_series_style.json"], "MUMPS", None),

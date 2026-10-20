@@ -49,11 +49,7 @@ def cmd_info(a):
     """纯 Python 光学摘要（与 Blender 里的 lens_info 同一套计算）。"""
     import copy
     import blenderlens.optics as O
-    rx = O.load(_preset_file(a.preset))
-    if a.focal_mm:
-        rx = O.rescale_to_vertical_efl(rx, a.focal_mm)
-    if a.gate:
-        rx = O.apply_gate(rx, a.gate)
+    rx = O.prepare(O.load(_preset_file(a.preset)), getattr(a, "format", None) or "S35", a.focal_mm or 0.0, a.gate or "FULL")
     S = O.layout(rx)
     mfd = rx.get("focus", {}).get("min_distance_mm") or rx.get("look", {}).get("min_focus_mm")
     out = dict(preset=rx["meta"].get("short_name", rx["meta"]["name"]), file=os.path.basename(_preset_file(a.preset)),
@@ -156,10 +152,10 @@ def cmd_render(a):
         s.append(f"bpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})")
         s.append("cam = bl.camera()")
         if a.preset:
-            s.append(f"cam = bl.build({_preset_file(a.preset)!r}, units='SCENE', focal_mm={a.focal_mm or 0.0}, gate={a.gate or 'FULL'!r})")
+            s.append(f"cam = bl.build({_preset_file(a.preset)!r}, units='SCENE', focal_mm={a.focal_mm or 0.0}, gate={a.gate or 'FULL'!r}, format={a.format or 'S35'!r})")
     else:
         s.append(DEMO_SCENE)
-        s.append(f"cam = bl.build({_preset_file(a.preset or 'c_series_style')!r}, units='MM', focal_mm={a.focal_mm or 0.0}, gate={a.gate or 'FULL'!r})")
+        s.append(f"cam = bl.build({_preset_file(a.preset or 'c_series_style')!r}, units='MM', focal_mm={a.focal_mm or 0.0}, gate={a.gate or 'FULL'!r}, format={a.format or 'S35'!r})")
         s.append("import math; cam.location = (0, 0, 1500); cam.rotation_euler = (math.pi / 2, 0, 0)")
     if a.gpu:
         s.append("print('gpu2', bl.enable_gpu(use_gpu=True))")
@@ -243,7 +239,7 @@ def cmd_shot(a):
         s.append("bl.enable_gpu(use_gpu=True)")
     passes = a.passes if a.passes in (None, "all", "temporal") else [x.strip() for x in a.passes.split(",")]
     s.append(f"res = bl.render_shot(source_camera={a.source!r}, frames={_frames(a.frames)!r}, out_dir={os.path.abspath(a.out)!r}, "
-             f"preset={a.preset!r}, focal_mm={a.focal_mm or 0.0}, gate={a.gate or '16:9_NATIVE'!r}, passes={passes!r}, "
+             f"preset={a.preset!r}, focal_mm={a.focal_mm or 0.0}, gate={a.gate or '16:9_NATIVE'!r}, format={a.format or 'S35'!r}, passes={passes!r}, "
              f"spp={a.spp!r}, follow={not a.no_follow}, guard={not a.no_guard}, height={a.height!r}, flare={bool(a.flare)}, "
              f"exposure={a.exposure!r}, guard_min_gb={a.guard_gb}, exr_codec={a.exr_codec!r}, "
              f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, focus_target={a.focus_target!r}, "
@@ -273,7 +269,8 @@ def cmd_sequence(a):
     s.append(f"res = bl.render_sequence({shots!r}, out_dir={os.path.abspath(a.out)!r}, preset={a.preset!r}, passes={passes!r}, "
              f"spp={a.spp!r}, guard={not a.no_guard}, flare={bool(a.flare)}, exposure={a.exposure!r}, height={a.height!r}, "
              f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, "
-             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r})")
+             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r}"
+             + (f", format={a.format!r}" if a.format else "") + ")")
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=96 * 3600)
 
@@ -300,10 +297,12 @@ def main():
     p = sub.add_parser("info"); p.add_argument("preset"); p.add_argument("--focus-m", type=float)
     p.add_argument("--coverage", action="store_true", help="覆盖与畸变报告（像圈、四角照度、畸变、竖线弯曲）"); p.add_argument("--stop", type=float)
     p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
+    p.add_argument("--format", choices=["S35", "FF"], help="画幅版本：S35 原设计 / FF 全画幅版本（0.8.8）")
     sub.add_parser("describe")
     p = sub.add_parser("render")
     p.add_argument("--preset"); p.add_argument("--blend"); p.add_argument("--scene", default="demo", choices=["demo"])
     p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
+    p.add_argument("--format", choices=["S35", "FF"], help="画幅版本：S35 原设计 / FF 全画幅版本（0.8.8）")
     p.add_argument("--focus-m", type=float); p.add_argument("--stop", type=float)
     p.add_argument("--set", action="append", help="设置=值（值按 JSON 解析，如 coating_type=BROADBAND、mumps_correction=0.5）")
     p.add_argument("--variants", help="对比图：JSON 列表或 JSON 文件，每项一组设置")
@@ -323,6 +322,7 @@ def main():
     p = sub.add_parser("shot"); p.add_argument("--blend", required=True); p.add_argument("--source")
     p.add_argument("--frames", required=True, help="40-56、40-56:2 或 1,5,9"); p.add_argument("--out", required=True)
     p.add_argument("--preset"); p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
+    p.add_argument("--format", choices=["S35", "FF"], help="画幅版本：S35 原设计 / FF 全画幅版本（0.8.8）")
     p.add_argument("--passes", help="all / temporal / 逗号分隔的渲染层名"); p.add_argument("--spp", type=int)
     p.add_argument("--height", type=int); p.add_argument("--flare", action="store_true")
     p.add_argument("--exposure", default="keep", choices=["keep", "pinhole", "pinhole_centre"]); p.add_argument("--exr-codec")
@@ -334,6 +334,7 @@ def main():
     p.add_argument("--shots", help="JSON 列表或文件"); p.add_argument("--markers", action="store_true")
     p.add_argument("--preset"); p.add_argument("--passes"); p.add_argument("--spp", type=int); p.add_argument("--height", type=int)
     p.add_argument("--flare", action="store_true"); p.add_argument("--exposure", default="keep", choices=["keep", "pinhole", "pinhole_centre"])
+    p.add_argument("--format", choices=["S35", "FF"])
     p.add_argument("--exclude"); p.add_argument("--no-guard", action="store_true"); p.add_argument("--gpu", action="store_true")
     p.add_argument("--exclude-spp", type=int); p.add_argument("--exclude-bounces", type=int)
     p = sub.add_parser("denoise"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True)

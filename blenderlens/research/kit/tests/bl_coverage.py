@@ -17,11 +17,13 @@ OUT = os.path.join(ROOT, "renders", "coverage")
 os.makedirs(OUT, exist_ok=True)
 GPU = bl.enable_gpu(use_gpu=True)[0]
 CASES = [("c_series_style", 24.6), ("c_series_style", 32.8), ("e_series_style", 24.6), ("e_series_style", 46.9),
-         ("laowa_2x_29", 30.88), ("panavision_rear_134", 24.6)]          # Laowa 30.88 mm = MessyRoom 的「取景 25.5 mm」
+         ("laowa_2x_29", 30.88), ("panavision_rear_134", 24.6),          # Laowa 30.88 mm = MessyRoom 的「取景 25.5 mm」
+         ("c_series_style", 0.0, "FF"), ("laowa_2x_29", 0.0, "FF")]      # 0.8.8 全画幅版本（原生焦距，16:9_NATIVE 收进 36 × 24）
 PTS = [(0.9, 0.0), (0.0, 0.9), (0.9, 0.9), (0.6, 0.6), (-0.9, -0.6)]
 rep = dict(cases={})
 worst = 0.0
-for pre, f in CASES:
+for pre, f, *fmt in CASES:
+    fmt = fmt[0] if fmt else "S35"
     sc = bpy.context.scene
     for o in list(sc.objects):
         bpy.data.objects.remove(o)
@@ -30,11 +32,12 @@ for pre, f in CASES:
         sc.world.use_nodes = True
     sc.world.node_tree.nodes["Background"].inputs[0].default_value = (1, 1, 1, 1)
     sc.unit_settings.system = 'METRIC'; sc.unit_settings.scale_length = 1.0
-    cam = bl.build(pre + ".json", sc, focal_mm=f, gate="16:9_NATIVE", units="SCENE", height=180)
+    cam = bl.build(pre + ".json", sc, focal_mm=f, gate="16:9_NATIVE", units="SCENE", height=180, format=fmt)
     bl.configure(cam, focus_m=7.0, f_number=2.0, dispersion=False)
     sc.cycles.device = 'GPU' if GPU else 'CPU'; sc.cycles.samples = 384 if GPU else 128; sc.cycles.use_denoising = False
     sc.view_settings.view_transform = 'Standard'
-    path = os.path.join(OUT, f"{pre}_{f}.exr")
+    key = f"{pre}@{f}" + ("" if fmt == "S35" else f"_{fmt}")
+    path = os.path.join(OUT, f"{key}.exr")
     bl.render_still(path, flare=False)
     im = bpy.data.images.load(path, check_existing=False)
     a = np.array(im.pixels[:], np.float32).reshape(im.size[1], im.size[0], 4)[::-1, :, :3].mean(-1)   # 行 0 = 顶部
@@ -48,10 +51,11 @@ for pre, f in CASES:
     d = max(abs(x - y) for x, y in zip(rend, model))
     worst = max(worst, d)
     q = json.loads(cam["bl_coverage_quick"])
+    if pre == "panavision_rear_134":
+        full = bl.coverage(cam)                           # PV @24.6 的完整报告
     issues = [i["code"] for i in bl.diagnose(sc)]
-    rep["cases"][f"{pre}@{f}"] = dict(render=[round(x, 3) for x in rend], model=[round(x, 3) for x in model], max_diff=round(d, 3),
+    rep["cases"][key] = dict(sensor_mm=[round(rig.read_prescription()["sensor"][k_], 2) for k_ in ("width", "height")], render=[round(x, 3) for x in rend], model=[round(x, 3) for x in model], max_diff=round(d, 3),
                                       covers=q["covers"], warned=bool(q["warnings"]), diagnose_coverage="coverage" in issues)
-full = bl.coverage(cam)                                   # 最后一个（PV @24.6）的完整报告
 # W1：Laowa 广角的竖线弯曲 vs C 风格（同样取景 21 mm，16:9_NATIVE；4K）
 from blenderlens import optics as O
 def bow(pre, framing):
@@ -70,5 +74,6 @@ rep["PASS"] = bool(worst <= 0.10 and C["e_series_style@24.6"]["warned"] and C["e
                    and not C["e_series_style@24.6"]["covers"] and C["c_series_style@24.6"]["warned"]
                    and C["panavision_rear_134@24.6"]["covers"] and not C["panavision_rear_134@24.6"]["warned"]
                    and rep["pv_full"]["covers"] and C["laowa_2x_29@30.88"]["covers"] and not C["laowa_2x_29@30.88"]["warned"]
-                   and rep["w1"]["laowa255_covers"] and rep["w1"]["ratio_255"] <= 0.4)
+                   and rep["w1"]["laowa255_covers"] and rep["w1"]["ratio_255"] <= 0.4
+                   and all(C[k]["covers"] and not C[k]["warned"] for k in ("c_series_style@0.0_FF", "laowa_2x_29@0.0_FF")))
 print("COVERAGE", json.dumps(rep, default=float))

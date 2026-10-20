@@ -47,23 +47,23 @@ def camera(scene=None):
 
 def build(preset="c_series_style.json", scene=None, *, prescription=None, focal_mm=0.0, gate="FULL",
           gate_size_mm=None, units="AUTO", height=1080, set_render=True, coated=True, film_nm=100.0,
-          name="BL_Camera", make_active=True):
+          name="BL_Camera", make_active=True, format="S35"):
     """搭一支镜头并返回相机对象。
     preset：自带预设文件名，或任意 JSON 路径；prescription：直接给处方 dict（优先）。
     focal_mm：缩放到这个垂直焦距（0 = 原生）；gate：'FULL' / '2.39' / '16:9'（抽取，裁切）/ '16:9_NATIVE'（原生 16:9 满像圈，不裁切）/ 'CUSTOM'（配 gate_size_mm=(w, h)）。
-    units：'AUTO' / 'SCENE'（保留米制等场景单位）/ 'MM'。"""
+    units：'AUTO' / 'SCENE'（保留米制等场景单位）/ 'MM'。
+    format（0.8.8）：'S35'（原设计）/ 'FF'（全画幅版本：整支镜头连同光窗等比放大到 36 × 24 mm 以内，焦距 × k，覆盖与观感
+    与原设计逐点相同，景深更浅）。focal_mm 在全画幅版本上再缩放（光窗保持全画幅）。见 optics.FORMATS。"""
     scene = scene or bpy.context.scene
     if prescription is not None:
         rx = optics.normalize(prescription)
     else:
         path = preset if os.path.isabs(preset) or os.path.exists(preset) else os.path.join(optics.PRESCRIPTION_DIR, preset)
         rx = optics.load(path)
-    if focal_mm and focal_mm > 0:
-        rx = optics.rescale_to_vertical_efl(rx, focal_mm)
     w, h = gate_size_mm or (None, None)
-    rx = optics.apply_gate(rx, gate, w, h)
+    rx = optics.prepare(rx, format, focal_mm, gate, w, h)
     cam_ob = rig.build(SimpleNamespace(scene=scene), rx, coated=coated, film_nm=film_nm, name=name, units=units)
-    cam_ob["bl_focal_mm"] = float(focal_mm or 0.0); cam_ob["bl_gate"] = gate
+    cam_ob["bl_focal_mm"] = float(focal_mm or 0.0); cam_ob["bl_gate"] = gate; cam_ob["bl_format"] = format or "S35"
     _coverage_check(cam_ob)
     if set_render:
         if make_active:

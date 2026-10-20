@@ -63,11 +63,11 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
                 passes=None, spp=None, follow=True, guard=True, scene=None, height=None, flare=False, name="f",
                 exposure="keep", stop=True, focus=True, seed=0, units="SCENE", exr_codec=None, half_color=None,
                 guard_min_gb=4.0, guard_wait_s=1800.0, file_ext=".exr", lock=True, exclude_collections=None, exclude_mode="hide",
-                settings=None, focus_target=None, rack=None, exclude_spp=None, exclude_bounces=None):
+                settings=None, focus_target=None, rack=None, exclude_spp=None, exclude_bounces=None, format="S35"):
     """渲一个镜头 → 日志 dict（同时写 <out_dir>/<name>_log.json）。
     source_camera：源相机（物体或名字）；None = 场景当前的相机（若它不是 BlenderLens 相机）。follow=False 时可以不给。
     frames：帧号序列；None = 场景的起止帧。preset：None = 用场景里已有的 BlenderLens 相机；给了 = 搭一支新镜头
-    （focal_mm、gate、units、height 同 bl.build）。passes / exr_codec / half_color / flare 同 bl.render_frames。
+    （focal_mm、gate、units、height、format 同 bl.build；format="FF" = 全画幅版本，0.8.8）。passes / exr_codec / half_color / flare 同 bl.render_frames。
     spp：采样数（None = 不改）。exposure："keep" 或 "pinhole"（见文件头）。
     exclude_collections（0.8.5）：如 ["FX_rain"]，单独成层 BL_Exclude，不进场景层 / 矢量 / 时间降噪。
     exclude_spp / exclude_bounces（0.8.7，可选）：排除层单独的采样数 / 弹射上限（默认与主渲染相同）。
@@ -91,7 +91,7 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
             raise ValueError("场景里没有 BlenderLens 相机：请给 preset")
         pf = preset if preset.endswith(".json") else preset + ".json"
         keep = {k: getattr(sc.cycles, k) for k in _KEEP_CYCLES if hasattr(sc.cycles, k)}
-        cam = api.build(pf, sc, focal_mm=focal_mm or 0.0, gate=gate, units=units,
+        cam = api.build(pf, sc, focal_mm=focal_mm or 0.0, gate=gate, units=units, format=format,
                         height=height or sc.render.resolution_y, make_active=True)
         for k, v in keep.items():                         # 0.8.5：搭镜头会套 render_preset（改 CPU、弹射数…）→ 换回场景原来的
             setattr(sc.cycles, k, v)

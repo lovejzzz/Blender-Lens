@@ -105,6 +105,10 @@ class BL_OT_build(bpy.types.Operator):
     focal_mm: FloatProperty(name="Vertical Focal Length (mm)", default=0.0, min=0.0, soft_max=300.0,
                             description="把整支镜头按比例缩放到这个垂直焦距（变形镜头按垂直方向命名焦距）；0 = 预设原生焦距。"
                                         "估算口径的组会按新视场重算口径")
+    format: EnumProperty(name="Format", default='S35',
+                         items=[('S35', "Super 35 (Original Design)", optics.FORMATS["S35"]),
+                                ('FF', "Full Frame Version", optics.FORMATS["FF"])],
+                         description="画幅版本：原设计（Super 35 级）或全画幅版本（整支镜头等比放大，覆盖与观感逐点相同，焦距 × k、景深更浅）")
     coated: BoolProperty(name="MgF₂ Coating", default=True,
                          description="Geometry 模式镜片材质的镀膜；之后由相机设置（处方 look 的初值）统一控制")
     film_nm: FloatProperty(name="Coating Thickness (nm)", default=100.0, min=0.0, max=400.0)
@@ -129,11 +133,12 @@ class BL_OT_build(bpy.types.Operator):
     def execute(self, context):
         try:
             path = bpy.path.abspath(self.filepath) if self.filepath else os.path.join(optics.PRESCRIPTION_DIR, self.preset)
-            rx = optics.load(path)
-            if self.focal_mm > 0:
-                rx = optics.rescale_to_vertical_efl(rx, self.focal_mm)
-            rx = optics.apply_gate(rx, self.gate, self.gate_width, self.gate_height)
+            rx = optics.prepare(optics.load(path), self.format, self.focal_mm, self.gate, self.gate_width, self.gate_height)
             cam_ob = rig.build(context, rx, coated=self.coated, film_nm=self.film_nm, units=self.units)
+            cam_ob["bl_format"] = self.format
+            from . import api as _api                 # 0.8.6 的覆盖检查（bl.build 里有，面板以前没有）
+            for w in _api._coverage_check(cam_ob).get("warnings", []):
+                self.report({'WARNING'}, w)
         except Exception as e:                        # noqa: BLE001 — 报给用户
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -151,6 +156,21 @@ class BL_OT_build(bpy.types.Operator):
         unit_note = "毫米场景" if cam_ob.get("bl_units") == 'MM' else f"保留场景单位（1 单位 = {rig.mm_per_unit(context.scene):g} mm）"
         self.report({'INFO'}, f"已搭建 {cam_ob.get('bl_preset', cam_ob.name)}；无穷远压缩比 {rig.squeeze_info(cam_ob):.3f}；{unit_note}")
         return {'FINISHED'}
+
+
+class BL_MT_build_ff(bpy.types.Menu):
+    """全画幅版本（0.8.8）：每支镜头整体等比放大，覆盖 36 × 24 mm 机身（焦距 × k，观感与原设计逐点相同，景深更浅）"""
+    bl_idname = "BL_MT_build_ff"
+    bl_label = "Build Lens (Full Frame)"
+
+    def draw(self, context):
+        for fn, name, _tag in _preset_items(self, context):
+            rx = optics.load(os.path.join(optics.PRESCRIPTION_DIR, fn))
+            k = optics.format_factor(rx, "FF")
+            fy = optics.paraxial_infinity(optics.layout(rx), "Ry")[0] * k
+            op = self.layout.operator(BL_OT_build.bl_idname, text=f"{name}  →  全画幅 {fy:.0f} mm")
+            op.preset = fn
+            op.format = 'FF'
 
 
 class BL_OT_rebuild_apertures(bpy.types.Operator):
@@ -323,6 +343,7 @@ class BL_PT_sidebar(bpy.types.Panel):
     def draw(self, context):
         lay = self.layout
         lay.operator_menu_enum(BL_OT_build.bl_idname, "preset", text="Build Lens", icon='OUTLINER_OB_CAMERA')
+        lay.menu(BL_MT_build_ff.bl_idname, text="Build Lens (Full Frame)", icon='OUTLINER_OB_CAMERA')
         cam_ob = context.scene.camera
         if cam_ob and cam_ob.type == 'CAMERA' and any(c.name.startswith("BL_Rig") for c in cam_ob.children):
             _draw_settings(lay, cam_ob)
@@ -371,7 +392,7 @@ def _frame_change(scene, depsgraph=None):
             rig.apply_settings(ob)
 
 
-classes = (BLCameraSettings, BL_OT_build, BL_OT_rebuild_apertures, BL_OT_mark_flare, BL_OT_render_flare,
+classes = (BLCameraSettings, BL_OT_build, BL_MT_build_ff, BL_OT_rebuild_apertures, BL_OT_mark_flare, BL_OT_render_flare,
            BL_OT_gpu_enable, BL_OT_gpu_remove, BL_OT_export, BL_PT_sidebar, BL_PT_camera)
 
 def register():

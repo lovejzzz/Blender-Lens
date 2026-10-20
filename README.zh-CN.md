@@ -21,6 +21,12 @@
 
 ---
 
+## 0.8.8 新增：全画幅版本
+
+- **每支镜头都有全画幅版本**：`bl.build(..., format="FF")`，面板里 Build Lens (Full Frame)，命令行 `--format FF`。原来的预设都是按 Super 35 设计的；全画幅版本是同一个设计整体做大一号（焦距 × 1.29–1.52），覆盖、渐晕、畸变、焦外形状、炫光与原设计逐点相同，同 f 值下景深更浅。例：C 风格 64.5 mm、Neil 65 → 87.6 mm、Laowa 39.6 mm、Panavision 1.34× 31.3–100.8 mm。
+- **修正**：用 `focal_mm` 缩放 C / E / G 时，近摄的发腮补偿以前没跟着缩放（压缩比偏差），现在任何焦距下都与原设计相同。
+- **排除层更快一点**：空画面在一个只有相机的临时场景里渲。
+
 ## 0.8.7 修正：雨层不再把画面压暗
 
 - **`BL_Exclude` 的 alpha 修正**：0.8.5 / 0.8.6 里排除层的 alpha 混进了镜头渐晕和采样截断偏差，`BL_Final` 在没有雨的地方也被压暗（中心约 5–8%、四角更多）。现在 alpha 与空画面的透明度相除，没有雨的像素 alpha 恰好 0，`BL_Final` = 场景 + 雨 + 炫光。已经渲好的帧：雨层颜色是对的，用加法合成 `Combined + BL_Exclude.rgb + BL_Flare + BL_Veil`。
@@ -108,12 +114,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.8.7.zip`](dist/blenderlens-0.8.7.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.8.8.zip`](dist/blenderlens-0.8.8.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.7.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.8.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。

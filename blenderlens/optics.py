@@ -844,6 +844,12 @@ def rescale_to_vertical_efl(rx, target_mm, reestimate=True):
                     st[key] = st[key] * k
     if rx.get("image_distance_mm") is not None:
         rx["image_distance_mm"] *= k
+    # 发腮补偿凸轮表（0.8.8 修正）：对焦行程 Δ1 是长度（× k），补偿板光焦度 φ 是 1/长度（÷ k）。0.8.7 及以前没缩放，
+    # 缩放后的 C / E / G 近摄压缩比不对（C 缩到一半焦距：最近对焦 1.80 而不是 2.01）
+    comp = rx.get("focus", {}).get("compensator")
+    if comp:
+        comp["d1"] = [x * k for x in comp["d1"]]
+        comp["phi"] = [x / k for x in comp["phi"]]
     # 整支镜头等比缩放 → 最近对焦距离（从像面量起）也等比缩放，否则缩大的镜头会「对焦到镜头里面」
     if rx.get("focus", {}).get("min_distance_mm"):
         rx["focus"]["min_distance_mm"] = round(rx["focus"]["min_distance_mm"] * k, 1)
@@ -901,6 +907,59 @@ def apply_gate(rx, gate="FULL", width=None, height=None):
     s["width"], s["height"] = round(w, 4), round(h, 4)
     s["gate"] = gate
     s["format"] = f'{GATES[gate].split("（")[0]}：{w:.2f} × {h:.2f} mm（原光窗 {W:g} × {H:g}）'
+    return rx
+
+# ───────────────────────── 画幅版本（0.8.8）─────────────────────────
+# 现有预设都按 Super 35 级光窗设计（约 22 × 18.6 mm）。「全画幅版本」= 同一个设计整体做大一号：镜片、间隔、口径、
+# 光阑、对焦行程、补偿凸轮全部 × k，光窗也 × k，k 取光窗放进 36 × 24 mm 的最大倍数（2× 镜头按高 24 mm，Panavision 1.34×
+# 按宽 36 mm）。光窗上每一点的物方角度、渐晕、畸变、焦外形状、炫光与原设计逐点相同（整支镜头的追迹只差一个比例），
+# 不同的只有：焦距 × k、同 f 值下景深更浅（全画幅的本意），以及最近对焦距离 × k。厂商做全画幅版本通常重新设计；
+# 这里是等比放大，是「同一支镜头的全画幅版」最直接、可验证的做法。
+
+FORMATS = {
+    "S35": "原设计（Super 35 级光窗）",
+    "FF": "全画幅版本：整支镜头连同光窗等比放大到 36 × 24 mm 以内（同一个设计做大一号，焦距 × k）",
+}
+FF_SIZE = (36.0, 24.0)
+
+def format_factor(rx, fmt="S35"):
+    """画幅版本的放大倍数 k（S35 = 1）。按处方原光窗（full_aperture）算。"""
+    if fmt in (None, "", "S35"):
+        return 1.0
+    if fmt != "FF":
+        raise ValueError(f"画幅版本只有 {list(FORMATS)}（收到 {fmt!r}）")
+    s = rx["sensor"].get("full_aperture") or rx["sensor"]
+    return min(FF_SIZE[0] / s["width"], FF_SIZE[1] / s["height"])
+
+def to_format(rx, fmt="S35"):
+    """处方 → 指定画幅版本（见上）。S35 原样返回。"""
+    k = format_factor(rx, fmt)
+    if k == 1.0:
+        return rx
+    fy = paraxial_infinity(layout(rx), "Ry")[0]
+    rx = rescale_to_vertical_efl(rx, fy * k, reestimate=False)        # 口径也按 k 等比（不重新估算）：逐点相同
+    s = rx["sensor"]
+    for d in [s] + ([s["full_aperture"]] if s.get("full_aperture") else []):
+        d["width"], d["height"] = round(d["width"] * k, 4), round(d["height"] * k, 4)
+    s["format"] = f'全画幅版本：{s["width"]:.2f} × {s["height"]:.2f} mm（原设计 × {k:.4f}）'
+    m = rx["meta"]
+    m["format"] = dict(name=fmt, factor=round(k, 5), from_vertical_efl=round(fy, 3))
+    m.pop("rescaled", None)
+    m["short_name"] = f'{m.get("short_name", m["name"]).split(" @ ")[0]} 全画幅 {fy * k:.0f} mm'
+    return rx
+
+def prepare(rx, fmt="S35", focal_mm=0.0, gate="FULL", width=None, height=None):
+    """搭镜头前的处方变换（api.build 与面板共用）：画幅版本 → 缩放到 focal_mm（光窗不变，只缩镜头）→ 光窗。"""
+    rx = to_format(rx, fmt)
+    if focal_mm and focal_mm > 0:
+        rx = rescale_to_vertical_efl(rx, focal_mm)
+    rx = apply_gate(rx, gate, width, height)
+    if fmt == "FF" and gate == "16:9_NATIVE":
+        # 原生 16:9 满像圈的光窗可以比处方光窗高；全画幅机身的传感器只有 36 × 24 → 等比收进去（自定义光窗不收）
+        s = rx["sensor"]; c = min(1.0, FF_SIZE[0] / s["width"], FF_SIZE[1] / s["height"])
+        if c < 1.0:
+            s["width"], s["height"] = round(s["width"] * c, 4), round(s["height"] * c, 4)
+            s["format"] += f'；收进全画幅传感器：{s["width"]:.2f} × {s["height"]:.2f} mm'
     return rx
 
 def gate_corner_transmission(rx, f_number=None, focus_dist=math.inf, n=25):

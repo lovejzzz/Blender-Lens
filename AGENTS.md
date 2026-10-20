@@ -27,6 +27,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `bl.contact_sheet(path, [ {...}, {...} ])` | 多组设置并排成一张图（A/B），渲完恢复原设置 |
 | `bl.temporal_check(mode="moving")` / `bl.temporal_denoise(in_dir, out_dir, frames)` / `bl.render_shot(source_camera, frames, out_dir, ...)` | 0.8.4：运镜闪烁 / 时间降噪 / 渲一个镜头（HANDOFF §6.8） |
 | `bl.render_sequence(shots)` / `bl.shots_from_markers()` / `bl.focus_track(cam, target, frames, rack)` / `exclude_collections=[...]` | 0.8.5：多镜头 / 对焦跟随 / 雨等排除层；透射面与倒影的矢量自动（HANDOFF §6.9） |
+| `bl.build(preset, format="FF")` / `bl.coverage(cam)` | 0.8.8 全画幅版本（整支镜头连同光窗等比放大）/ 0.8.6 覆盖与畸变报告（HANDOFF §6.10、§6.12） |
 | `bl.build / set_focus / set_stop / set_mumps_correction / lens_info / render_still / render_frames / follow_camera / enable_gpu` | 原有稳定接口，见 `blenderlens/HANDOFF.md` §6 |
 
 距离一律用米（`focus_m`）；镜头内部毫米；场景单位任意。GPU（Metal）必须在本进程第一次 GPU 渲染之前 `bl.enable_gpu()`。
@@ -81,6 +82,8 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 - 辅助数据渲染至少 8 采样：Cryptomatte 按全部采样累积，1 采样时和 Position 一样有洞，补洞认不出物体。
 - 要逐像素比对的输出用无损压缩（PIZ / ZIP）；`temporal` 预设默认的 DWAB 有损。
 - 判断渐晕 / 覆盖要用与 Analytic 渲染同一判据（`coverage.py` / `pupil._passes`）；`optics.pupil_transmission` 和 Geometry 模式会放过「两面在口径内相交」的光线。
+- 缩放镜头（`rescale_to_vertical_efl`）时所有带长度单位的量都要跟着缩放：发腮补偿凸轮（Δ1 × k、φ ÷ k）0.8.8 前漏了；全画幅版本用 `optics.to_format`（口径不重新估算，逐点等比）。
+- KernelCamera 的 `pole_merge_angle_*` 只在全景立体时同步，自定义相机读到 0：不能用来给 GPU 传参数（`gpukernel.FIELD_MAP` 只用确认会同步的字段）。
 - 跑长任务（Blender 测试、整套测试）放后台；Geometry 模式 CPU 渲染很慢。
 
 ## 看图

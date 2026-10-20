@@ -479,7 +479,9 @@ def set_compensation(cam_ob, level):
     apply_settings(cam_ob)
     return True
 
-WEIGHT_SCALE = [1.0]       # 0.8.7：相机光线权重缩放（排除层的两次辅助渲染临时设 0.25，见 render_frame_multilayer）
+WEIGHT_SCALE = [1.0]           # 0.8.7：相机光线权重缩放（排除层的两次辅助渲染临时设 0.25，见 render_frame_multilayer）
+EMPTY_FRAME_WORLD = ["none"]   # 0.8.8：空画面不带世界（"scene" = 用场景的世界，对照测试用）
+EMPTY_FRAME_MODE = ["scene"]   # 0.8.8：空画面在临时场景里渲（"hide" = 0.8.7 的做法，对照测试用）
 
 
 def _write_gpu_fields(cam, d1, d2, f_number, blades, phi=0.0):
@@ -816,7 +818,7 @@ def _aux_render(scene, path, hide=(), data_only=True, need_passes=(), holdout=No
         setv(r, "use_compositing", False)
         old_fp = r.filepath; r.filepath = path
         try:
-            bpy.ops.render.render(write_still=True)
+            bpy.ops.render.render(write_still=True, scene=scene.name)
         finally:
             r.filepath = old_fp
     finally:
@@ -825,6 +827,44 @@ def _aux_render(scene, path, hide=(), data_only=True, need_passes=(), holdout=No
                 setattr(owner, attr, v)
             except TypeError:
                 pass
+
+
+def _copy_rna(src, dst):
+    """把 src 的可写标量属性（不含指针 / 集合）抄到 dst（同类型的 RNA 结构）。"""
+    for prop in src.bl_rna.properties:
+        if prop.is_readonly or prop.type in ('POINTER', 'COLLECTION') or prop.identifier == "rna_type":
+            continue
+        try:
+            setattr(dst, prop.identifier, getattr(src, prop.identifier))
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            pass
+
+
+def _empty_frame_render(scene, cam_ob, path, samples=None, weight_scale=None):
+    """排除层 alpha 的分母：「什么都没有、只有世界背景」的画面（0.8.8）。
+    空画面的透明度只取决于镜头权重与采样序列（种子、采样数、帧号、分辨率、运动模糊设置），与场景里的物体、相机位置都无关，
+    所以在一个只有相机（共用同一份相机数据 = 同一支镜头）和世界的临时场景里渲：不用同步 / 隐藏几千个物体
+    （MessyRoom 3,100 个物体的场景，原来的「全部隐藏」做法这一步约 30 秒）。渲染、Cycles、色彩设置逐项抄过去，渲完删掉。"""
+    tmp = bpy.data.scenes.new("BL_EmptyFrame")
+    cam = None
+    try:
+        for a in ("render", "cycles", "view_settings", "display_settings"):
+            if hasattr(scene, a) and hasattr(tmp, a):
+                _copy_rna(getattr(scene, a), getattr(tmp, a))
+        tmp.render.use_persistent_data = False
+        tmp.world = scene.world if EMPTY_FRAME_WORLD[0] == "scene" else None   # 透明度与背景颜色无关：不用世界（HDRI / 天空纹理
+                                                                                 # 每次渲染要建重要性采样图）
+        tmp.frame_current = scene.frame_current
+        cam = bpy.data.objects.new("BL_EmptyFrameCam", cam_ob.data)
+        tmp.collection.objects.link(cam)
+        cam.matrix_world = cam_ob.matrix_world.copy()
+        tmp.camera = cam
+        _aux_render(tmp, path, data_only=False, film_transparent=True, only_combined=True, samples=samples,
+                    adaptive=False, denoise=False, weight_scale=weight_scale)
+    finally:
+        if cam is not None:
+            bpy.data.objects.remove(cam)
+        bpy.data.scenes.remove(tmp)
 
 
 def exclude_objects(scene, collections):
@@ -1231,8 +1271,13 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
             try:
                 _aux_render(scene, tmp_x, data_only=False, film_transparent=True, holdout_objects=others, only_combined=True,
                             samples=exclude_spp, bounces=exclude_bounces, adaptive=False, weight_scale=XS)
-                _aux_render(scene, tmp_0, data_only=False, film_transparent=True, hide=everything, only_combined=True,
-                            samples=exclude_spp, adaptive=False, denoise=False, weight_scale=XS)
+                t_e0 = time.perf_counter()
+                if EMPTY_FRAME_MODE[0] == "scene":
+                    _empty_frame_render(scene, cam_ob, tmp_0, samples=exclude_spp, weight_scale=XS)
+                else:                                     # 0.8.7 的做法（对照测试用）：在原场景里把所有物体隐藏
+                    _aux_render(scene, tmp_0, data_only=False, film_transparent=True, hide=everything, only_combined=True,
+                                samples=exclude_spp, adaptive=False, denoise=False, weight_scale=XS)
+                T["exclude_empty"] = time.perf_counter() - t_e0
             finally:
                 WEIGHT_SCALE[0] = 1.0
                 p.ghosts = ghosts_was

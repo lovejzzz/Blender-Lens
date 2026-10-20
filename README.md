@@ -29,6 +29,12 @@ Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same cam
 
 ---
 
+## What's new in 0.8.8: full-frame versions
+
+- **Every lens now has a full-frame version**: `bl.build(..., format="FF")`, the panel's Build Lens (Full Frame) menu, or `--format FF` on the command line. The presets were all designed for Super 35; the full-frame version is the same design scaled up as a whole (focal length × 1.29–1.52), so coverage, vignetting, distortion, bokeh shape and flares match the original point for point, with shallower depth of field at the same f-number. For example: C-style 64.5 mm, Neil 65 → 87.6 mm, Laowa 39.6 mm, Panavision 1.34× 31.3–100.8 mm.
+- **Fix**: when C / E / G were rescaled with `focal_mm`, the mumps compensation at close focus was not rescaled with them (the squeeze drifted); it now matches the original design at every focal length.
+- **Slightly faster exclude pass**: the empty frame renders in a temporary scene that holds only the camera.
+
 ## Fixed in 0.8.7: the rain layer no longer darkens the frame
 
 - **`BL_Exclude` alpha**: in 0.8.5 / 0.8.6 the exclude layer's alpha also carried lens vignetting and a sample-clamping bias, so `BL_Final` was darkened where there was no rain (about 5–8% in the centre, more in the corners). Alpha is now divided by the transparency of an empty frame, so pixels without rain have alpha exactly 0 and `BL_Final` = scene + rain + flare. For frames already rendered, the rain colour is correct: composite additively, `Combined + BL_Exclude.rgb + BL_Flare + BL_Veil`.
@@ -116,12 +122,12 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.8.7.zip`](dist/blenderlens-0.8.7.zip) from this repository.
+1. Download [`dist/blenderlens-0.8.8.zip`](dist/blenderlens-0.8.8.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.7.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.8.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.
