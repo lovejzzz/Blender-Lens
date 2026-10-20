@@ -21,6 +21,13 @@
 
 ---
 
+## 0.8.6 新增：广角变形（MessyRoom Day 5）
+
+- **Laowa 风格 2× 广角 29 mm**：CN 112285889 B 的真实现代 2× 广角变形（柱面在中间，不是前置附加镜）。在 16:9 原生光窗上缩到取景 21–28 mm 时，边缘畸变约 −6%（C 风格 −58%），4K 下竖直线弯 17–43 px（C 风格 101 px）。
+- **覆盖与畸变报告**：`bl.coverage(cam)` / `bl.lens_info(cam, coverage=True)` / `blcli.py info --coverage`：像圈 vs 光窗对角线、四角相对照度（与渲染同一估计器，差 ≤ 0.02）、横 / 竖畸变、画面边缘竖直线在 4K 下的弯曲、当前视场 vs 能覆盖的视场。
+- **不牺牲质量的提速**：出瞳采样盒更贴（有效采样约 +10%，仍然无偏）、运动矢量投影 2.2 倍、补洞 5 倍、倒影矢量用 BVH 树、炫光解析求交。4K 每帧后期 17 → 12 秒。
+- **build 警告**：缩放后覆盖不了光窗时，`bl.build` 会警告（控制台、`lens_info`、`diagnose`），不再静默生成「舷窗」。
+
 ## 0.8.5 新增：便利店雨夜（MessyRoom Day 5）
 
 - **矢量和深度穿过玻璃**：橱窗、门、冷柜门（Principled 透射 ≥ 0.9 且粗糙度 ≤ 0.1、Glass BSDF，或 `bl_pass_through`）后面的东西不再拿到玻璃的运动。`BL_Vector` / `Depth` 取第一个非透射面；玻璃自己的进 `BL_VectorSurface` / `BL_DepthSurface`；玻璃后的置信度按反射占比降。
@@ -96,12 +103,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.8.5.zip`](dist/blenderlens-0.8.5.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.8.6.zip`](dist/blenderlens-0.8.6.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.5.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.6.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。
@@ -242,6 +249,7 @@ O.bokeh_aspect(rx, 1200.0, 20000.0)      # 焦外高宽比（解挤压后）
 | **G 系列风格 100 mm（2007）** | 同 E 系列风格光学，整体缩放 0.763 | 垂直 100 mm · f/3 · 0.91 m | 2.094 → 2.094（补偿，默认）；关补偿 1.652（−21%） | G Series 100 mm T3、最近对焦 91.4 cm、「极佳的抗眩光」 |
 | **Panavision 后置 1.34×（真实处方）** | [US 7,085,066](https://patents.google.com/patent/US7085066B2/en)（Iain A. Neil / Panavision 2004）原样：变焦镜短焦端 + 8 片后置变形组（3 片 Y 向柱面 + 5 片 X 向柱面），2 个非球面 | 水平 15.8 / 垂直 20.7 mm · f/3.66 · 0.48 m | 1.304 → 1.304（无发腮） | 专利实施例：16:9 画幅解挤压到 2.40:1 |
 | **Neil 2× 现代变形 50 / 65 / 85 mm（真实处方，0.6）** | [CN 111562632 B](https://patents.google.com/patent/CN111562632B/en)（Iain A. Neil / 广东思锐光学 Sirui，2019）原样：同一前变形部分（X 柱面 3 片、Y 柱面 3 片，G1b 两片内对焦）+ 三个可换后组。**美国同族 US 11,287,618 的表格印刷错误多，不能用**（见 `blenderlens/research/RESEARCH.md`） | 垂直 50 / 65 / 85 mm · f/3 · 1.08 m | 2.06 → 1.93（−6.6%） | 专利实施例（不是 Panavision 镜头；设计者与 Panavision 后置组相同） |
+| **Laowa 风格 2× 广角 29 mm（真实处方，0.8.6）** | [CN 112285889 B](https://patents.google.com/patent/CN112285889B/zh) 实施例 1（安徽长庚光学 / Laowa，2020）：负前组（一片移动对焦）→ Y 向柱面组 → X 向柱面组 → 含光阑的后组；专利只给 nd / Vd、没有口径（口径估算后按真实边厚收回） | 水平 14.6 / 垂直 29.0 mm · f/2.9 · 1.68 m | 1.99 → 1.99（内对焦） | 专利实施例；广角选项：16:9_NATIVE 下取景约 25 mm 起覆盖，边缘畸变 −6% |
 | **Panavision 后置 1.34× 长焦端（真实处方）** | 同上，变焦镜取长焦端 Z4（变焦间隔取自 [US 6,122,111](https://patents.google.com/patent/US6122111A/en) TABLE 1，叠加到已核实的 Z1 表上） | 水平 50.9 / 垂直 66.4 mm · f/4.1（垂直）· 0.48 m | 1.305 → 1.305（无发腮） | 变焦镜单独 49.22 mm（专利 49.2） |
 
 - **统一焦段**：Build 时填「Vertical Focal Length」，可把任意预设按比例缩放到同一垂直焦距（压缩比、f 值、像差形态不变；估算口径的预设按新视场重算口径）。Isco 附加镜（E/G）低于约 100 mm 会超出设计视场，所以几个预设能同时物理成立的共同焦段是 100 mm。

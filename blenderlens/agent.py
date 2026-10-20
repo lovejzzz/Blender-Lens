@@ -204,6 +204,14 @@ def diagnose(scene=None):
         out.append(_issue("warning", "multiple_cameras", f"有 {len(cams)} 支 BlenderLens 相机，但每个 .blend 只能有一支（处方只存一份）",
                           "删掉多余的，或重新 bl.build"))
     cam = sc.camera if sc.camera in cams else cams[0]
+    if cam.get("bl_coverage_quick"):                       # 0.8.6：搭镜头时的覆盖检查
+        import json as _json
+        try:
+            cq = _json.loads(cam["bl_coverage_quick"])
+        except ValueError:
+            cq = {}
+        for w in cq.get("warnings", []):
+            out.append(_issue("warning", "coverage", w, "加长焦距、换覆盖更大的预设（bl.coverage(cam) 看完整报告），或换窄一点的光窗"))
     if sc.camera not in cams:
         out.append(_issue("warning", "not_scene_camera", f"场景相机是 {sc.camera.name if sc.camera else None}，不是 BlenderLens 相机",
                           f"bpy.context.scene.camera = bpy.data.objects[{cam.name!r}]"))

@@ -1,0 +1,608 @@
+{
+  "meta": {
+    "name": "Laowa 风格 2× 广角变形 29 mm（CN 112285889 B 实施例 1，f/2.9）",
+    "short_name": "Laowa 2× 广角 29 mm（真实处方）",
+    "order": 9,
+    "tagline": "现代一体式 2× 广角变形：负前组 + 中间 Y / X 柱面组 + 后组光阑；广角下畸变小、覆盖 S35",
+    "note": "专利实施例原样收录（是否为某款市售镜头未知）。柱面在中间（不是前置附加镜），广角时比 C 风格的前置变形器畸变小得多。专利未给口径与玻璃牌号：口径按 apply_apertures 估算（角落放行 0.6），色散按 Nd / Vd 两项 Cauchy。",
+    "units": "mm",
+    "conventions": {
+      "origin": "像面（传感器）",
+      "object_side": "+Z",
+      "light_travels": "-Z",
+      "surface_order": "从物方到像方",
+      "radius_sign": "R > 0：曲率中心在像方（-Z 一侧）；R < 0：在物方；null = 平面（无穷大）",
+      "surface_z": "z = z_vertex - sag(x, y)",
+      "d": "该面到下一面的轴上距离（专利原值，使用时乘该组 scale）",
+      "medium": "该面之后（像方一侧）的介质",
+      "cylinder": "柱面镜只在水平主截面（x）有光焦度：R_y = null",
+      "aperture": "每面 aperture 为物理 mm（已缩放，不再乘 scale）：柱面镜片 rect(semi_x, semi_y)；球面镜片 circle(clear 通光半径, outer 外半径，二者之间为黑色平台)"
+    }
+  },
+  "glasses": {
+    "air": {
+      "nd": 1.0,
+      "vd": null
+    },
+    "LW_192103_2134": {
+      "nd": 1.92103,
+      "vd": 21.34,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_191241_2500": {
+      "nd": 1.91241,
+      "vd": 25.0,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_189598_3091": {
+      "nd": 1.89598,
+      "vd": 30.91,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_190300_4080": {
+      "nd": 1.903,
+      "vd": 40.8,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_188255_3893": {
+      "nd": 1.88255,
+      "vd": 38.93,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_184126_2437": {
+      "nd": 1.84126,
+      "vd": 24.37,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_149700_8161": {
+      "nd": 1.497,
+      "vd": 81.61,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_190864_2113": {
+      "nd": 1.90864,
+      "vd": 21.13,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_160342_3801": {
+      "nd": 1.60342,
+      "vd": 38.01,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_181799_2381": {
+      "nd": 1.81799,
+      "vd": 23.81,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_190366_3131": {
+      "nd": 1.90366,
+      "vd": 31.31,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_169895_3005": {
+      "nd": 1.69895,
+      "vd": 30.05,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_180610_3327": {
+      "nd": 1.8061,
+      "vd": 33.27,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_169680_5546": {
+      "nd": 1.6968,
+      "vd": 55.46,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_172916_5467": {
+      "nd": 1.72916,
+      "vd": 54.67,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    },
+    "LW_168893_3116": {
+      "nd": 1.68893,
+      "vd": 31.16,
+      "note": "专利只给 Nd / Vd（两项 Cauchy）"
+    }
+  },
+  "groups": [
+    {
+      "id": "front",
+      "role": "G1 负前组（L7–L8 移动对焦）+ G2 Y 向柱面组 + G3 X 向柱面组 + G4 前半",
+      "scale": 1.0,
+      "surfaces": [
+        {
+          "id": "L1",
+          "R_x": 93.899,
+          "R_y": 93.899,
+          "d": 1.8,
+          "medium": "LW_192103_2134",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 40.6139,
+            "outer": 40.6139
+          }
+        },
+        {
+          "id": "L2",
+          "R_x": 53.423,
+          "R_y": 53.423,
+          "d": 8.144,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 33.7689,
+            "outer": 40.6139
+          }
+        },
+        {
+          "id": "L3",
+          "R_x": 142.045,
+          "R_y": 142.045,
+          "d": 7.629,
+          "medium": "LW_191241_2500",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 37.75,
+            "outer": 40.0
+          }
+        },
+        {
+          "id": "L4",
+          "R_x": -469.695,
+          "R_y": -469.695,
+          "d": 0.15,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 40.0,
+            "outer": 40.0
+          }
+        },
+        {
+          "id": "L5",
+          "R_x": 95.141,
+          "R_y": 95.141,
+          "d": 1.5,
+          "medium": "LW_189598_3091",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 31.75,
+            "outer": 31.75
+          }
+        },
+        {
+          "id": "L6",
+          "R_x": 39.132,
+          "R_y": 39.132,
+          "d": 16.279,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 27.25,
+            "outer": 31.75
+          }
+        },
+        {
+          "id": "L7",
+          "R_x": -477.362,
+          "R_y": -477.362,
+          "d": 1.5,
+          "medium": "LW_190300_4080",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 23.5,
+            "outer": 23.5
+          }
+        },
+        {
+          "id": "L8",
+          "R_x": 77.321,
+          "R_y": 77.321,
+          "d": 4.0,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 22.5,
+            "outer": 23.5
+          }
+        },
+        {
+          "id": "L9",
+          "R_x": null,
+          "R_y": 40.196,
+          "d": 17.0,
+          "medium": "LW_188255_3893",
+          "shape": "YCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 18.25,
+            "semi_y": 16.5
+          }
+        },
+        {
+          "id": "L10",
+          "R_x": null,
+          "R_y": -47.909,
+          "d": 1.5,
+          "medium": "LW_184126_2437",
+          "shape": "YCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 18.25,
+            "semi_y": 16.5
+          }
+        },
+        {
+          "id": "L11",
+          "R_x": null,
+          "R_y": 176.465,
+          "d": 27.92,
+          "medium": "air",
+          "shape": "YCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 18.25,
+            "semi_y": 16.5
+          }
+        },
+        {
+          "id": "L12",
+          "R_x": null,
+          "R_y": -21.485,
+          "d": 1.2,
+          "medium": "LW_149700_8161",
+          "shape": "YCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 7.75,
+            "semi_y": 8.75
+          }
+        },
+        {
+          "id": "L13",
+          "R_x": null,
+          "R_y": -34.203,
+          "d": 3.0,
+          "medium": "air",
+          "shape": "YCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 7.75,
+            "semi_y": 8.75
+          }
+        },
+        {
+          "id": "L14",
+          "R_x": -20.48,
+          "R_y": null,
+          "d": 7.563,
+          "medium": "LW_190864_2113",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 8.75,
+            "semi_y": 9.0
+          }
+        },
+        {
+          "id": "L15",
+          "R_x": -35.748,
+          "R_y": null,
+          "d": 0.15,
+          "medium": "air",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 8.75,
+            "semi_y": 9.0
+          }
+        },
+        {
+          "id": "L16",
+          "R_x": -47.914,
+          "R_y": null,
+          "d": 2.286,
+          "medium": "LW_149700_8161",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 9.25,
+            "semi_y": 9.25
+          }
+        },
+        {
+          "id": "L17",
+          "R_x": -26.179,
+          "R_y": null,
+          "d": 0.5,
+          "medium": "air",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 9.25,
+            "semi_y": 9.25
+          }
+        },
+        {
+          "id": "L18",
+          "R_x": -80.348,
+          "R_y": -80.348,
+          "d": 1.244,
+          "medium": "LW_160342_3801",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 8.4422,
+            "outer": 8.6703
+          }
+        },
+        {
+          "id": "L19",
+          "R_x": 40.098,
+          "R_y": 40.098,
+          "d": 1.138,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 8.6703,
+            "outer": 8.6703
+          }
+        },
+        {
+          "id": "L20",
+          "R_x": -244.499,
+          "R_y": -244.499,
+          "d": 2.272,
+          "medium": "LW_181799_2381",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 8.6703,
+            "outer": 8.8986
+          }
+        },
+        {
+          "id": "L21",
+          "R_x": -49.219,
+          "R_y": -49.219,
+          "d": 3.675,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 8.8986,
+            "outer": 8.8986
+          }
+        }
+      ],
+      "source": {
+        "patent": "CN 112285889 B — 李大勇，一种变形宽荧幕镜头及具有其的数码摄影机（安徽长庚光学科技 / Venus Optics Laowa），2020 申请、2024 授权，实施例 1",
+        "url": "https://patents.google.com/patent/CN112285889B/zh",
+        "pdf": "https://patentimages.storage.googleapis.com/23/f1/bc/d576b5493f6c1a/CN112285889B.pdf",
+        "table": "说明书 [0057]–[0059]（PDF 第 6–7 页，表为图片，逐位对照转录）",
+        "patent_values": {
+          "Fx": 14.59,
+          "Fy": 29.03,
+          "Fno": 2.9,
+          "omega_x_deg": 41.5,
+          "omega_y_deg": 16.7,
+          "bfl": 38.85,
+          "focus_table": {
+            "inf": [
+              16.279,
+              4.0
+            ],
+            "1500": [
+              15.414,
+              4.865
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "rear",
+      "role": "G4 后半（光阑之后）",
+      "scale": 1.0,
+      "f_number": 2.9,
+      "stop": {
+        "after_surface": "L21",
+        "offset_mm": 0.15,
+        "f_number": 2.9,
+        "note": "光阑（专利第 22 面）；专利没给孔径，按 Fno 2.9（垂直截面近轴）定",
+        "semi_diameter_at_f_number": 9.267,
+        "z_at_infinity": 75.861
+      },
+      "surfaces": [
+        {
+          "id": "L23",
+          "R_x": 22.183,
+          "R_y": 22.183,
+          "d": 4.0,
+          "medium": "LW_190366_3131",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.25,
+            "outer": 11.25
+          }
+        },
+        {
+          "id": "L24",
+          "R_x": 392.186,
+          "R_y": 392.186,
+          "d": 12.645,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.0,
+            "outer": 11.25
+          }
+        },
+        {
+          "id": "L25",
+          "R_x": -20.218,
+          "R_y": -20.218,
+          "d": 2.471,
+          "medium": "LW_169895_3005",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 6.8678,
+            "outer": 7.6758
+          }
+        },
+        {
+          "id": "L26",
+          "R_x": 33.179,
+          "R_y": 33.179,
+          "d": 1.155,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 7.6758,
+            "outer": 7.6758
+          }
+        },
+        {
+          "id": "L27",
+          "R_x": -86.126,
+          "R_y": -86.126,
+          "d": 1.2,
+          "medium": "LW_180610_3327",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 6.6165,
+            "outer": 7.8683
+          }
+        },
+        {
+          "id": "L28",
+          "R_x": 18.735,
+          "R_y": 18.735,
+          "d": 5.026,
+          "medium": "LW_169680_5546",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 7.8683,
+            "outer": 7.8683
+          }
+        },
+        {
+          "id": "L29",
+          "R_x": -21.152,
+          "R_y": -21.152,
+          "d": 0.15,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 7.6896,
+            "outer": 7.8683
+          }
+        },
+        {
+          "id": "L30",
+          "R_x": 31.919,
+          "R_y": 31.919,
+          "d": 5.667,
+          "medium": "LW_172916_5467",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.3846,
+            "outer": 10.3846
+          }
+        },
+        {
+          "id": "L31",
+          "R_x": -17.131,
+          "R_y": -17.131,
+          "d": 1.172,
+          "medium": "LW_168893_3116",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.1886,
+            "outer": 10.3846
+          }
+        },
+        {
+          "id": "L32",
+          "R_x": 201.032,
+          "R_y": 201.032,
+          "d": 38.85,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.3846,
+            "outer": 10.3846
+          }
+        }
+      ]
+    }
+  ],
+  "image_distance_mm": 38.85,
+  "anamorphic": {
+    "desqueeze": 2.0,
+    "type": "integrated",
+    "note": "近轴 Fy/Fx = 1.99（专利 29.03 / 14.59）；按 2.0 解挤压"
+  },
+  "look": {
+    "reference": "专利实施例 1；成品镜头规格未公开",
+    "f_number": 2.9,
+    "coating": "BROADBAND",
+    "coating_nm": 94.0,
+    "flare_color": "PHYSICAL",
+    "flare_gain": 1.0,
+    "veiling_glare": 0.01,
+    "corner_pupil_fraction": 0.6,
+    "min_focus_mm": 1682.8
+  },
+  "focus": {
+    "mechanism": "G1 最靠像面的一片负透镜（L7–L8）移动：D(6) 减小、D(8) 增大同样多（专利 ∞ 16.279 / 4.000，1500 mm 15.414 / 4.865）",
+    "groups": [
+      {
+        "ids": [
+          "L7",
+          "L8"
+        ],
+        "moves": [
+          1,
+          0
+        ]
+      }
+    ],
+    "solve": [
+      "Ry"
+    ],
+    "min_distance_mm": 1682.8
+  },
+  "sensor": {
+    "format": "专利像面：按主光线追迹，半画角 ωx 41.5° / ωy 16.7° 落在 ±12.0 / ±8.8 mm → 24.0 × 17.6 mm（S35 级）",
+    "width": 24.0,
+    "height": 17.6
+  },
+  "aperture_design": {
+    "method": "真实光线追迹：传感器 9 个视场点 × 光阑边缘 48 点 + 中心，追到物方取各面最大高度",
+    "margin": 0.07,
+    "corner_pupil_fraction": 0.6,
+    "round_to_mm": 0.25,
+    "note": "角落视场只放行 60% 光瞳 → 机械渐晕，即边缘猫眼焦外的来源；收光圈后渐晕消失、焦外变圆"
+  }
+}

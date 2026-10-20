@@ -221,7 +221,7 @@ def generate_header(rx, settings=None):
                   BL_Z_EXP=D["z_exp"], BL_R_EXP=D["r_exp"], BL_N0=D["N0"], BL_EXPOSURE_NORM=1.0 / D["T0"],
                   BL_SG1=float(D["SG1"]), BL_SG2=float(D["SG2"]), BL_SP_L0=D["SPEC"]["table"]["l0"], BL_SP_DL=D["SPEC"]["table"]["dl"],
                   BL_LAMBDA_D=O.LAMBDA_D, BL_UNIT_SCALE=st["unit_scale"], BL_BLADE_ROT=st["blade_rotation"],
-                  BL_DISP_STRENGTH=st["dispersion_strength"], BL_PUPIL_MARGIN=1.4,
+                  BL_DISP_STRENGTH=st["dispersion_strength"], BL_PUPIL_MARGIN=D["PM"],
                   BL_GHOST_FRACTION=st["ghost_fraction"], BL_GHOST_GAIN=st["ghost_gain"],
                   BL_COATING_NM=st["coating_nm"], BL_COATING_IOR=st["coating_ior"], BL_COAT_HIGH_N=O.COAT_HIGH_N)
     for k, v in consts.items():

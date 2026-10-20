@@ -70,6 +70,7 @@ TESTS = [
     ("bl_exposure_focus", "standard", "bl", ["tests/bl_exposure_focus.py"], "EXPFOCUS", None),
     ("bl_render_sequence", "standard", "bl", ["tests/bl_render_sequence.py"], "SEQUENCE", None),
     ("bl_reflection", "standard", "bl", ["tests/bl_reflection.py"], "REFLECT", None),
+    ("bl_coverage", "standard", "bl", ["tests/bl_coverage.py"], "COVERAGE", None),
     ("bl_temporal_denoise", "full", "bl", ["tests/bl_temporal_denoise.py"], "TDENOISE", None),
     ("bl_ghosts_broadband", "full", "bl", ["tests/bl_gpu_ghosts.py", "--", "BROADBAND"], "GHOSTS", None),
     ("bl_mumps_e", "full", "bl", ["tests/bl_mumps.py", "--", "e_series_style.json"], "MUMPS", None),

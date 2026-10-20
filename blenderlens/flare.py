@@ -105,8 +105,23 @@ class Lens:
             sf = self.S[k]
             cx, cy = O.curv(sf["Rx"]), O.curv(sf["Ry"])
             t = (sf["z"] - P[:, 2]) / D[:, 2]
+            asph = sf.get("asph") or ()
+            simple = not any(asph) and not sf["kx"] and not sf["ky"] and not (cx and cy and cx != cy) and not any(sf.get("kc") or ())
             with np.errstate(all="ignore"):
-                for it in range(8):
+                if simple:                                  # 0.8.6：平面 / 球面 / 纯柱面解析求交（与 pupil._passes、OSL 同一个稳定二次式）
+                    c_ = cx or cy
+                    mx, my = (1.0 if cx else 0.0), (1.0 if cy else 0.0)
+                    x0 = P[:, 0] + t * D[:, 0]; y0 = P[:, 1] + t * D[:, 1]
+                    qa = c_ * (mx * D[:, 0] ** 2 + my * D[:, 1] ** 2 + D[:, 2] ** 2)
+                    qb = 2.0 * (c_ * (mx * x0 * D[:, 0] + my * y0 * D[:, 1]) + D[:, 2])
+                    qc = c_ * (mx * x0 * x0 + my * y0 * y0)
+                    disc = qb * qb - 4.0 * qa * qc
+                    den = qb + np.where(qb >= 0, 1.0, -1.0) * np.sqrt(np.clip(disc, 0, None))
+                    t = t + np.where(den != 0, -2.0 * qc / np.where(den != 0, den, 1.0), 0.0)
+                    t = np.where(disc >= 0, t, np.nan)
+                    x = P[:, 0] + t * D[:, 0]; y = P[:, 1] + t * D[:, 1]
+                    s, gx, gy, ok = _sag_grad(x, y, cx, cy, sf["kx"], sf["ky"], asph)
+                for it in range(0 if simple else 8):
                     x = P[:, 0] + t * D[:, 0]; y = P[:, 1] + t * D[:, 1]
                     s, gx, gy, ok = _sag_grad(x, y, cx, cy, sf["kx"], sf["ky"], sf.get("asph") or ())
                     g = P[:, 2] + t * D[:, 2] - sf["z"] + s

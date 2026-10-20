@@ -81,6 +81,9 @@ def cmd_info(a):
                 row["bokeh_aspect_background"] = round(O.bokeh_aspect(r, dd, 1e7)["aspect_desqueezed"], 3)
             table.append(row)
     out["focus_table"] = table
+    if a.coverage:                                          # 0.8.6：覆盖与畸变（与渲染同一估计器）
+        import blenderlens.coverage as CV
+        out["coverage"] = CV.coverage_report(rx, (a.focus_m or 7.0) * 1000.0, a.stop or None)
     return out
 
 
@@ -293,6 +296,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("presets")
     p = sub.add_parser("info"); p.add_argument("preset"); p.add_argument("--focus-m", type=float)
+    p.add_argument("--coverage", action="store_true", help="覆盖与畸变报告（像圈、四角照度、畸变、竖线弯曲）"); p.add_argument("--stop", type=float)
     p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
     sub.add_parser("describe")
     p = sub.add_parser("render")

@@ -24,7 +24,9 @@ __all__ = ["presets", "build", "set_focus", "set_stop", "set_mumps_correction", 
            # 0.8.4 渲一个镜头（shot.py）、时间降噪（denoise.py）
            "render_shot", "temporal_denoise",
            # 0.8.5 多镜头
-           "render_sequence", "shots_from_markers"]
+           "render_sequence", "shots_from_markers",
+           # 0.8.6 覆盖与畸变
+           "coverage"]
 
 
 def presets():
@@ -61,6 +63,8 @@ def build(preset="c_series_style.json", scene=None, *, prescription=None, focal_
     w, h = gate_size_mm or (None, None)
     rx = optics.apply_gate(rx, gate, w, h)
     cam_ob = rig.build(SimpleNamespace(scene=scene), rx, coated=coated, film_nm=film_nm, name=name, units=units)
+    cam_ob["bl_focal_mm"] = float(focal_mm or 0.0); cam_ob["bl_gate"] = gate
+    _coverage_check(cam_ob)
     if set_render:
         if make_active:
             scene.camera = cam_ob
@@ -68,6 +72,20 @@ def build(preset="c_series_style.json", scene=None, *, prescription=None, focal_
         scene.render.resolution_x, scene.render.resolution_y = rig.desqueezed_resolution(rig.read_prescription(), height)
         scene.render.pixel_aspect_x = scene.render.pixel_aspect_y = 1.0
     return cam_ob
+
+
+def _coverage_check(cam_ob):
+    """0.8.6（MessyRoom W3）：搭好后快速检查覆盖（中心 / 边缘 / 四角相对照度）。不覆盖就在控制台警告，结论存在相机属性
+    bl_coverage_quick（lens_info、diagnose 会带上），不再静默生成「舷窗」。"""
+    import json as _json
+    try:
+        q = coverage(cam_ob, quick=True)
+    except Exception as e:                                # noqa: BLE001  检查失败不影响搭镜头
+        q = dict(error=str(e)[:200], warnings=[])
+    cam_ob["bl_coverage_quick"] = _json.dumps(q, ensure_ascii=False, default=float)
+    for w in q.get("warnings", []):
+        print("BlenderLens 警告：", w)
+    return q
 
 
 def set_focus(cam_ob, metres=None, mm=None):
@@ -98,12 +116,37 @@ def set_mumps_correction(cam_ob, level):
     return cam_ob.data.blenderlens.mumps_correction
 
 
-def lens_info(cam_ob):
-    """当前状态的光学信息（全部由处方算出）。"""
+_COVERAGE_CACHE = {}
+
+
+def coverage(cam_ob=None, quick=False, out_h=2160):
+    """覆盖与畸变报告（0.8.6，见 coverage.py）：像圈、四角相对照度、横 / 竖畸变、画面边缘竖直线弯曲（4K 像素）、
+    当前视场 vs 能覆盖的视场、警告。按（处方、对焦、f 值）缓存。"""
+    from . import coverage as CV, oslgen
+    cam_ob = cam_ob or camera()
+    rx = rig.read_prescription()
+    p = cam_ob.data.blenderlens
+    dist = rig.focus_mm(cam_ob)
+    key = (oslgen.rx_key(rx), round(dist, 1) if math.isfinite(dist) else -1, round(p.f_number, 3), quick, out_h)
+    if key not in _COVERAGE_CACHE:
+        if len(_COVERAGE_CACHE) > 16:
+            _COVERAGE_CACHE.clear()
+        _COVERAGE_CACHE[key] = CV.coverage_report(rx, dist, p.f_number, out_h=out_h, quick=quick)
+    return _COVERAGE_CACHE[key]
+
+
+def lens_info(cam_ob, coverage=False):
+    """当前状态的光学信息（全部由处方算出）。coverage=True（0.8.6）：另附完整的覆盖与畸变报告（几秒到十几秒，有缓存）。"""
     rx = rig.read_prescription()
     dist = rig.focus_mm(cam_ob)
     S = optics.layout(rx, *optics.solve_focus(rx, dist))
-    return dict(preset=cam_ob.get("bl_preset"), focus_mm=dist, f_number=cam_ob.data.blenderlens.f_number,
+    extra = {}
+    if coverage:
+        extra["coverage"] = globals()["coverage"](cam_ob)
+    elif cam_ob.get("bl_coverage_quick"):
+        import json as _json
+        extra["coverage_quick"] = _json.loads(cam_ob["bl_coverage_quick"])
+    return dict(**extra, preset=cam_ob.get("bl_preset"), focus_mm=dist, f_number=cam_ob.data.blenderlens.f_number,
                 efl_x=optics.paraxial_infinity(S, "Rx")[0], efl_y=optics.paraxial_infinity(S, "Ry")[0],
                 squeeze=optics.squeeze_at(rx, dist), desqueeze=optics.desqueeze(rx),
                 gate_mm=(rx["sensor"]["width"], rx["sensor"]["height"]), units=cam_ob.get("bl_units"),

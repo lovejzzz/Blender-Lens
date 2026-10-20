@@ -826,9 +826,26 @@ def _plane_of(ob, tol=1e-4):
     return c, vt[2]
 
 
+def _principled_emits(ob):
+    """材质里 Principled 的发光强度 > 0 且颜色不黑（接了纹理也算发光）。"""
+    for sl in ob.material_slots:
+        m = sl.material
+        if m is None or not m.use_nodes or m.node_tree is None:
+            continue
+        for nd in m.node_tree.nodes:
+            if nd.type == 'BSDF_PRINCIPLED':
+                st, col = nd.inputs.get("Emission Strength"), nd.inputs.get("Emission Color")
+                if st is None:
+                    continue
+                if st.is_linked or (st.default_value > 0 and (col is None or col.is_linked or max(col.default_value[:3]) > 0)):
+                    return True
+    return False
+
+
 def reflector_objects(scene):
     """平面反射体（0.8.5，MessyRoom 0.8.5 R6）：物体属性 bl_reflector = True，或（没设 False 时）平面网格且材质是
-    Principled、粗糙度 ≤ 0.4 或接了纹理（湿地面、水洼常用噪声控制粗糙度）、不是透射面。→ [(物体, 局部原点, 局部法线)]。"""
+    Principled、粗糙度 ≤ 0.4 或接了纹理（湿地面、水洼常用噪声控制粗糙度）、不是透射面、不发光。→ [(物体, 局部原点, 局部法线)]。
+    0.8.6：只对倒影占比 > 0.3 的像素追反射光线（reflection_vectors(need=…)），所以自动识别多认几块平面也不会很慢。"""
     out = []
     for ob in scene.objects:
         if ob.type != 'MESH' or ob.hide_render or ob.name.startswith("BL_"):
@@ -837,6 +854,8 @@ def reflector_objects(scene):
         if flag is not None and not bool(flag):
             continue
         if flag is None:
+            if _emission_of(ob)[0] > 0 or _principled_emits(ob):   # 0.8.6：发光的招牌 / 灯箱 / 卡片不算（MessyRoom：自动识别太宽）
+                continue
             ok = False
             for sl in ob.material_slots:
                 m = sl.material
@@ -855,10 +874,54 @@ def reflector_objects(scene):
     return out
 
 
-def reflection_vectors(scene, cam_ob, parts, vl_name, W, H, region, reflectors, max_rays=1500000):
+def _scene_bvh(dg):
+    """场景里所有网格（含实例，镜头自己的 BL_ 物体除外）合成一棵 BVH 树（世界坐标）→ (树, 三角形下标 → 物体名)。
+    与 scene.ray_cast 用同一份求值后的几何；百万三角形约 0.4 秒建好，每条光线约 1 µs（scene.ray_cast 约 4.6 µs）。"""
+    from mathutils.bvhtree import BVHTree
+    verts, tris, owner_idx, names = [], [], [], []
+    base = 0
+    for inst in dg.object_instances:
+        ob = inst.object
+        if ob.type not in ('MESH', 'CURVE', 'SURFACE', 'FONT', 'META') or ob.name.startswith("BL_"):
+            continue
+        try:
+            me = ob.to_mesh()
+        except RuntimeError:
+            continue
+        if me is None or not len(me.vertices):
+            ob.to_mesh_clear(); continue
+        me.calc_loop_triangles()
+        n = len(me.vertices)
+        co = np.empty(n * 3, np.float32); me.vertices.foreach_get("co", co); co = co.reshape(n, 3)
+        M = np.array(inst.matrix_world, np.float64)
+        co = co @ M[:3, :3].T + M[:3, 3]
+        lt = np.empty(len(me.loop_triangles) * 3, np.int32); me.loop_triangles.foreach_get("vertices", lt)
+        ob.to_mesh_clear()
+        if not len(lt):
+            continue
+        verts.append(co); tris.append(lt.reshape(-1, 3) + base); base += n
+        owner_idx.append(np.full(len(lt) // 3, len(names), np.int32)); names.append(ob.name)
+    if not verts:
+        return None, None
+    V = np.concatenate(verts); T = np.concatenate(tris)
+    tree = BVHTree.FromPolygons(V.tolist(), T.tolist(), all_triangles=True)
+    own = np.concatenate(owner_idx)
+    return tree, _Owners(own, names)
+
+
+class _Owners:
+    def __init__(self, idx, names):
+        self.idx, self.names = idx, names
+
+    def __getitem__(self, i):
+        return self.names[self.idx[i]]
+
+
+def reflection_vectors(scene, cam_ob, parts, vl_name, W, H, region, reflectors, max_rays=20000000, need=None):
     """平面反射体上主反射的运动矢量（虚像点投影回去）：反射体像素 S 处，视线按平面镜面反射，ray_cast 找到倒影里的点 Q
     （没打到 = 天空，取无穷远）；上一帧 / 下一帧时 Q 随它的物体刚体运动、对当时的平面取镜像 Q′，用当时的相机与对焦投影。
-    → (H×W×4 矢量（Cycles 约定，只在反射体像素上非零）, H×W bool 有效, 统计)。像素多于 max_rays 时隔一个取一个、邻近填。"""
+    → (H×W×4 矢量（Cycles 约定，只在反射体像素上非零）, H×W bool 有效, 统计)。像素多于 max_rays 时隔一个取一个、邻近填
+    （0.8.6 起光线多时用 BVH 树，默认上限 2000 万 = 不再隔点）。"""
     from mathutils import Vector
     from . import passes as PS, lenspack as LP
     pos = PS.find(parts, "Position", vl_name) or PS.find(parts, "Position")
@@ -880,6 +943,9 @@ def reflection_vectors(scene, cam_ob, parts, vl_name, W, H, region, reflectors, 
         if nm in refl_names:
             mask |= idx == k
     mask &= np.abs(P).sum(-1) > 0
+    n_refl = int(mask.sum())
+    if need is not None:                                 # 0.8.6：只追倒影占比够高的像素（下游只在占比 > 0.5 处用倒影矢量）
+        mask &= need
     rows, cols = np.nonzero(mask)
     step = 1
     if len(rows) > max_rays:
@@ -894,6 +960,9 @@ def reflection_vectors(scene, cam_ob, parts, vl_name, W, H, region, reflectors, 
     far = FAR_MM / us
     Q = np.empty((len(rows), 3)); hit_ob = np.empty(len(rows), object)
     n_hit = 0
+    tree = owners = None
+    if len(rows) > 20000:                                 # 0.8.6：光线多时用 BVH 树（约 5 倍快，同一几何、同一交点）
+        tree, owners = _scene_bvh(dg)
     for i in range(len(rows)):
         ob, lc, ln = refl_names[who[i]]
         mw = ob.matrix_world
@@ -903,13 +972,19 @@ def reflection_vectors(scene, cam_ob, parts, vl_name, W, H, region, reflectors, 
         if v.dot(nrm) > 0:
             nrm = -nrm
         r = v - 2.0 * v.dot(nrm) * nrm
-        hit, loc, _n, _i, hob, _m = scene.ray_cast(dg, S + nrm * (0.5 / us) + r * (0.5 / us), r)
-        for _ in range(4):                                # 跳过镜头自己的网格
-            if not (hit and hob.name.startswith("BL_")):
-                break
-            hit, loc, _n, _i, hob, _m = scene.ray_cast(dg, loc + r * (0.5 / us), r)
+        o = S + nrm * (0.5 / us) + r * (0.5 / us)
+        if tree is not None:
+            loc, _n, fi, _d = tree.ray_cast(o, r)
+            hit, hname = loc is not None, (owners[fi] if loc is not None else None)
+        else:
+            hit, loc, _n, _i, hob, _m = scene.ray_cast(dg, o, r)
+            for _ in range(4):                            # 跳过镜头自己的网格
+                if not (hit and hob.name.startswith("BL_")):
+                    break
+                hit, loc, _n, _i, hob, _m = scene.ray_cast(dg, loc + r * (0.5 / us), r)
+            hname = hob.name if hit else None
         if hit:
-            Q[i] = tuple(loc); hit_ob[i] = hob.name; n_hit += 1
+            Q[i] = tuple(loc); hit_ob[i] = hname; n_hit += 1
         else:
             Q[i] = tuple(S + r * far); hit_ob[i] = None
     cams, focus, mats, planes = {}, {}, {}, {}
@@ -968,7 +1043,7 @@ def reflection_vectors(scene, cam_ob, parts, vl_name, W, H, region, reflectors, 
             r2, c2 = r2[inb], c2[inb]
             m2 = mask[r2, c2]
             out[r2[m2], c2[m2]] = vec[inb][m2]; valid[r2[m2], c2[m2]] = ok[inb][m2]
-    return out, valid, dict(pixels=int(mask.sum()), rays=len(rows), hits=n_hit, step=step,
+    return out, valid, dict(pixels=n_refl, traced=int(mask.sum()), rays=len(rows), hits=n_hit, step=step,
                             reflectors=sorted(refl_names))
 
 
@@ -1217,12 +1292,16 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
                 new.append(PS.new_part(comb, "BL_Vector", dict(X=vec[..., 0], Y=vec[..., 1], Z=vec[..., 2], W=vec[..., 3])))
                 refl_use = None
                 if reflectors:                           # 0.8.5：平面反射体上主反射的运动矢量 + 反射占比
-                    rv, rvalid, rstats = reflection_vectors(scene, cam_ob, parts, vl.name, W, H, region, reflectors)
-                    new.append(PS.new_part(comb, "BL_VectorReflection", dict(X=rv[..., 0], Y=rv[..., 1], Z=rv[..., 2], W=rv[..., 3])))
                     gl = [PS.find(parts, n_, vl.name) or PS.find(parts, n_) for n_ in ("Glossy Direct", "Glossy Indirect")]
+                    share0 = None
                     if all(q is not None for q in gl):
                         lum3 = lambda q: (q["channels"]["R"].astype(np.float32) + q["channels"]["G"] + q["channels"]["B"]) / 3.0
-                        share_r = np.clip((lum3(gl[0]) + lum3(gl[1])) / np.maximum(lum3(comb), 1e-6), 0.0, 1.0) * rvalid
+                        share0 = np.clip((lum3(gl[0]) + lum3(gl[1])) / np.maximum(lum3(comb), 1e-6), 0.0, 1.0)
+                    rv, rvalid, rstats = reflection_vectors(scene, cam_ob, parts, vl.name, W, H, region, reflectors,
+                                                            need=None if share0 is None else share0 > 0.3)
+                    new.append(PS.new_part(comb, "BL_VectorReflection", dict(X=rv[..., 0], Y=rv[..., 1], Z=rv[..., 2], W=rv[..., 3])))
+                    if share0 is not None:
+                        share_r = share0 * rvalid
                         new.append(PS.new_part(comb, "BL_ReflectionShare", dict(X=share_r.astype(np.float32))))
                         refl_use = share_r > 0.5
                         rstats["share_mean_on_reflectors"] = round(float(share_r[rvalid].mean()), 4) if rvalid.any() else None
@@ -1311,21 +1390,28 @@ def fill_first_sample_passes(scene, cam_ob, parts, vl_name, W, H, region=None, m
     obj = (cov > 0) & (idx >= 0)
     missing = obj & ~have
     n0 = int(missing.sum())
-    for _ in range(6):                                   # 1. 邻域填（同一物体）
-        if not missing.any():
+    Hh, Ww = have.shape
+    Pf, havef, idxf = P.reshape(-1, 3), have.reshape(-1), idx.reshape(-1)
+    for _ in range(6):                                   # 1. 邻域填（同一物体）：只在缺的像素上做（0.8.6，原来整幅平移 8 次）
+        mi = np.flatnonzero(missing)
+        if not len(mi):
             break
-        acc = np.zeros_like(P); cnt = np.zeros(P.shape[:2], np.float32)
+        r, c = np.divmod(mi, Ww)
+        acc = np.zeros((len(mi), 3), np.float32); cnt = np.zeros(len(mi), np.float32)
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 if dx == 0 and dy == 0:
                     continue
-                sh = lambda a: np.roll(np.roll(a, dy, 0), dx, 1)
-                ok = sh(have) & (sh(idx) == idx)
-                acc += np.where(ok[..., None], sh(P), 0.0); cnt += ok
-        fill = missing & (cnt > 0)
-        P[fill] = acc[fill] / cnt[fill][:, None]
-        have = have | fill
-        missing = missing & ~fill
+                rr, cc = r - dy, c - dx                  # 与原来 np.roll(·, dy / dx) 同一个邻居；出界的不算（原来会绕到对边）
+                inb = (rr >= 0) & (rr < Hh) & (cc >= 0) & (cc < Ww)
+                ni = np.where(inb, rr * Ww + cc, 0)
+                ok = inb & havef[ni] & (idxf[ni] == idxf[mi])
+                acc += np.where(ok[:, None], Pf[ni], 0.0); cnt += ok
+        sel = cnt > 0
+        fi = mi[sel]
+        Pf[fi] = acc[sel] / cnt[sel][:, None]            # 本轮补的值都只用上一轮已有的邻居（与原来一致）
+        havef[fi] = True
+        missing.reshape(-1)[fi] = False
     n_cast = 0
     if missing.any() and missing.sum() <= max_raycast:  # 2. 主光线 ray_cast
         rx = _rx_cached()

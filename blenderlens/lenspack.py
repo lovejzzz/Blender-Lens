@@ -334,28 +334,47 @@ class LensProjector:
         dy = ((f01 - f00) * (1 - tx) + (f11 - f10) * tx) / (self.gy[1] - self.gy[0])
         return v, dx, dy
 
-    def project(self, Q, s0=None, iters=6):
-        """Q：N×3（镜头坐标 mm）。返回 (sx, sy, valid)。s0：初值（如当前像素的传感器坐标），缺省用小孔近似。"""
+    def _interp4(self, sx, sy):
+        """Ax、Bx、Ay、By 四张表在同一批点上的值与偏导（下标、权重只算一次）。"""
+        hx, hy = self.gx[1] - self.gx[0], self.gy[1] - self.gy[0]
+        fx = (sx - self.gx[0]) / hx; fy = (sy - self.gy[0]) / hy
+        ix = np.clip(np.floor(fx).astype(np.int64), 0, len(self.gx) - 2); iy = np.clip(np.floor(fy).astype(np.int64), 0, len(self.gy) - 2)
+        tx, ty = fx - ix, fy - iy
+        out = []
+        for F in (self.Ax, self.Bx, self.Ay, self.By):
+            f00, f10, f01, f11 = F[iy, ix], F[iy, ix + 1], F[iy + 1, ix], F[iy + 1, ix + 1]
+            v = (f00 * (1 - tx) + f10 * tx) * (1 - ty) + (f01 * (1 - tx) + f11 * tx) * ty
+            dx = ((f10 - f00) * (1 - ty) + (f11 - f01) * ty) / hx
+            dy = ((f01 - f00) * (1 - tx) + (f11 - f10) * tx) / hy
+            out.append((v, dx, dy))
+        return out
+
+    def project(self, Q, s0=None, iters=6, tol=1e-7):
+        """Q：N×3（镜头坐标 mm）。返回 (sx, sy, valid)。s0：初值（如当前像素的传感器坐标），缺省用小孔近似。
+        0.8.6：四张表一起插值；牛顿步长 < tol（mm，约 2e-5 像素）的点不再迭代——结果与固定迭代相同（差 < tol）。"""
         Q = np.asarray(Q, np.float64)
         z = Q[:, 2]
         if s0 is None:
-            bx = self._interp(self.Bx, np.zeros(1), np.zeros(1))[1][0]
             sx = np.zeros(len(Q)); sy = np.zeros(len(Q))
         else:
             sx, sy = (np.array(s0[0], np.float64), np.array(s0[1], np.float64))
+        act = np.arange(len(Q))
         for _ in range(iters):
-            ax, axx, axy = self._interp(self.Ax, sx, sy); bx_, bxx, bxy = self._interp(self.Bx, sx, sy)
-            ay, ayx, ayy = self._interp(self.Ay, sx, sy); by_, byx, byy = self._interp(self.By, sx, sy)
-            fx = ax + z * bx_ - Q[:, 0]; fy = ay + z * by_ - Q[:, 1]
-            j11, j12 = axx + z * bxx, axy + z * bxy
-            j21, j22 = ayx + z * byx, ayy + z * byy
+            if not len(act):
+                break
+            xs, ys, za = sx[act], sy[act], z[act]
+            (ax, axx, axy), (bx_, bxx, bxy), (ay, ayx, ayy), (by_, byx, byy) = self._interp4(xs, ys)
+            fx = ax + za * bx_ - Q[act, 0]; fy = ay + za * by_ - Q[act, 1]
+            j11, j12 = axx + za * bxx, axy + za * bxy
+            j21, j22 = ayx + za * byx, ayy + za * byy
             det = j11 * j22 - j12 * j21
             det = np.where(np.abs(det) < 1e-12, 1e-12, det)
-            sx = sx - (j22 * fx - j12 * fy) / det
-            sy = sy - (-j21 * fx + j11 * fy) / det
-            sx = np.clip(sx, self.gx[0], self.gx[-1]); sy = np.clip(sy, self.gy[0], self.gy[-1])
-        ax = self._interp(self.Ax, sx, sy)[0] + z * self._interp(self.Bx, sx, sy)[0]
-        ay = self._interp(self.Ay, sx, sy)[0] + z * self._interp(self.By, sx, sy)[0]
-        resid = np.hypot(ax - Q[:, 0], ay - Q[:, 1])
+            nx_ = np.clip(xs - (j22 * fx - j12 * fy) / det, self.gx[0], self.gx[-1])
+            ny_ = np.clip(ys - (-j21 * fx + j11 * fy) / det, self.gy[0], self.gy[-1])
+            moved = np.abs(nx_ - xs) + np.abs(ny_ - ys)
+            sx[act], sy[act] = nx_, ny_
+            act = act[~(moved < tol)]                       # NaN 的照常留着（与原来一样最后判无效）
+        (ax, _, _), (bx_, _, _), (ay, _, _), (by_, _, _) = self._interp4(sx, sy)
+        resid = np.hypot(ax + z * bx_ - Q[:, 0], ay + z * by_ - Q[:, 1])
         valid = (z > 0) & (resid < 1e-3 * np.maximum(1.0, np.abs(z)) )
         return sx, sy, valid

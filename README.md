@@ -29,6 +29,13 @@ Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same cam
 
 ---
 
+## What's new in 0.8.6: wide anamorphic (MessyRoom Day 5)
+
+- **Laowa-style 2× wide 29 mm**, a real modern 2× wide anamorphic from CN 112285889 B (cylinders in the middle, not a front attachment). Scaled to a 21–28 mm framing on a 16:9 native gate, it has about −6% edge distortion against −58% for the C-style, and vertical lines bend 17–43 px at 4K against 101 px.
+- **Coverage and distortion report**: `bl.coverage(cam)` / `bl.lens_info(cam, coverage=True)` / `blcli.py info --coverage` give the image circle versus the gate diagonal, corner relative illumination (same estimator as the render, within 0.02), horizontal and vertical distortion, the 4K bow of a vertical line at the frame edge, and current versus maximum covered field.
+- **Faster without any quality loss**: tighter pupil sampling boxes (about 10% more useful samples, still unbiased), 2.2× faster motion-vector projection, 5× faster hole filling, BVH ray casts for reflection vectors, exact surface intersections in the flare tracer. 4K post-processing 17 → 12 s per frame.
+- **Build warnings**: `bl.build` now warns (console, `lens_info`, `diagnose`) when the scaled lens cannot cover the gate instead of silently producing a porthole.
+
 ## What's new in 0.8.5: a rainy convenience store (MessyRoom Day 5)
 
 - **Vectors and depth through glass**: shop windows, doors and fridge doors (Principled transmission ≥ 0.9 and roughness ≤ 0.1, Glass BSDF, or `bl_pass_through`) no longer give everything behind them the glass's motion. `BL_Vector` / `Depth` take the first non-transmissive hit; the glass itself goes to `BL_VectorSurface` / `BL_DepthSurface`; confidence behind glass drops by the reflection share.
@@ -104,12 +111,12 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.8.5.zip`](dist/blenderlens-0.8.5.zip) from this repository.
+1. Download [`dist/blenderlens-0.8.6.zip`](dist/blenderlens-0.8.6.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.5.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.6.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.
@@ -252,6 +259,7 @@ The complete reference (every parameter, FAQ, known limitations) is [`blenderlen
 | **G-style 100 mm (2007)** | Same optics as E-style, scaled by 0.763 | vertical 100 mm · f/3 · 0.91 m | 2.094 → 2.094 (corrected, default); uncorrected 1.652 (−21%) | G Series 100 mm T3, close focus 91.4 cm, "excellent glare resistance" |
 | **Panavision rear 1.34× (real prescription)** | [US 7,085,066](https://patents.google.com/patent/US7085066B2/en) (Iain A. Neil / Panavision 2004) as published: zoom at the wide end + an 8-element rear anamorphic group (3 Y-cylinders + 5 X-cylinders), 2 aspheres | horizontal 15.8 / vertical 20.7 mm · f/3.66 · 0.48 m | 1.304 → 1.304 (no mumps) | Patent embodiment: 16:9 gate desqueezed to 2.40:1 |
 | **Neil 2× modern anamorphic 50 / 65 / 85 mm (real prescription, 0.6)** | [CN 111562632 B](https://patents.google.com/patent/CN111562632B/en) (Iain A. Neil / Guangdong Sirui Optical, 2019) as published: one shared front anamorphic section (3 X-cylinders, 3 Y-cylinders, two-element G1b internal focus) + three interchangeable rear groups. **The tables in the US family member US 11,287,618 contain many misprints and cannot be used** (see `blenderlens/research/RESEARCH.md`) | vertical 50 / 65 / 85 mm · f/3 · 1.08 m | 2.06 → 1.93 (−6.6%) | Patent embodiment (not a Panavision lens; same designer as the Panavision rear group) |
+| **Laowa-style 2× wide 29 mm (real prescription, 0.8.6)** | [CN 112285889 B](https://patents.google.com/patent/CN112285889B/zh) example 1 (Venus Optics / Laowa, 2020): negative front group (one element focuses) → Y-cylinder group → X-cylinder group → rear group with the stop; only nd / Vd and no apertures are published (apertures estimated and capped to real edge thicknesses) | horizontal 14.6 / vertical 29.0 mm · f/2.9 · 1.68 m | 1.99 → 1.99 (internal focus) | Patent embodiment; the wide option: covers 16:9_NATIVE from about 25 mm "framing" with −6% edge distortion |
 | **Panavision rear 1.34×, tele end (real prescription)** | As above, zoom at the tele end Z4 (zoom spacings from [US 6,122,111](https://patents.google.com/patent/US6122111A/en) TABLE 1, applied to the verified Z1 table) | horizontal 50.9 / vertical 66.4 mm · f/4.1 (vertical) · 0.48 m | 1.305 → 1.305 (no mumps) | Zoom alone 49.22 mm (patent 49.2) |
 
 - **Common focal length**: set "Vertical Focal Length" at Build to scale any preset to the same vertical focal length (squeeze, f-number and aberration character unchanged; presets with estimated apertures are re-estimated for the new field of view). The Isco attachment (E/G) exceeds its design field below about 100 mm, so 100 mm is the common focal length at which all presets are physically valid.

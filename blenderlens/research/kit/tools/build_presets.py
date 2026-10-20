@@ -475,6 +475,132 @@ def neil_sirui(fl):
     return rx
 
 
+# ───────── CN 112285889 B（安徽长庚光学 / Venus Optics Laowa，李大勇，2020 申请、2024 授权）实施例 1 ─────────
+# 2× 一体式变形广角：负屈光度第一组 G1（最后一片负透镜移动对焦）→ Y 向柱面组 G2 → X 向柱面组 G3 → 含光阑的正第四组 G4。
+# 专利：Fx 14.59 / Fy 29.03 mm、Fno 2.9、半画角 ωx 41.5° / ωy 16.7°（真实主光线：像面 24.0 × 17.6 mm，S35 级）。
+# 表是图片（说明书 [0057]–[0059]，PDF 第 6–7 页），逐位对照页面图像转录；表头列序为 Ns、Ry、Rx、D、Nd、ABV（Ry 在前）。
+# 只给 Nd / Vd（无牌号、无口径、无非球面）→ 两项 Cauchy 色散、口径由 optics.apply_apertures 估算。
+LAOWA_EX1 = [   # (面, Ry, Rx, D, Nd, Vd)；Nd 为该面之后的介质
+    (1, 93.899, 93.899, 1.800, 1.92103, 21.34), (2, 53.423, 53.423, 8.144, None, None),
+    (3, 142.045, 142.045, 7.629, 1.91241, 25.00), (4, -469.695, -469.695, 0.150, None, None),
+    (5, 95.141, 95.141, 1.500, 1.89598, 30.91), (6, 39.132, 39.132, "D6", None, None),
+    (7, -477.362, -477.362, 1.500, 1.90300, 40.80), (8, 77.321, 77.321, "D8", None, None),
+    (9, 40.196, None, 17.000, 1.88255, 38.93), (10, -47.909, None, 1.500, 1.84126, 24.37), (11, 176.465, None, 27.920, None, None),
+    (12, -21.485, None, 1.200, 1.49700, 81.61), (13, -34.203, None, 3.000, None, None),
+    (14, None, -20.480, 7.563, 1.90864, 21.13), (15, None, -35.748, 0.150, None, None),
+    (16, None, -47.914, 2.286, 1.49700, 81.61), (17, None, -26.179, 0.500, None, None),
+    (18, -80.348, -80.348, 1.244, 1.60342, 38.01), (19, 40.098, 40.098, 1.138, None, None),
+    (20, -244.499, -244.499, 2.272, 1.81799, 23.81), (21, -49.219, -49.219, 0.150, None, None),
+    ("STOP", None, None, 3.525, None, None),
+    (23, 22.183, 22.183, 4.000, 1.90366, 31.31), (24, 392.186, 392.186, 12.645, None, None),
+    (25, -20.218, -20.218, 2.471, 1.69895, 30.05), (26, 33.179, 33.179, 1.155, None, None),
+    (27, -86.126, -86.126, 1.200, 1.80610, 33.27), (28, 18.735, 18.735, 5.026, 1.69680, 55.46), (29, -21.152, -21.152, 0.150, None, None),
+    (30, 31.919, 31.919, 5.667, 1.72916, 54.67), (31, -17.131, -17.131, 1.172, 1.68893, 31.16), (32, 201.032, 201.032, 38.850, None, None),
+]
+LAOWA_FOCUS = {"inf": (16.279, 4.000), 1500.0: (15.414, 4.865)}     # D(6)、D(8)；物体距离（物面到第一面，mm）
+
+
+def _cap_apertures_to_edges(rx, min_glass=0.3, min_air=0.0, step=0.97, iters=400):
+    """专利没给口径时，apply_apertures 按光线估的口径可能超出镜片能做到的范围（两面在口径内相交 = 边厚为负）。
+    把这样的镜片（含胶合件）口径按比例收回，直到 ∞ 与最近对焦时玻璃边厚 ≥ min_glass、空气间隙 ≥ min_air。
+    收回的口径会让角落多一点机械渐晕——这是这支镜头真实的样子。→ {镜片: 收回后的比例}。"""
+    by_id = {sf["id"]: sf for g in rx["groups"] for sf in g["surfaces"]}
+    el_of = {}
+    for ids in O.element_groups(rx):
+        for i in ids:
+            el_of[i] = ids
+    states = [(0.0, 0.0)]
+    md = rx.get("focus", {}).get("min_distance_mm")
+    if md:
+        states.append(O.solve_focus(rx, md))
+    scale = {}
+    def shrink(sid):
+        ids = el_of.get(sid, [sid])
+        for i in ids:
+            a = by_id[i].get("aperture")
+            if not a:
+                continue
+            for k in ("semi_x", "semi_y", "clear", "outer"):
+                if a.get(k):
+                    a[k] = round(a[k] * step, 4)
+        key = "+".join(ids); scale[key] = round(scale.get(key, 1.0) * step, 4)
+    for _ in range(iters):
+        bad = []
+        for d1, d2 in states:
+            for e in O.edge_report(rx, d1, d2):
+                lim = min_glass if e["kind"] == "glass" else min_air
+                if e["min_gap"] < lim:
+                    bad.append((e["min_gap"] - lim, e["between"]))
+        if not bad:
+            break
+        _, between = min(bad)
+        a_id, b_id = between.split("→")
+        ra = max(v or 0 for v in O._outer_extent(next(sf for sf in O.layout(rx) if sf["id"] == a_id)))
+        rb = max(v or 0 for v in O._outer_extent(next(sf for sf in O.layout(rx) if sf["id"] == b_id)))
+        shrink(a_id if ra >= rb else b_id)               # 收回口径较大的那一侧
+    return scale
+
+
+def laowa_2x():
+    glasses = {"air": {"nd": 1.0, "vd": None}}
+    def glass(nd, vd):
+        key = f"LW_{int(round(nd * 1e5))}_{int(round(vd * 100))}"
+        glasses[key] = {"nd": nd, "vd": vd, "note": "专利只给 Nd / Vd（两项 Cauchy）"}
+        return key
+    front, rear, stop, cur = [], [], None, None
+    cur = front
+    d6, d8 = LAOWA_FOCUS["inf"]
+    for sid, ry, rx_, d, nd, vd in LAOWA_EX1:
+        if sid == "STOP":
+            stop = {"after_surface": cur[-1]["id"], "offset_mm": cur[-1]["d"], "f_number": 2.9,
+                    "note": "光阑（专利第 22 面）；专利没给孔径，按 Fno 2.9（垂直截面近轴）定"}
+            cur[-1]["d"] = round(cur[-1]["d"] + d, 4)
+            cur = rear
+            continue
+        dd = {"D6": d6, "D8": d8}.get(d, d)
+        cyl = "YCyl" if rx_ is None else ("XCyl" if ry is None else "Sph")
+        cur.append({"id": f"L{sid}", "R_x": rx_, "R_y": ry, "d": dd, "medium": glass(nd, vd) if nd else "air", "shape": cyl})
+    src = {"patent": "CN 112285889 B — 李大勇，一种变形宽荧幕镜头及具有其的数码摄影机（安徽长庚光学科技 / Venus Optics Laowa），2020 申请、2024 授权，实施例 1",
+           "url": "https://patents.google.com/patent/CN112285889B/zh",
+           "pdf": "https://patentimages.storage.googleapis.com/23/f1/bc/d576b5493f6c1a/CN112285889B.pdf",
+           "table": "说明书 [0057]–[0059]（PDF 第 6–7 页，表为图片，逐位对照转录）",
+           "patent_values": {"Fx": 14.59, "Fy": 29.03, "Fno": 2.9, "omega_x_deg": 41.5, "omega_y_deg": 16.7, "bfl": 38.85,
+                             "focus_table": {"inf": list(LAOWA_FOCUS["inf"]), "1500": list(LAOWA_FOCUS[1500.0])}}}
+    conv = json.load(open(os.path.join(PDIR, "c_series_style.json"), encoding="utf-8"))["meta"]["conventions"]
+    meta = {"name": "Laowa 风格 2× 广角变形 29 mm（CN 112285889 B 实施例 1，f/2.9）",
+            "short_name": "Laowa 2× 广角 29 mm（真实处方）", "order": 9,
+            "tagline": "现代一体式 2× 广角变形：负前组 + 中间 Y / X 柱面组 + 后组光阑；广角下畸变小、覆盖 S35",
+            "note": "专利实施例原样收录（是否为某款市售镜头未知）。柱面在中间（不是前置附加镜），广角时比 C 风格的前置变形器畸变小得多。"
+                    "专利未给口径与玻璃牌号：口径按 apply_apertures 估算（角落放行 0.6），色散按 Nd / Vd 两项 Cauchy。",
+            "units": "mm", "conventions": conv}
+    rx = {"meta": meta, "glasses": glasses,
+          "groups": [{"id": "front", "role": "G1 负前组（L7–L8 移动对焦）+ G2 Y 向柱面组 + G3 X 向柱面组 + G4 前半", "scale": 1.0,
+                      "surfaces": front, "source": src},
+                     {"id": "rear", "role": "G4 后半（光阑之后）", "scale": 1.0, "f_number": 2.9, "stop": stop, "surfaces": rear}],
+          "image_distance_mm": rear[-1]["d"],
+          "anamorphic": {"desqueeze": 2.0, "type": "integrated",
+                         "note": "近轴 Fy/Fx = 1.99（专利 29.03 / 14.59）；按 2.0 解挤压"},
+          "look": {"reference": "专利实施例 1；成品镜头规格未公开", "f_number": 2.9, "coating": "BROADBAND", "coating_nm": 94.0,
+                   "flare_color": "PHYSICAL", "flare_gain": 1.0, "veiling_glare": 0.01, "corner_pupil_fraction": 0.6},
+          "focus": {"mechanism": "G1 最靠像面的一片负透镜（L7–L8）移动：D(6) 减小、D(8) 增大同样多（专利 ∞ 16.279 / 4.000，1500 mm 15.414 / 4.865）",
+                    "groups": [{"ids": ["L7", "L8"], "moves": [1, 0]}], "solve": ["Ry"], "min_distance_mm": None},
+          "sensor": {"format": "专利像面：按主光线追迹，半画角 ωx 41.5° / ωy 16.7° 落在 ±12.0 / ±8.8 mm → 24.0 × 17.6 mm（S35 级）",
+                     "width": 24.0, "height": 17.6}}
+    rx = O.normalize(rx)
+    z1 = O.layout(rx)[0]["z"]
+    rx["focus"]["min_distance_mm"] = round(1500.0 + z1, 1)          # 专利近摄表：物面到第一面 1500 mm
+    rx["look"]["min_focus_mm"] = rx["focus"]["min_distance_mm"]
+    rx, info = O.apply_apertures(rx)
+    shrunk = _cap_apertures_to_edges(rx, min_glass=0.3, min_air=0.0)
+    if shrunk:
+        print("laowa_2x_29: 口径按边厚收回：", shrunk)
+    O.save(rx, os.path.join(PDIR, "laowa_2x_29.json"))
+    S = O.layout(rx)
+    print(f"laowa_2x_29.json: EFL_x {O.paraxial_infinity(S, 'Rx')[0]:.3f}  EFL_y {O.paraxial_infinity(S, 'Ry')[0]:.3f}  "
+          f"BFL_y {O.paraxial_infinity(S, 'Ry')[1]:.3f}  光阑 r {info['r_stop']:.3f}")
+    return rx
+
+
 if __name__ == "__main__":
     conv = json.load(open(os.path.join(PDIR, "c_series_style.json"), encoding="utf-8"))["meta"]["conventions"]
     # Isco 附加镜为长焦设计（原尺寸配 f=100 主镜：垂直 131 mm、水平 62.7 mm，S35 变形画幅垂直半视场约 4°）。
@@ -501,6 +627,7 @@ if __name__ == "__main__":
     panavision_rear("Z4")
     for fl in (50, 65, 85):
         neil_sirui(fl)
+    laowa_2x()
     for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json"):   # C 是手工维护的 JSON，这一步幂等
         add_compensator_file(fn)
     for fn in ("e_series_style.json", "panavision_rear_134.json", "panavision_rear_134_tele.json",

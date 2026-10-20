@@ -114,7 +114,7 @@ def pupil_table(rx):
 
 _DATA_KEYS = ("S", "z_exp", "r_exp", "z_stop", "r_stop", "NS", "Z", "CX", "CY", "KX", "KY", "A_", "B_", "CLR", "MSX", "MSY",
               "AS", "G1", "G2", "CO", "AG", "NPAIRS", "SG1", "SG2", "W", "H", "N0", "sources", "SPEC", "T0", "PNX", "PNY", "PB",
-              "AT", "AC", "AMX", "AMY", "C_", "E_", "ND", "KCX", "KCY")
+              "AT", "AC", "AMX", "AMY", "C_", "E_", "ND", "KCX", "KCY", "PM")
 
 def lens_data(rx, importance=True):
     """OSL 相机与 GPU 内核（gpugen）共用的处方数据：同一份数组，两边结果才能逐像素对得上。"""
@@ -168,15 +168,17 @@ def lens_data(rx, importance=True):
         PNX, PNY = T["NX"], T["NY"]
         PB = [list(T[k].ravel()) for k in ("X0", "X1", "Y0", "Y1")]     # 下标 ix * NY + iy
     else:
+        T = pupil_table(rx)                                               # 不用盒也要它的采样盘大小
         PNX, PNY = 2, 2
         PB = [[-1e3] * 4, [1e3] * 4, [-1e3] * 4, [1e3] * 4]
+    PM = round(float(T["r_samp"]) / r_exp, 6)                             # 0.8.6：采样盘 / 近轴出瞳（每支镜头自己的，≥ 1.4）
     loc = locals()
     return {k: loc[k] for k in _DATA_KEYS}
 
 def generate(rx, name="blenderlens_camera", importance=True):
     D = lens_data(rx, importance)
     (S, z_exp, r_exp, z_stop, r_stop, NS, Z, CX, CY, KX, KY, A_, B_, CLR, MSX, MSY, AS, G1, G2, CO, AG, NPAIRS,
-     SG1, SG2, W, H, N0, sources, SPEC, T0, PNX, PNY, PB, AT, AC, AMX, AMY, C_, E_, ND, KCX, KCY) = (D[k] for k in _DATA_KEYS)
+     SG1, SG2, W, H, N0, sources, SPEC, T0, PNX, PNY, PB, AT, AC, AMX, AMY, C_, E_, ND, KCX, KCY, PM) = (D[k] for k in _DATA_KEYS)
 
     src = f"""// 自动生成：{rx['meta']['name']}
 // 来源处方：{sources}
@@ -272,7 +274,7 @@ shader {name}(
   float comp_phi = 0.0 [[ string help = "发腮补偿板的光焦度 φ（1/mm，水平 −φ、垂直 +φ），由插件按对焦距离写入" ]],
   int dispersion = 1 [[ string widget = "checkBox", string help = "三波长色散（仅 Analytic）" ]],
   int exposure_compensate = 1 [[ string widget = "checkBox", string help = "收光圈时补偿曝光（关闭 = 物理 T 值变暗）" ]],
-  float pupil_margin = 1.4 [[ float min = 1.0, float max = 3.0, string help = "出瞳采样盘相对近轴出瞳的放大倍数" ]],
+  float pupil_margin = {PM:.6g} [[ float min = 1.0, float max = 3.0, string help = "出瞳采样盘相对近轴出瞳的放大倍数（0.8.6：按镜头自动，广角时 > 1.4）" ]],
   int ghosts = 0 [[ string widget = "checkBox", string help = "序列鬼影追迹（两次反射，炫光/一字拉丝；仅 Analytic）" ]],
   float ghost_fraction = 0.5 [[ float min = 0.05, float max = 0.95, string help = "走鬼影路径的采样比例" ]],
   float ghost_gain = 1.0 [[ float min = 0.0, float max = 1000.0, string help = "鬼影增益（1 = 物理正确）" ]],
@@ -323,7 +325,7 @@ shader {name}(
   float ex = 0.0, ey = 0.0, area_w = 1.0;
   int use_box = 0;
   float bx0 = 0.0, bx1 = 0.0, by0 = 0.0, by1 = 0.0;
-  if (pupil_importance && mode == 0 && !ghosts && fabs(pupil_margin - 1.4) < 1e-4) {{
+  if (pupil_importance && mode == 0 && !ghosts && fabs(pupil_margin - {PM:.6g}) < 1e-4) {{
     // 出瞳重要性采样：按 |sx|、|sy| 在象限表里双线性插值得到通光区的包围盒，镜像到本象限，
     // 再夹到当前光圈的采样盘的外接正方形里；盒内均匀采样，盘外照旧算挡光。权重 × 盒面积 / 盘面积 → 无偏。
     float fx = fabs(sx) / (0.5 * SENSOR_W) * (PNX - 1), fy = fabs(sy) / (0.5 * SENSOR_H) * (PNY - 1);

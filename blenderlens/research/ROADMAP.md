@@ -32,6 +32,11 @@
 | 8.6 | **Geometry 模式亚像素平移**（旧问题 §7.2） | 单片透镜复现 → 查像素中心约定 | 偏移 < 0.05 px | 小 |
 | 8.7 | **外部数据回归** | 新测试 `test_reference.py`：前置预设的散景高宽比随离焦趋向挤压比；后置 PV 1.34× 散景接近圆（ASC / FDTimes 的定性结论）；呼吸方向以垂直为主（E 系列、Hawk 的描述）；最近对焦距离与 Panavision 公布值比对 | 全部通过或在文档里解释差异 | 小 |
 
+## 0.8.6 —— 广角变形（2026-10-19 完成，MessyRoom Day 5 W1–W3，见 RESEARCH.md §6.16、HANDOFF §6.10）
+
+W1 ✅ Laowa 2× 广角预设（CN 112285889 B 实施例 1）：16:9_NATIVE 下取景 25 mm 起覆盖，4K 竖线弯曲为 C 风格的 17%（取景 25.5 vs 21）。W2 ✅ `bl.coverage`（像圈、四角照度、畸变、竖线弯曲、视场），与渲染差 ≤ 0.02。W3 ✅ build / diagnose 警告。同版本另做了不牺牲质量的提速：出瞳采样盒边界加密（有效采样 +10%）、矢量投影 2.2×、补洞 5×、倒影 BVH、炫光解析求交（HANDOFF §6.10）。W4（畸变强度参数）没做：W1 用真实光学解决了，后期反畸变会牵动所有渲染层与矢量，等真有需要再做。
+同一专利族的 CN 117270168 A 实施例 3 是 2× 广角变焦（Fy 26.8–43.2，广端 ωy 22°），比实施例 1 更广，表是图片且有换行，转录工作量大——下一个广角候选。
+
 ## 0.8.5 —— 便利店雨夜（2026-10-19 完成，MessyRoom Day 5 的 R1–R6，见 RESEARCH.md §6.15、HANDOFF §6.9）
 
 R1 ✅ 矢量 / 深度穿过透射面（辅助数据渲染，BL_VectorSurface / BL_DepthSurface，置信度按反射占比）。R2 ✅ 排除层 BL_Exclude（雨不进场景层、不被时间平均）。R3 ✅ `render_sequence` + `shots_from_markers` + `blcli sequence`（同一进程多支镜头；修了 render_shot 搭镜头时改掉场景渲染设置的问题）。R4 ✅ pinhole 曝光补偿乘到 film_exposure 曲线上。R5 ✅ `focus_track`（跟随 + 拉焦）。R6 ✅ 平面反射体的倒影矢量 BL_VectorReflection + BL_ReflectionShare。

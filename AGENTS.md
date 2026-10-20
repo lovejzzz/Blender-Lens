@@ -46,6 +46,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `blenderlens/rig.py` | 在场景里搭镜头、每帧同步（`apply_settings`）、渲染后期、多层 EXR（`render_frame_multilayer`、`bl_vector`） | 是 |
 | `blenderlens/passes.py` / `focus.py` / `temporal.py` | 多层 EXR 读写（0.8.4：流式、half / DWAB、`temporal` 预设）/ 对焦助手与景深 / 闪烁检查（locked / moving） | 部分 |
 | `blenderlens/motion.py` / `denoise.py` / `shot.py` | 运动补偿工具（纯 numpy）/ 时间降噪 / 一条命令渲一个镜头（0.8.4） | 否 / 否 / 是 |
+| `blenderlens/coverage.py` | 覆盖与畸变报告（0.8.6）：与 Analytic 渲染同一估计器的相对照度、像圈、畸变、竖线弯曲 | 否 |
 | `blenderlens/agent.py` / `api.py` / `ui.py` | AI 接口 / 稳定脚本接口 / 面板与属性 | 是 |
 | `tools/build_presets.py` | 从专利转录数据生成 E/G/Panavision/Neil 处方，并给 C/E/G 加补偿板 | 否 |
 | `tools/build_pupil_tables.py` | 预设出瞳表（改了处方的光学部分或 `pupil.py` 后必须重跑） | 否 |
@@ -79,6 +80,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 - `bl.build` 会套 `render_preset`（设备改 CPU、弹射数……）：在别人的生产场景里搭镜头后要把渲染设置换回去（render_shot 已处理）。
 - 辅助数据渲染至少 8 采样：Cryptomatte 按全部采样累积，1 采样时和 Position 一样有洞，补洞认不出物体。
 - 要逐像素比对的输出用无损压缩（PIZ / ZIP）；`temporal` 预设默认的 DWAB 有损。
+- 判断渐晕 / 覆盖要用与 Analytic 渲染同一判据（`coverage.py` / `pupil._passes`）；`optics.pupil_transmission` 和 Geometry 模式会放过「两面在口径内相交」的光线。
 - 跑长任务（Blender 测试、整套测试）放后台；Geometry 模式 CPU 渲染很慢。
 
 ## 看图
