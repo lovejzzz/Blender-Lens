@@ -601,6 +601,111 @@ def laowa_2x():
     return rx
 
 
+# ───────── CN 118169848 A（广东思锐光学 / 中山亚众光电，2022-12-08 申请）：全画幅超广角大倍率变形镜头 ─────────
+# 同日的实用新型 CN 218886282 U 是同一设计。Y 向焦距 35 mm、变倍比 1.6×、全画幅、2.4:1 画面（= 36 × 1.6 / 24）、
+# 18 片 13 组、58 mm 滤镜、< 420 g、长 < 103 mm、内对焦（第 2–3 片）0.7 m–∞——与市售 Sirui Saturn 35 mm T2.9 1.6× 全画幅
+# （18 片 13 组、58 mm、415 g、102 mm）逐项吻合。表 1 是图片（说明书 [0066]，PDF 第 9 页），按 4 倍放大的页面逐位转录；
+# 列序：透镜、面型、Y 半径、X 半径、厚度、折射率、阿贝数（Y 在前）。只给 nd / vd（三位 / 一位小数），没有口径、没有后截距。
+# 第 4–6 片是 X 向柱面（第一柱面组，水平压缩），第 16–17 片是 Y 向柱面；第 18 片两面偶次非球面（表 2）。
+SIRUI_FF35 = [   # (面, Ry, Rx, D, nd, vd)；nd 为该面之后的介质；None = 平面（Inf）
+    (1, 99.430, 99.430, 2.400, 1.787, 47.7), (2, 28.754, 28.754, "D2", None, None),
+    (3, -308.34, -308.34, 2.000, 1.886, 19.4), (4, 70.370, 70.370, 0.200, None, None),
+    (5, 45.955, 45.955, 6.441, 1.919, 28.9), (6, -137.35, -137.35, "D6", None, None),
+    (7, None, -61.867, 2.400, 1.516, 67.1), (8, None, 20.821, 7.88, None, None),
+    (9, None, -65.393, 5.01, 1.730, 23.4), (10, None, 24.333, 7.866, 1.915, 31.3), (11, None, -42.382, 0.300, None, None),
+    (12, 46.577, 46.577, 3.11, 1.921, 27.5), (13, None, None, 1.382, None, None),
+    (14, -49.587, -49.587, 1.300, 1.561, 39.3), (15, 29.534, 29.534, 6.995, 1.804, 46.6), (16, -15.095, -15.095, 1.300, 1.851, 28.2),
+    (17, None, None, 3.00, None, None),
+    ("STOP", None, None, 1.176, None, None),
+    (18, 22.109, 22.109, 3.544, 1.946, 18.0), (19, -87.010, -87.010, 0.640, None, None),
+    (20, 48.705, 48.705, 1.300, 1.676, 26.3), (21, 14.131, 14.131, 3.180, None, None),
+    (22, -18.318, -18.318, 1.300, 1.905, 18.7), (23, 13.228, 13.228, 5.528, 1.804, 46.6), (24, -50.491, -50.491, 0.200, None, None),
+    (25, 34.084, 34.084, 3.184, 1.946, 17.9), (26, 164.133, 164.133, 0.502, None, None),
+    (27, 38.661, None, 5.61, 1.670, 33.2), (28, -24.310, None, 2.20, 1.760, 50.0), (29, 33.557, None, 3.614, None, None),
+    (30, 80.037, 80.037, 2.413, 1.807, 41.0), (31, 108.986, 108.986, "BFL", None, None),
+]
+SIRUI_FF35_ASPH = {30: (-7.8997, [-1.0e-4, -7.424e-7, 8.484e-10, -3.4404e-13]),     # 表 2：面 1 / 面 2（第十八透镜）
+                   31: (7.9691, [-6.0433e-5, -7.6463e-7, 3.8716e-9, -6.1160e-12])}
+SIRUI_FF35_FOCUS_IDS = ["S3", "S4", "S5", "S6"]                                     # 第 2–3 片（内对焦组）
+
+
+def sirui_ff35():
+    glasses = {"air": {"nd": 1.0, "vd": None}}
+    def glass(nd, vd):
+        key = f"SR_{int(round(nd * 1e3))}_{int(round(vd * 10))}"
+        glasses[key] = {"nd": nd, "vd": vd, "note": "专利只给 nd / vd（两项 Cauchy）"}
+        return key
+    front, rear, stop, cur = [], [], None, None
+    cur = front
+    for sid, ry, rx_, d, nd, vd in SIRUI_FF35:
+        if sid == "STOP":
+            stop = {"after_surface": cur[-1]["id"], "offset_mm": cur[-1]["d"], "f_number": 2.9,
+                    "note": "光阑（专利表 1「光阑」行：第十透镜后 3.00 mm、距第十一透镜 1.176 mm）；专利没给孔径，"
+                            "按市售 Sirui Saturn 35 mm 的 T2.9 取 f/2.9（垂直截面近轴）"}
+            cur[-1]["d"] = round(cur[-1]["d"] + d, 4)
+            cur = rear
+            continue
+        dd = {"D2": 8.490, "D6": 4.554, "BFL": 30.0}.get(d, d)        # BFL 先占位，下面按 Y 向近轴像面求出
+        cyl = "YCyl" if rx_ is None and ry is not None else ("XCyl" if ry is None and rx_ is not None else "Sph")
+        sf = {"id": f"S{sid}", "R_x": rx_, "R_y": ry, "d": dd, "medium": glass(nd, vd) if nd else "air", "shape": cyl}
+        if sid in SIRUI_FF35_ASPH:
+            K, A = SIRUI_FF35_ASPH[sid]
+            sf["k"] = K; sf["asph"] = A; sf["shape"] = "Asph"
+        cur.append(sf)
+    src = {"patent": "CN 118169848 A — 全画幅超广角大倍率变形镜头（广东思锐光学 / 中山亚众光电，2022-12-08 申请，2024-06-11 公开）；"
+                     "同日实用新型 CN 218886282 U（2023-04-18 授权）为同一设计",
+           "url": "https://patents.google.com/patent/CN118169848A/zh",
+           "pdf": "https://patentimages.storage.googleapis.com/16/50/78/11e8f07caa79eb/CN118169848A.pdf",
+           "table": "说明书 [0066] 表 1、[0068] 表 2（PDF 第 9 页，表为图片，按 4 倍放大逐位转录）",
+           "patent_values": {"Fy": 35.0, "squeeze": 1.6, "picture": "2.4:1", "format": "全画幅",
+                             "claims": {"fY": [33.0, 37.0], "fX": [20.6, 23.2], "fY/fX": [1.55, 1.65],
+                                        "f(2-3)X/f(1-10)Y": [1.00, 1.30], "f(1-3)X/f(4-10)Y": [-3.0, -2.2],
+                                        "f(1-10)X/f(11-18)Y": [0.50, 0.55]},
+                             "min_object_image_mm": 700.0, "filter_mm": 58, "mass_g": "< 420", "length_mm": "< 103"},
+           "product": "Sirui Saturn 35 mm T2.9 1.6× 全画幅（18 片 13 组、58 mm 滤镜、E 口 415 g、长 102 mm、最近对焦 0.9 m）——规格与专利逐项吻合"}
+    conv = json.load(open(os.path.join(PDIR, "c_series_style.json"), encoding="utf-8"))["meta"]["conventions"]
+    meta = {"name": "Sirui 风格 1.6× 全画幅广角变形 35 mm（CN 118169848 A，T2.9）",
+            "short_name": "Sirui 1.6× 全画幅 35 mm（真实处方）", "order": 10,
+            "tagline": "原生全画幅（36 × 24）的 1.6× 一体式广角变形：前球面组 + X 向柱面组 + 光阑 + Y 向柱面组 + 非球面；全画幅出 2.4:1",
+            "note": "专利实施例原样收录；与市售 Sirui Saturn 35 mm T2.9 1.6× 规格逐项吻合（是否完全相同未经厂方确认）。"
+                    "专利未给口径、后截距与玻璃牌号：口径按 apply_apertures 估算（角落放行 0.6）并按真实边厚收回，后截距取 Y 向近轴像面，色散按 nd / vd 两项 Cauchy。",
+            "units": "mm", "conventions": conv}
+    rx = {"meta": meta, "glasses": glasses,
+          "groups": [{"id": "front", "role": "第一球面组（S1–S6，第 2–3 片内对焦）+ 第一柱面组 X 向（S7–S11）+ 第二球面组前半（S12–S17）",
+                      "scale": 1.0, "surfaces": front, "source": src},
+                     {"id": "rear", "role": "第二球面组后半（光阑之后）+ 第二柱面组 Y 向（S27–S29）+ 非球面第 18 片", "scale": 1.0,
+                      "f_number": 2.9, "stop": stop, "surfaces": rear}],
+          "image_distance_mm": 30.0,
+          "anamorphic": {"desqueeze": 1.6, "type": "integrated",
+                         "note": "专利：变倍比 1.6×、全画幅出 2.4:1；按 1.6 解挤压（市售标称）。实际：近轴 fY / fX = 1.648；物方 tan 比随视场增大"
+                                 "（画宽 25% 1.66、50% 1.69、75% 1.73、边缘 1.78）——水平桶形约 −3%、垂直枕形约 +4%"},
+          "look": {"reference": "专利实施例；市售对应 Sirui Saturn 35 mm T2.9 1.6×（最近对焦 0.9 m）", "f_number": 2.9,
+                   "coating": "BROADBAND", "coating_nm": 94.0, "flare_color": "PHYSICAL", "flare_gain": 1.0, "veiling_glare": 0.01,
+                   "corner_pupil_fraction": 0.6},
+          "focus": {"mechanism": "第 2–3 片（S3–S6）整体移动的内对焦：D2（专利 8.490）与 D6（4.554）此消彼长，镜头总长不变；0.7 m（物像距）到 ∞",
+                    "groups": [{"ids": SIRUI_FF35_FOCUS_IDS, "moves": [1, 0]}], "solve": ["Ry"], "min_distance_mm": 900.0,
+                    "note": "专利说 0.7 m（物像距）；近轴求解在 0.7 m 要 4.60 mm 行程，而 D6 只有 4.554 mm（差 1%，与 Neil / Laowa 同类：专利按最佳像面、"
+                            "这里按近轴）→ 最近对焦取市售 Sirui Saturn 35 mm 公布的 0.9 m（此时 D6 剩约 0.9 mm）"},
+          "sensor": {"format": "原生全画幅 36 × 24 mm（专利：全画幅、1.6× 出 2.4:1 = 36 × 1.6 / 24）", "width": 36.0, "height": 24.0,
+                     "max_gate": [36.0, 24.0]}}
+    rx = O.normalize(rx)
+    S = O.layout(rx)
+    bfl_y = O.paraxial_infinity(S, "Ry")[1]
+    rear[-1]["d"] = round(bfl_y, 4)
+    rx["groups"][1]["surfaces"][-1]["d"] = round(bfl_y, 4)
+    rx["image_distance_mm"] = round(bfl_y, 4)
+    rx["look"]["min_focus_mm"] = rx["focus"]["min_distance_mm"]
+    rx, info = O.apply_apertures(rx)
+    shrunk = _cap_apertures_to_edges(rx, min_glass=0.3, min_air=0.0)
+    if shrunk:
+        print("sirui_ff_35: 口径按边厚收回：", shrunk)
+    O.save(rx, os.path.join(PDIR, "sirui_ff_35.json"))
+    S = O.layout(rx)
+    print(f"sirui_ff_35.json: EFL_x {O.paraxial_infinity(S, 'Rx')[0]:.3f}  EFL_y {O.paraxial_infinity(S, 'Ry')[0]:.3f}  "
+          f"BFL_x {O.paraxial_infinity(S, 'Rx')[1]:.3f}  BFL_y {O.paraxial_infinity(S, 'Ry')[1]:.3f}  光阑 r {info['r_stop']:.3f}")
+    return rx
+
+
 if __name__ == "__main__":
     conv = json.load(open(os.path.join(PDIR, "c_series_style.json"), encoding="utf-8"))["meta"]["conventions"]
     # Isco 附加镜为长焦设计（原尺寸配 f=100 主镜：垂直 131 mm、水平 62.7 mm，S35 变形画幅垂直半视场约 4°）。
@@ -628,6 +733,7 @@ if __name__ == "__main__":
     for fl in (50, 65, 85):
         neil_sirui(fl)
     laowa_2x()
+    sirui_ff35()
     for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json"):   # C 是手工维护的 JSON，这一步幂等
         add_compensator_file(fn)
     for fn in ("e_series_style.json", "panavision_rear_134.json", "panavision_rear_134_tele.json",

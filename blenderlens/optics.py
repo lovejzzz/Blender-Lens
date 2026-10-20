@@ -705,6 +705,7 @@ def apply_apertures(rx, margin=0.07, vignette=None, round_to=0.25):
                 by_id[i]["aperture"] = {"shape": "circle", "clear": min(outer, up(ap[i]["semi_r"])), "outer": outer}
     for sf in by_id.values():
         sf.pop("D", None)
+    capped = _cap_to_surface_extent(rx, by_id, fixed)
     # 空气间隔边缘相撞：回收两侧圆形面的余量（不小于光线实际高度），每次 round_to
     adjusted = []
     for _ in range(40):
@@ -744,7 +745,41 @@ def apply_apertures(rx, margin=0.07, vignette=None, round_to=0.25):
         "method": "真实光线追迹：传感器 9 个视场点 × 光阑边缘 48 点 + 中心，追到物方取各面最大高度",
         "margin": margin, "corner_pupil_fraction": vignette, "round_to_mm": round_to,
         "note": f"角落视场只放行 {vignette:.0%} 光瞳 → 机械渐晕，即边缘猫眼焦外的来源；收光圈后渐晕消失、焦外变圆"}
-    return rx, dict(z_stop=z_stop, r_stop=r_stop, failed=failed, clash_fixed=adjusted)
+    return rx, dict(z_stop=z_stop, r_stop=r_stop, failed=failed, clash_fixed=adjusted, capped_to_surface=capped)
+
+def _sag_limit(R, k=0.0, frac=0.98):
+    """曲面在半径 r 处有定义的上限（二次曲面 Q > 0）：r < |R| / √(1 + k)。取 frac 留余量。"""
+    if R is None or math.isinf(R) or R == 0:
+        return math.inf
+    q = 1.0 + (k or 0.0)
+    return math.inf if q <= 0 else frac * abs(R) / math.sqrt(q)
+
+def _cap_to_surface_extent(rx, by_id, fixed):
+    """0.9.0（MessyRoom 报的 E / G 全画幅崩溃）：缩到远离设计视场时，按光线估出的口径可能超过曲面本身能到的半径
+    （比半球还大，曲面在那里没有定义）——这样的镜片做不出来。把口径收到曲面有定义的范围内（98%），多出来的就是机械渐晕，
+    覆盖报告 / build 警告会显示。→ 被收回的面列表。"""
+    flat = {sf["id"]: sf for sf in flatten(rx)}
+    out = []
+    for ids in element_groups(rx):
+        if any(i in fixed for i in ids):
+            continue
+        lim_x = min(_sag_limit(flat[i]["Rx"], flat[i]["kx"]) for i in ids)
+        lim_y = min(_sag_limit(flat[i]["Ry"], flat[i]["ky"]) for i in ids)
+        a0 = by_id[ids[0]]["aperture"]
+        if a0["shape"] == "rect":
+            if a0["semi_x"] > lim_x or a0["semi_y"] > lim_y:
+                for i in ids:
+                    a = by_id[i]["aperture"]
+                    a["semi_x"] = round(min(a["semi_x"], lim_x), 4); a["semi_y"] = round(min(a["semi_y"], lim_y), 4)
+                out.append("+".join(ids))
+        else:
+            lim = min(lim_x, lim_y)
+            if a0["outer"] > lim:
+                for i in ids:
+                    a = by_id[i]["aperture"]
+                    a["outer"] = round(min(a["outer"], lim), 4); a["clear"] = round(min(a["clear"], lim), 4)
+                out.append("+".join(ids))
+    return out
 
 def _outer_extent(sf):
     a = sf["ap"]
@@ -942,6 +977,7 @@ def to_format(rx, fmt="S35"):
     for d in [s] + ([s["full_aperture"]] if s.get("full_aperture") else []):
         d["width"], d["height"] = round(d["width"] * k, 4), round(d["height"] * k, 4)
     s["format"] = f'全画幅版本：{s["width"]:.2f} × {s["height"]:.2f} mm（原设计 × {k:.4f}）'
+    s["max_gate"] = list(FF_SIZE)
     m = rx["meta"]
     m["format"] = dict(name=fmt, factor=round(k, 5), from_vertical_efl=round(fy, 3))
     m.pop("rescaled", None)
@@ -954,9 +990,11 @@ def prepare(rx, fmt="S35", focal_mm=0.0, gate="FULL", width=None, height=None):
     if focal_mm and focal_mm > 0:
         rx = rescale_to_vertical_efl(rx, focal_mm)
     rx = apply_gate(rx, gate, width, height)
-    if fmt == "FF" and gate == "16:9_NATIVE":
-        # 原生 16:9 满像圈的光窗可以比处方光窗高；全画幅机身的传感器只有 36 × 24 → 等比收进去（自定义光窗不收）
-        s = rx["sensor"]; c = min(1.0, FF_SIZE[0] / s["width"], FF_SIZE[1] / s["height"])
+    mg = rx["sensor"].get("max_gate") or (list(FF_SIZE) if fmt == "FF" else None)
+    if mg and gate == "16:9_NATIVE":
+        # 原生 16:9 满像圈的光窗可以比处方光窗高；全画幅机身（全画幅版本、原生全画幅预设的 sensor.max_gate）的传感器
+        # 只有 36 × 24 → 等比收进去（自定义光窗不收）
+        s = rx["sensor"]; c = min(1.0, mg[0] / s["width"], mg[1] / s["height"])
         if c < 1.0:
             s["width"], s["height"] = round(s["width"] * c, 4), round(s["height"] * c, 4)
             s["format"] += f'；收进全画幅传感器：{s["width"]:.2f} × {s["height"]:.2f} mm'

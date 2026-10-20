@@ -9,18 +9,22 @@ BlenderLens simulates anamorphic cinema lenses in Blender using **real lens pres
 
 | C-style · 100 mm · f/2.3 | E-style · 100 mm · f/2.8 | G-style · 100 mm · f/3 |
 |---|---|---|
-| ![C](docs/images/real_c_100mm.jpg) | ![E](docs/images/real_e_100mm.jpg) | ![G](docs/images/real_g_100mm.jpg) |
+| ![C](docs/images/v0.9_c_100mm.jpg) | ![E](docs/images/v0.9_e_100mm.jpg) | ![G](docs/images/v0.9_g_100mm.jpg) |
 
-| Neil 2× modern anamorphic · 100 mm · f/3 (0.6) | Panavision rear 1.34×, tele end · 100 mm · f/4.1 |
+| Neil 2× modern anamorphic · 100 mm · f/3 | Panavision rear 1.34×, tele end · 100 mm · f/4.1 |
 |---|---|
-| ![Neil](docs/images/real_neil_2x_85_100mm.jpg) | ![Panavision](docs/images/real_panavision_rear_134_tele_100mm.jpg) |
+| ![Neil](docs/images/v0.9_neil_100mm.jpg) | ![Panavision](docs/images/v0.9_pv_tele_100mm.jpg) |
 
-Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same camera position; 768 spp + OIDN, with the forward-traced flare pass. The last two were rendered with the GPU path (M2 Max, about 3–5 minutes per 720p frame).
+| Laowa 2× wide · 30.9 mm · f/2.9 (16:9) | Sirui 1.6× **native full frame** 35 mm · f/2.9 (36 × 24 → 2.4:1) |
+|---|---|
+| ![Laowa](docs/images/v0.9_laowa_31mm.jpg) | ![Sirui](docs/images/v0.9_sirui_ff_35mm.jpg) |
+
+Rendered with 0.9.0: same real 3D scene (Poly Haven CC0 models and HDRI) and camera position; the first five at the same 100 mm vertical focal length, the two wide lenses at their own focal lengths. Native 16:9 gate (the Sirui uses its whole 36 × 24 sensor), 768 spp + OIDN, forward-traced flare pass, all on the Metal GPU path (M2 Max, 40–100 s per 720p frame). The 0.6 gallery is in the [0.6 section](#whats-new-in-06).
 
 > Panavision has never published the production prescriptions of its C / E / G / T / Primo anamorphic series. The C / E / G presets combine **public patents of the same era and construction** with look parameters set from Panavision's published specs — they are **not replicas**. The only public Panavision anamorphic prescription, US 7,085,066 (a rear 1.34× anamorphic group), is included as-is in two presets.
 
 **At a glance**
-- 8 presets: three Panavision-style front anamorphics, the real Panavision rear 1.34× at both zoom ends, and a modern 2× by Iain Neil (Sirui patent) at 50 / 65 / 85 mm.
+- 10 presets: three Panavision-style front anamorphics, the real Panavision rear 1.34× at both zoom ends, a modern 2× by Iain Neil (Sirui patent) at 50 / 65 / 85 mm, a Laowa 2× wide 29 mm, and a native full-frame Sirui 1.6× 35 mm — plus a full-frame version of every Super 35 preset.
 - Cycles OSL custom camera (CPU / OptiX) plus a **GPU path for Apple Metal** (about 19× faster than CPU, 57× faster than 0.4).
 - Catalog-accurate glass dispersion (Ohara / Schott), single-layer or broadband multilayer coatings, Auto Panatar-style mumps correction.
 - Deterministic forward-traced flares, diffraction starbursts, ISO 9358-calibrated veiling glare.
@@ -28,6 +32,12 @@ Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same cam
 - **AI-native**: a self-describing API, a JSON command line, tiered tests with a metric baseline, and `AGENTS.md`.
 
 ---
+
+## What's new in 0.9.0: a native full-frame wide anamorphic
+
+- **New preset: Sirui-style 1.6× full-frame 35 mm (real prescription)**, from [CN 118169848 A](https://patents.google.com/patent/CN118169848A/zh) (Guangdong Sirui Optical, 2022), which matches the retail Sirui Saturn 35 mm T2.9 1.6× point for point (18 elements in 13 groups, 58 mm filter, 415 g). The first preset *designed* for full frame: the whole 36 × 24 mm sensor desqueezes to 2.4:1. Transcribed digit by digit: vertical focal length 34.96 mm (patent 35), X and Y image planes within 0.03 mm, and all six focal-length relations in the claims satisfied. Corners are 26% of the centre wide open (a property of the design, 42.5° half-diagonal field) and 37% from f/4; there is about −3% horizontal barrel and +5% vertical pincushion distortion.
+- **Coverage report shows the format**: `bl.coverage` now gives the crop factor relative to 36 × 24 and the matching depth-of-field factor; full-frame versions also report how much bigger the gate really is than the Super 35 design. A 2× lens on native 16:9 is height-limited on full frame (21.3 × 24 mm), only 8% larger than on Super 35; for a real full-frame look use a lower squeeze across the full width: Panavision 1.34× full-frame (1.52× the diagonal) or the new Sirui 1.6×.
+- **New demo pictures** rendered with 0.9 (the 0.6 gallery is kept in the 0.6 section below).
 
 ## What's new in 0.8.8: full-frame versions
 
@@ -110,6 +120,17 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 ## What's new in 0.6
 
+Gallery rendered with 0.6 (full gate, CPU / first GPU path, about 3–5 minutes per 720p frame):
+
+| C-style · 100 mm · f/2.3 | E-style · 100 mm · f/2.8 | G-style · 100 mm · f/3 |
+|---|---|---|
+| ![C](docs/images/v0.6/real_c_100mm.jpg) | ![E](docs/images/v0.6/real_e_100mm.jpg) | ![G](docs/images/v0.6/real_g_100mm.jpg) |
+
+| Neil 2× modern anamorphic · 100 mm · f/3 | Panavision rear 1.34×, tele end · 100 mm · f/4.1 |
+|---|---|
+| ![Neil](docs/images/v0.6/real_neil_2x_85_100mm.jpg) | ![Panavision](docs/images/v0.6/real_panavision_rear_134_tele_100mm.jpg) |
+
+
 - **Three Neil 2× modern anamorphic presets**:
   - read digit by digit from the Chinese grant's tables; paraxial focal lengths 49.998 / 65.028 / 85.012 mm (patent 50 / 65 / 85), back focus within 0.1 mm of the printed values;
   - internal focus with G1b: one degree of freedom focuses both axes.
@@ -122,12 +143,12 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.8.8.zip`](dist/blenderlens-0.8.8.zip) from this repository.
+1. Download [`dist/blenderlens-0.9.0.zip`](dist/blenderlens-0.9.0.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.8.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.0.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.
@@ -271,6 +292,7 @@ The complete reference (every parameter, FAQ, known limitations) is [`blenderlen
 | **Panavision rear 1.34× (real prescription)** | [US 7,085,066](https://patents.google.com/patent/US7085066B2/en) (Iain A. Neil / Panavision 2004) as published: zoom at the wide end + an 8-element rear anamorphic group (3 Y-cylinders + 5 X-cylinders), 2 aspheres | horizontal 15.8 / vertical 20.7 mm · f/3.66 · 0.48 m | 1.304 → 1.304 (no mumps) | Patent embodiment: 16:9 gate desqueezed to 2.40:1 |
 | **Neil 2× modern anamorphic 50 / 65 / 85 mm (real prescription, 0.6)** | [CN 111562632 B](https://patents.google.com/patent/CN111562632B/en) (Iain A. Neil / Guangdong Sirui Optical, 2019) as published: one shared front anamorphic section (3 X-cylinders, 3 Y-cylinders, two-element G1b internal focus) + three interchangeable rear groups. **The tables in the US family member US 11,287,618 contain many misprints and cannot be used** (see `blenderlens/research/RESEARCH.md`) | vertical 50 / 65 / 85 mm · f/3 · 1.08 m | 2.06 → 1.93 (−6.6%) | Patent embodiment (not a Panavision lens; same designer as the Panavision rear group) |
 | **Laowa-style 2× wide 29 mm (real prescription, 0.8.6)** | [CN 112285889 B](https://patents.google.com/patent/CN112285889B/zh) example 1 (Venus Optics / Laowa, 2020): negative front group (one element focuses) → Y-cylinder group → X-cylinder group → rear group with the stop; only nd / Vd and no apertures are published (apertures estimated and capped to real edge thicknesses) | horizontal 14.6 / vertical 29.0 mm · f/2.9 · 1.68 m | 1.99 → 1.99 (internal focus) | Patent embodiment; the wide option: covers 16:9_NATIVE from about 25 mm "framing" with −6% edge distortion |
+| **Sirui-style 1.6× full-frame 35 mm (real prescription, 0.9.0)** | [CN 118169848 A](https://patents.google.com/patent/CN118169848A/zh) (Guangdong Sirui Optical, 2022; = Sirui Saturn 35 mm T2.9 1.6×): front spherical group (elements 2–3 focus) → X-cylinder group → spherical group with the stop → Y-cylinder group → aspheric element; designed for full frame (36 × 24 → 2.4:1); only nd / vd and no apertures are published (apertures estimated) | horizontal 21.2 / vertical 35.0 mm · f/2.9 · 0.9 m | 1.648 → 1.648 (no mumps; desqueezed at the nominal 1.6) | Patent embodiment; full frame natively: corners 26% wide open, 37% at f/4 |
 | **Panavision rear 1.34×, tele end (real prescription)** | As above, zoom at the tele end Z4 (zoom spacings from [US 6,122,111](https://patents.google.com/patent/US6122111A/en) TABLE 1, applied to the verified Z1 table) | horizontal 50.9 / vertical 66.4 mm · f/4.1 (vertical) · 0.48 m | 1.305 → 1.305 (no mumps) | Zoom alone 49.22 mm (patent 49.2) |
 
 - **Common focal length**: set "Vertical Focal Length" at Build to scale any preset to the same vertical focal length (squeeze, f-number and aberration character unchanged; presets with estimated apertures are re-estimated for the new field of view). The Isco attachment (E/G) exceeds its design field below about 100 mm, so 100 mm is the common focal length at which all presets are physically valid.

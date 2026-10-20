@@ -1,0 +1,653 @@
+{
+  "meta": {
+    "name": "Sirui 风格 1.6× 全画幅广角变形 35 mm（CN 118169848 A，T2.9）",
+    "short_name": "Sirui 1.6× 全画幅 35 mm（真实处方）",
+    "order": 10,
+    "tagline": "原生全画幅（36 × 24）的 1.6× 一体式广角变形：前球面组 + X 向柱面组 + 光阑 + Y 向柱面组 + 非球面；全画幅出 2.4:1",
+    "note": "专利实施例原样收录；与市售 Sirui Saturn 35 mm T2.9 1.6× 规格逐项吻合（是否完全相同未经厂方确认）。专利未给口径、后截距与玻璃牌号：口径按 apply_apertures 估算（角落放行 0.6）并按真实边厚收回，后截距取 Y 向近轴像面，色散按 nd / vd 两项 Cauchy。",
+    "units": "mm",
+    "conventions": {
+      "origin": "像面（传感器）",
+      "object_side": "+Z",
+      "light_travels": "-Z",
+      "surface_order": "从物方到像方",
+      "radius_sign": "R > 0：曲率中心在像方（-Z 一侧）；R < 0：在物方；null = 平面（无穷大）",
+      "surface_z": "z = z_vertex - sag(x, y)",
+      "d": "该面到下一面的轴上距离（专利原值，使用时乘该组 scale）",
+      "medium": "该面之后（像方一侧）的介质",
+      "cylinder": "柱面镜只在水平主截面（x）有光焦度：R_y = null",
+      "aperture": "每面 aperture 为物理 mm（已缩放，不再乘 scale）：柱面镜片 rect(semi_x, semi_y)；球面镜片 circle(clear 通光半径, outer 外半径，二者之间为黑色平台)"
+    }
+  },
+  "glasses": {
+    "air": {
+      "nd": 1.0,
+      "vd": null
+    },
+    "SR_1787_477": {
+      "nd": 1.787,
+      "vd": 47.7,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1886_194": {
+      "nd": 1.886,
+      "vd": 19.4,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1919_289": {
+      "nd": 1.919,
+      "vd": 28.9,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1516_671": {
+      "nd": 1.516,
+      "vd": 67.1,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1730_234": {
+      "nd": 1.73,
+      "vd": 23.4,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1915_313": {
+      "nd": 1.915,
+      "vd": 31.3,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1921_275": {
+      "nd": 1.921,
+      "vd": 27.5,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1561_393": {
+      "nd": 1.561,
+      "vd": 39.3,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1804_466": {
+      "nd": 1.804,
+      "vd": 46.6,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1851_282": {
+      "nd": 1.851,
+      "vd": 28.2,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1946_180": {
+      "nd": 1.946,
+      "vd": 18.0,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1676_263": {
+      "nd": 1.676,
+      "vd": 26.3,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1905_187": {
+      "nd": 1.905,
+      "vd": 18.7,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1946_179": {
+      "nd": 1.946,
+      "vd": 17.9,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1670_332": {
+      "nd": 1.67,
+      "vd": 33.2,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1760_500": {
+      "nd": 1.76,
+      "vd": 50.0,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    },
+    "SR_1807_410": {
+      "nd": 1.807,
+      "vd": 41.0,
+      "note": "专利只给 nd / vd（两项 Cauchy）"
+    }
+  },
+  "groups": [
+    {
+      "id": "front",
+      "role": "第一球面组（S1–S6，第 2–3 片内对焦）+ 第一柱面组 X 向（S7–S11）+ 第二球面组前半（S12–S17）",
+      "scale": 1.0,
+      "surfaces": [
+        {
+          "id": "S1",
+          "R_x": 99.43,
+          "R_y": 99.43,
+          "d": 2.4,
+          "medium": "SR_1787_477",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 24.25,
+            "outer": 24.25
+          }
+        },
+        {
+          "id": "S2",
+          "R_x": 28.754,
+          "R_y": 28.754,
+          "d": 8.49,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 20.0,
+            "outer": 24.25
+          }
+        },
+        {
+          "id": "S3",
+          "R_x": -308.34,
+          "R_y": -308.34,
+          "d": 2.0,
+          "medium": "SR_1886_194",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 19.75,
+            "outer": 19.75
+          }
+        },
+        {
+          "id": "S4",
+          "R_x": 70.37,
+          "R_y": 70.37,
+          "d": 0.2,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 19.25,
+            "outer": 19.75
+          }
+        },
+        {
+          "id": "S5",
+          "R_x": 45.955,
+          "R_y": 45.955,
+          "d": 6.441,
+          "medium": "SR_1919_289",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 19.25,
+            "outer": 19.25
+          }
+        },
+        {
+          "id": "S6",
+          "R_x": -137.35,
+          "R_y": -137.35,
+          "d": 4.554,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 18.75,
+            "outer": 19.25
+          }
+        },
+        {
+          "id": "S7",
+          "R_x": -61.867,
+          "R_y": null,
+          "d": 2.4,
+          "medium": "SR_1516_671",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 14.0,
+            "semi_y": 13.5
+          }
+        },
+        {
+          "id": "S8",
+          "R_x": 20.821,
+          "R_y": null,
+          "d": 7.88,
+          "medium": "air",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 14.0,
+            "semi_y": 13.5
+          }
+        },
+        {
+          "id": "S9",
+          "R_x": -65.393,
+          "R_y": null,
+          "d": 5.01,
+          "medium": "SR_1730_234",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 11.75,
+            "semi_y": 11.5
+          }
+        },
+        {
+          "id": "S10",
+          "R_x": 24.333,
+          "R_y": null,
+          "d": 7.866,
+          "medium": "SR_1915_313",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 11.75,
+            "semi_y": 11.5
+          }
+        },
+        {
+          "id": "S11",
+          "R_x": -42.382,
+          "R_y": null,
+          "d": 0.3,
+          "medium": "air",
+          "shape": "XCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 11.75,
+            "semi_y": 11.5
+          }
+        },
+        {
+          "id": "S12",
+          "R_x": 46.577,
+          "R_y": 46.577,
+          "d": 3.11,
+          "medium": "SR_1921_275",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.5,
+            "outer": 10.5
+          }
+        },
+        {
+          "id": "S13",
+          "R_x": null,
+          "R_y": null,
+          "d": 1.382,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 10.0,
+            "outer": 10.5
+          }
+        },
+        {
+          "id": "S14",
+          "R_x": -49.587,
+          "R_y": -49.587,
+          "d": 1.3,
+          "medium": "SR_1561_393",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 9.5,
+            "outer": 9.5
+          }
+        },
+        {
+          "id": "S15",
+          "R_x": 29.534,
+          "R_y": 29.534,
+          "d": 6.995,
+          "medium": "SR_1804_466",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 8.75,
+            "outer": 9.5
+          }
+        },
+        {
+          "id": "S16",
+          "R_x": -15.095,
+          "R_y": -15.095,
+          "d": 1.3,
+          "medium": "SR_1851_282",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 8.0,
+            "outer": 9.5
+          }
+        },
+        {
+          "id": "S17",
+          "R_x": null,
+          "R_y": null,
+          "d": 4.176,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 7.75,
+            "outer": 9.5
+          }
+        }
+      ],
+      "source": {
+        "patent": "CN 118169848 A — 全画幅超广角大倍率变形镜头（广东思锐光学 / 中山亚众光电，2022-12-08 申请，2024-06-11 公开）；同日实用新型 CN 218886282 U（2023-04-18 授权）为同一设计",
+        "url": "https://patents.google.com/patent/CN118169848A/zh",
+        "pdf": "https://patentimages.storage.googleapis.com/16/50/78/11e8f07caa79eb/CN118169848A.pdf",
+        "table": "说明书 [0066] 表 1、[0068] 表 2（PDF 第 9 页，表为图片，按 4 倍放大逐位转录）",
+        "patent_values": {
+          "Fy": 35.0,
+          "squeeze": 1.6,
+          "picture": "2.4:1",
+          "format": "全画幅",
+          "claims": {
+            "fY": [
+              33.0,
+              37.0
+            ],
+            "fX": [
+              20.6,
+              23.2
+            ],
+            "fY/fX": [
+              1.55,
+              1.65
+            ],
+            "f(2-3)X/f(1-10)Y": [
+              1.0,
+              1.3
+            ],
+            "f(1-3)X/f(4-10)Y": [
+              -3.0,
+              -2.2
+            ],
+            "f(1-10)X/f(11-18)Y": [
+              0.5,
+              0.55
+            ]
+          },
+          "min_object_image_mm": 700.0,
+          "filter_mm": 58,
+          "mass_g": "< 420",
+          "length_mm": "< 103"
+        },
+        "product": "Sirui Saturn 35 mm T2.9 1.6× 全画幅（18 片 13 组、58 mm 滤镜、E 口 415 g、长 102 mm、最近对焦 0.9 m）——规格与专利逐项吻合"
+      }
+    },
+    {
+      "id": "rear",
+      "role": "第二球面组后半（光阑之后）+ 第二柱面组 Y 向（S27–S29）+ 非球面第 18 片",
+      "scale": 1.0,
+      "f_number": 2.9,
+      "stop": {
+        "after_surface": "S17",
+        "offset_mm": 3.0,
+        "f_number": 2.9,
+        "note": "光阑（专利表 1「光阑」行：第十透镜后 3.00 mm、距第十一透镜 1.176 mm）；专利没给孔径，按市售 Sirui Saturn 35 mm 的 T2.9 取 f/2.9（垂直截面近轴）",
+        "semi_diameter_at_f_number": 6.983,
+        "z_at_infinity": 47.628
+      },
+      "surfaces": [
+        {
+          "id": "S18",
+          "R_x": 22.109,
+          "R_y": 22.109,
+          "d": 3.544,
+          "medium": "SR_1946_180",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 7.5,
+            "outer": 7.5
+          }
+        },
+        {
+          "id": "S19",
+          "R_x": -87.01,
+          "R_y": -87.01,
+          "d": 0.64,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 7.0,
+            "outer": 7.5
+          }
+        },
+        {
+          "id": "S20",
+          "R_x": 48.705,
+          "R_y": 48.705,
+          "d": 1.3,
+          "medium": "SR_1676_263",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 6.25,
+            "outer": 6.25
+          }
+        },
+        {
+          "id": "S21",
+          "R_x": 14.131,
+          "R_y": 14.131,
+          "d": 3.18,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 6.0,
+            "outer": 6.25
+          }
+        },
+        {
+          "id": "S22",
+          "R_x": -18.318,
+          "R_y": -18.318,
+          "d": 1.3,
+          "medium": "SR_1905_187",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 6.0,
+            "outer": 8.25
+          }
+        },
+        {
+          "id": "S23",
+          "R_x": 13.228,
+          "R_y": 13.228,
+          "d": 5.528,
+          "medium": "SR_1804_466",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 7.25,
+            "outer": 8.25
+          }
+        },
+        {
+          "id": "S24",
+          "R_x": -50.491,
+          "R_y": -50.491,
+          "d": 0.2,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 8.25,
+            "outer": 8.25
+          }
+        },
+        {
+          "id": "S25",
+          "R_x": 34.084,
+          "R_y": 34.084,
+          "d": 3.184,
+          "medium": "SR_1946_179",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 9.5,
+            "outer": 9.75
+          }
+        },
+        {
+          "id": "S26",
+          "R_x": 164.133,
+          "R_y": 164.133,
+          "d": 0.502,
+          "medium": "air",
+          "shape": "Sph",
+          "aperture": {
+            "shape": "circle",
+            "clear": 9.75,
+            "outer": 9.75
+          }
+        },
+        {
+          "id": "S27",
+          "R_x": null,
+          "R_y": 38.661,
+          "d": 5.61,
+          "medium": "SR_1670_332",
+          "shape": "YCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 10.5,
+            "semi_y": 7.75
+          }
+        },
+        {
+          "id": "S28",
+          "R_x": null,
+          "R_y": -24.31,
+          "d": 2.2,
+          "medium": "SR_1760_500",
+          "shape": "YCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 10.5,
+            "semi_y": 7.75
+          }
+        },
+        {
+          "id": "S29",
+          "R_x": null,
+          "R_y": 33.557,
+          "d": 3.614,
+          "medium": "air",
+          "shape": "YCyl",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 10.5,
+            "semi_y": 7.75
+          }
+        },
+        {
+          "id": "S30",
+          "R_x": 80.037,
+          "R_y": 80.037,
+          "d": 2.413,
+          "medium": "SR_1807_410",
+          "shape": "Asph",
+          "k": -7.8997,
+          "asph": [
+            -0.0001,
+            -7.424e-07,
+            8.484e-10,
+            -3.4404e-13
+          ],
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.5,
+            "outer": 13.5
+          }
+        },
+        {
+          "id": "S31",
+          "R_x": 108.986,
+          "R_y": 108.986,
+          "d": 13.2373,
+          "medium": "air",
+          "shape": "Asph",
+          "k": 7.9691,
+          "asph": [
+            -6.0433e-05,
+            -7.6463e-07,
+            3.8716e-09,
+            -6.116e-12
+          ],
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.5,
+            "outer": 13.5
+          }
+        }
+      ]
+    }
+  ],
+  "image_distance_mm": 13.2373,
+  "anamorphic": {
+    "desqueeze": 1.6,
+    "type": "integrated",
+    "note": "专利：变倍比 1.6×、全画幅出 2.4:1；按 1.6 解挤压（市售标称）。实际：近轴 fY / fX = 1.648；物方 tan 比随视场增大（画宽 25% 1.66、50% 1.69、75% 1.73、边缘 1.78）——水平桶形约 −3%、垂直枕形约 +4%"
+  },
+  "look": {
+    "reference": "专利实施例；市售对应 Sirui Saturn 35 mm T2.9 1.6×（最近对焦 0.9 m）",
+    "f_number": 2.9,
+    "coating": "BROADBAND",
+    "coating_nm": 94.0,
+    "flare_color": "PHYSICAL",
+    "flare_gain": 1.0,
+    "veiling_glare": 0.01,
+    "corner_pupil_fraction": 0.6,
+    "min_focus_mm": 900.0
+  },
+  "focus": {
+    "mechanism": "第 2–3 片（S3–S6）整体移动的内对焦：D2（专利 8.490）与 D6（4.554）此消彼长，镜头总长不变；0.7 m（物像距）到 ∞",
+    "groups": [
+      {
+        "ids": [
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "moves": [
+          1,
+          0
+        ]
+      }
+    ],
+    "solve": [
+      "Ry"
+    ],
+    "min_distance_mm": 900.0,
+    "note": "专利说 0.7 m（物像距）；近轴求解在 0.7 m 要 4.60 mm 行程，而 D6 只有 4.554 mm（差 1%，与 Neil / Laowa 同类：专利按最佳像面、这里按近轴）→ 最近对焦取市售 Sirui Saturn 35 mm 公布的 0.9 m（此时 D6 剩约 0.9 mm）"
+  },
+  "sensor": {
+    "format": "原生全画幅 36 × 24 mm（专利：全画幅、1.6× 出 2.4:1 = 36 × 1.6 / 24）",
+    "width": 36.0,
+    "height": 24.0,
+    "max_gate": [
+      36.0,
+      24.0
+    ]
+  },
+  "aperture_design": {
+    "method": "真实光线追迹：传感器 9 个视场点 × 光阑边缘 48 点 + 中心，追到物方取各面最大高度",
+    "margin": 0.07,
+    "corner_pupil_fraction": 0.6,
+    "round_to_mm": 0.25,
+    "note": "角落视场只放行 60% 光瞳 → 机械渐晕，即边缘猫眼焦外的来源；收光圈后渐晕消失、焦外变圆"
+  }
+}

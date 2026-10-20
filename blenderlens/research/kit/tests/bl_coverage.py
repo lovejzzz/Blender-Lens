@@ -18,7 +18,8 @@ os.makedirs(OUT, exist_ok=True)
 GPU = bl.enable_gpu(use_gpu=True)[0]
 CASES = [("c_series_style", 24.6), ("c_series_style", 32.8), ("e_series_style", 24.6), ("e_series_style", 46.9),
          ("laowa_2x_29", 30.88), ("panavision_rear_134", 24.6),          # Laowa 30.88 mm = MessyRoom 的「取景 25.5 mm」
-         ("c_series_style", 0.0, "FF"), ("laowa_2x_29", 0.0, "FF")]      # 0.8.8 全画幅版本（原生焦距，16:9_NATIVE 收进 36 × 24）
+         ("c_series_style", 0.0, "FF"), ("laowa_2x_29", 0.0, "FF"),
+         ("sirui_ff_35", 0.0, "S35")]                                    # 0.9 原生全画幅 1.6×（16:9_NATIVE 收进 36 × 24）      # 0.8.8 全画幅版本（原生焦距，16:9_NATIVE 收进 36 × 24）
 PTS = [(0.9, 0.0), (0.0, 0.9), (0.9, 0.9), (0.6, 0.6), (-0.9, -0.6)]
 rep = dict(cases={})
 worst = 0.0
@@ -75,5 +76,5 @@ rep["PASS"] = bool(worst <= 0.10 and C["e_series_style@24.6"]["warned"] and C["e
                    and C["panavision_rear_134@24.6"]["covers"] and not C["panavision_rear_134@24.6"]["warned"]
                    and rep["pv_full"]["covers"] and C["laowa_2x_29@30.88"]["covers"] and not C["laowa_2x_29@30.88"]["warned"]
                    and rep["w1"]["laowa255_covers"] and rep["w1"]["ratio_255"] <= 0.4
-                   and all(C[k]["covers"] and not C[k]["warned"] for k in ("c_series_style@0.0_FF", "laowa_2x_29@0.0_FF")))
+                   and all(C[k]["covers"] and not C[k]["warned"] for k in ("c_series_style@0.0_FF", "laowa_2x_29@0.0_FF", "sirui_ff_35@0.0")))
 print("COVERAGE", json.dumps(rep, default=float))

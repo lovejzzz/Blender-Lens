@@ -70,6 +70,27 @@ class _Estimator:
         return float((ok * D[:, 2] ** 4).sum())
 
 
+def _corner_angle(ang, W, H, fx, fy, n=12):
+    """光窗四角的物方主光线半视场（对角线）。0.9.0 修正（MessyRoom 报：PV 长焦端全画幅显示 4.7°）：角落超出镜头能成像的范围时，
+    主光线追迹会给出乱的角度（S35 51.8°、全画幅 116.8°，同一支镜头）。沿对角线逐点追，只用连续、单调的点；角落不可信时
+    用最后一个可信点的「真实 / 近轴」tan 比外推到角落，并标记 estimated=True。"""
+    par = lambda t: math.hypot(t * W / 2 / fx, t * H / 2 / fy)          # 近轴 tan
+    last, prev, step = None, 0.0, None
+    for i in range(1, n + 1):
+        t = i / n
+        a = ang(t * W / 2, t * H / 2)
+        if a is None or not (prev < a < 89.0) or (step is not None and a - prev > 3.0 * step + 2.0):
+            break                                      # 追不过去 / 不单调 / 突然跳大 → 后面的都不可信
+        step, prev, last = a - prev, a, (t, a)
+    if last is None:
+        return None, True
+    t0, a0 = last
+    if t0 >= 1.0:
+        return a0, False
+    r = math.tan(math.radians(a0)) / par(t0)
+    return math.degrees(math.atan(r * par(1.0))), True
+
+
 def _chief_dir(LM, sx, sy):
     """传感器点 → 物方主光线方向（镜头坐标，物方 +Z）。"""
     from_lp = _lp()
@@ -113,7 +134,7 @@ def coverage_report(rx, focus_mm=math.inf, f_number=None, out_h=2160, n=21, ri_c
         elif not covers:
             warnings.append(f"四角相对照度 {rel['corner']:.0%} < {ri_cover:.0%}：四角明显发暗")
         return dict(relative_illumination=rel, covers=bool(covers), ri_threshold=ri_cover, f_number=f_number, warnings=warnings,
-                    quick=True)
+                    quick=True, format=format_info(rx))
     # 沿对角线找像圈与能覆盖的位置
     diag = math.hypot(W / 2, H / 2)
     ux, uy = W / 2 / diag, H / 2 / diag
@@ -131,7 +152,7 @@ def coverage_report(rx, focus_mm=math.inf, f_number=None, out_h=2160, n=21, ri_c
     def ang(sx, sy):
         d = _chief_dir(LM, sx, sy)
         return None if d is None else math.degrees(math.atan2(math.hypot(d[0], d[1]), d[2]))
-    cur = ang(W / 2, H / 2)
+    cur, cur_est = _corner_angle(ang, W, H, fx, fy)
     cov = ang(r_cover * ux, r_cover * uy) if r_cover > 0 else 0.0
     # 畸变
     def dist(sx, sy, axis):
@@ -181,11 +202,42 @@ def coverage_report(rx, focus_mm=math.inf, f_number=None, out_h=2160, n=21, ri_c
     if cur is not None and cov is not None and cur > cov + 0.05:
         warnings.append(f"当前对角线半视场 {cur:.1f}° 超过这支镜头能覆盖的 {cov:.1f}°（照度 ≥ {ri_cover:.0%}）：焦距缩得太短")
     return dict(gate_mm=[W, H], gate_diagonal_mm=round(2 * diag, 2), image_circle_mm=round(2 * r_circle, 2),
+                format=format_info(rx),
                 relative_illumination=rel, covers=bool(covers and not hard_edge), ri_threshold=ri_cover,
                 half_field_deg=dict(current_diag=None if cur is None else round(cur, 2),
+                                    current_diag_estimated=cur_est,
                                     max_covered_diag=None if cov is None else round(cov, 2)),
                 distortion_pct=dist_pct, edge_vertical_bow_px=bow_px, bow_out_height=out_h,
                 f_number=f_number, focus_mm=None if not math.isfinite(focus_mm) else focus_mm, warnings=warnings)
+
+
+FF_DIAG = math.hypot(36.0, 24.0)
+
+
+def format_info(rx):
+    """画幅换算（0.8.8 后 MessyRoom 的建议）：光窗对角线 vs 全画幅 36 × 24（crop factor）；同样取景、同样 f 值时景深与 crop factor
+    成正比（光窗小 → 景深深）。全画幅版本另给与 Super 35 原设计（同一光窗方式）的对角线比——2× 镜头的 16:9_NATIVE 在
+    全画幅上受 24 mm 高度限制，只比 S35 大 8% 左右，景深也只浅这么多。"""
+    s = rx["sensor"]
+    diag = math.hypot(s["width"], s["height"])
+    out = dict(gate_diagonal_mm=round(diag, 2), crop_factor_vs_36x24=round(FF_DIAG / diag, 3),
+               dof_vs_36x24_same_framing_and_stop=round(FF_DIAG / diag, 3))
+    fm = rx.get("meta", {}).get("format")
+    if fm and fm.get("name") == "FF":
+        k = fm["factor"]
+        fa = s.get("full_aperture") or s
+        base = dict(rx, sensor={"width": fa["width"] / k, "height": fa["height"] / k})
+        g = s.get("gate") or "FULL"
+        try:
+            b = O.apply_gate(base, g) if g not in ("FULL", "CUSTOM") else base
+            d0 = math.hypot(b["sensor"]["width"], b["sensor"]["height"])
+            out["vs_s35_design"] = dict(gate=g, s35_gate_mm=[round(b["sensor"]["width"], 2), round(b["sensor"]["height"], 2)],
+                                        gate_diagonal_ratio=round(diag / d0, 3), dof_factor=round(d0 / diag, 3),
+                                        lens_scale=round(k, 4),
+                                        note="同样取景、同样 f 值：景深 × dof_factor（< 1 = 更浅）；lens_scale 是镜头放大倍数")
+        except Exception:                                  # noqa: BLE001
+            pass
+    return out
 
 
 def relative_illumination(rx, points, focus_mm=math.inf, f_number=None, m=72):

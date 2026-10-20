@@ -26,6 +26,12 @@ PTS = [(0.0, 0.0), (0.95, 0.0), (0.0, 0.95), (0.95, 0.95), (-0.6, 0.5)]
 for f in sorted(glob.glob(os.path.join(O.PRESCRIPTION_DIR, "*.json"))):
     name = os.path.basename(f)[:-5]
     rx = O.load(f)
+    if O.format_factor(rx, "FF") == 1.0:                 # 原生全画幅预设（0.9：Sirui 1.6× 35 mm）：全画幅版本就是它自己
+        nat = O.prepare(rx, "FF", 0.0, "16:9_NATIVE")
+        ok(rx["sensor"]["width"] == 36.0 and rx["sensor"]["height"] == 24.0 and O.to_format(rx, "FF") is rx
+           and nat["sensor"]["height"] <= 24.0 + 1e-6 and O.prepare(rx, "S35", 0.0, "16:9_NATIVE")["sensor"]["height"] <= 24.0 + 1e-6,
+           f"{name}: 原生全画幅（36 × 24），16:9_NATIVE 也收进传感器（{nat['sensor']['width']:.2f} × {nat['sensor']['height']:.2f}）")
+        continue
     ff = O.to_format(rx, "FF")
     k = ff["meta"]["format"]["factor"]
     W, H = ff["sensor"]["width"], ff["sensor"]["height"]
@@ -51,6 +57,20 @@ for f in sorted(glob.glob(os.path.join(O.PRESCRIPTION_DIR, "*.json"))):
     nat = O.prepare(rx, "FF", 0.0, "16:9_NATIVE")
     ok(nat["sensor"]["width"] <= 36.0 + 1e-6 and nat["sensor"]["height"] <= 24.0 + 1e-6,
        f"{name}: 全画幅 16:9_NATIVE 光窗 {nat['sensor']['width']:.2f} × {nat['sensor']['height']:.2f} mm")
+# 0.9.0 回归（MessyRoom 报的全画幅问题）：E / G 全画幅缩到取景 33 mm 时网格能生成（口径不超过曲面范围）；
+# PV 长焦端缩过头时，S35 与全画幅的角落视场一致（以前全画幅显示 4.7°）
+import meshgen as MG
+for pre in ("e_series_style", "g_series_style"):
+    r = O.prepare(O.load(os.path.join(O.PRESCRIPTION_DIR, pre + ".json")), "FF", 33 * 24 / 18.37, "16:9_NATIVE")
+    for sf in O.layout(r):
+        if sf.get("ap"):
+            MG.surface_mesh(sf, rings=8, sectors=16, nx=9, ny=3)
+    ok(True, f"{pre}: 全画幅版本缩到 43.1 mm 时网格能生成（口径收到曲面范围内）")
+pv = O.load(os.path.join(O.PRESCRIPTION_DIR, "panavision_rear_134_tele.json"))
+hs = [CV.coverage_report(O.prepare(pv, fm, 33 * gh / 18.37, "16:9_NATIVE"), 7000.0, None)["half_field_deg"]
+      for fm, gh in (("S35", 16.4528), ("FF", 24.0))]
+ok(abs(hs[0]["current_diag"] - hs[1]["current_diag"]) < 1.0 and hs[1]["current_diag"] > 20,
+   f"PV 长焦端缩过头：角落视场 S35 {hs[0]['current_diag']}° / 全画幅 {hs[1]['current_diag']}°（估计值 {hs[1]['current_diag_estimated']}）")
 ok(O.to_format(O.load(f), "S35") is not None and O.format_factor(O.load(f), "S35") == 1.0, "S35 = 原设计（不变）")
 try:
     O.to_format(O.load(f), "IMAX")

@@ -145,4 +145,31 @@ for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json"):
     a1 = max(rms_spot(lev(1.0), mfd, f, g) for f, g in ((0, 0), (0.7, 0), (0, 0.7)))
     ok(a1 < 1.35 * a0, f"{fn}: sharpness at MFD kept (worst RMS spot {1000 * a0:.0f} → {1000 * a1:.0f} µm)")
     ok(O.comp_phi(lev(1.0), 0.0) == 0.0, f"{fn}: compensator plate is flat at infinity")
+# ── Sirui 1.6× 全画幅 35 mm（CN 118169848 A）：专利只给 fY 35 与权利要求里的 6 个比值；后截距没给 → X / Y 两向近轴像面必须重合 ──
+rx = P("sirui_ff_35.json"); S = O.layout(rx)
+fx, bx = O.paraxial_infinity(S, "Rx"); fy, by = O.paraxial_infinity(S, "Ry")
+ok(abs(fy / 35.0 - 1) < 0.005, f"Sirui FF 35: fY {fy:.3f} vs patent 35 mm ({100 * (fy / 35 - 1):+.2f}%)")
+ok(abs(bx - by) < 0.05, f"Sirui FF 35: X / Y image planes coincide (BFL {bx:.3f} / {by:.3f}) — transcription check")
+idx = {sf["id"]: i for i, sf in enumerate(S)}
+def sub_efl(a, b, axis):
+    M = [[1.0, 0.0], [0.0, 1.0]]; n_prev = 1.0
+    for i in range(idx[a], idx[b] + 1):
+        sf = S[i]; R = sf[axis]; n_next = sf["n"] if i < idx[b] else 1.0
+        Pw = 0.0 if math.isinf(R) else (n_next - n_prev) / R
+        M = [[M[0][0], M[0][1]], [M[1][0] - Pw * M[0][0], M[1][1] - Pw * M[0][1]]]
+        if i < idx[b]:
+            t = sf["d"] / n_next
+            M = [[M[0][0] + t * M[1][0], M[0][1] + t * M[1][1]], M[1]]
+        n_prev = n_next
+    return -1.0 / M[1][0]
+vals = {"fY": fy, "fX": fx, "fY/fX": fy / fx,
+        "f(2-3)X/f(1-10)Y": sub_efl("S3", "S6", "Rx") / sub_efl("S1", "S17", "Ry"),
+        "f(1-3)X/f(4-10)Y": sub_efl("S1", "S6", "Rx") / sub_efl("S7", "S17", "Ry"),
+        "f(1-10)X/f(11-18)Y": sub_efl("S1", "S17", "Rx") / sub_efl("S18", "S31", "Ry")}
+claims = rx["groups"][0]["source"]["patent_values"]["claims"]
+for k, v in vals.items():
+    ok(claims[k][0] < v < claims[k][1], f"Sirui FF 35: claim {k} = {v:.4f} in {claims[k]}")
+d1, d2 = O.solve_focus(rx, rx["focus"]["min_distance_mm"])
+ok(not [e for e in O.edge_report(rx, d1, d2) if e["min_gap"] < 0], "Sirui FF 35: no clash at MFD (0.9 m)")
+ok(rx["groups"][0]["surfaces"][0]["aperture"]["clear"] * 2 < 58.0, "Sirui FF 35: estimated front element fits the 58 mm filter thread")
 print("ALL PRESET TESTS PASSED")

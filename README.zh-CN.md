@@ -9,17 +9,27 @@
 
 | C 系列风格 · 100 mm · f/2.3 | E 系列风格 · 100 mm · f/2.8 | G 系列风格 · 100 mm · f/3 |
 |---|---|---|
-| ![C](docs/images/real_c_100mm.jpg) | ![E](docs/images/real_e_100mm.jpg) | ![G](docs/images/real_g_100mm.jpg) |
+| ![C](docs/images/v0.9_c_100mm.jpg) | ![E](docs/images/v0.9_e_100mm.jpg) | ![G](docs/images/v0.9_g_100mm.jpg) |
 
-| Neil 2× 现代变形 · 100 mm · f/3（0.6） | Panavision 后置 1.34× 长焦端 · 100 mm · f/4.1 |
+| Neil 2× 现代变形 · 100 mm · f/3 | Panavision 后置 1.34× 长焦端 · 100 mm · f/4.1 |
 |---|---|
-| ![Neil](docs/images/real_neil_2x_85_100mm.jpg) | ![Panavision](docs/images/real_panavision_rear_134_tele_100mm.jpg) |
+| ![Neil](docs/images/v0.9_neil_100mm.jpg) | ![Panavision](docs/images/v0.9_pv_tele_100mm.jpg) |
 
-同一个真实 3D 场景（Poly Haven CC0 模型与 HDRI）、同一焦段、同一机位，768 spp + OIDN，带正向追迹炫光。后两张用 GPU 路径渲染（M2 Max，720p 每张约 3–5 分钟）。
+| Laowa 2× 广角 · 30.9 mm · f/2.9（16:9） | Sirui 1.6× **原生全画幅** 35 mm · f/2.9（36 × 24 → 2.4:1） |
+|---|---|
+| ![Laowa](docs/images/v0.9_laowa_31mm.jpg) | ![Sirui](docs/images/v0.9_sirui_ff_35mm.jpg) |
+
+用 0.9.0 渲染：同一个真实 3D 场景（Poly Haven CC0 模型与 HDRI）、同一机位；前五张同为垂直 100 mm，两支广角用各自的焦段。原生 16:9 光窗（Sirui 用整个 36 × 24 传感器），768 spp + OIDN，带正向追迹炫光，全部走 Metal GPU 路径（M2 Max，720p 每张 40–100 秒）。0.6 的旧图在 [0.6 新增](#06-新增) 里。
 
 > Panavision 的 C / E / G / T / Primo 变形系列量产处方从未公开。C / E / G 三个选项是「同年代、同结构的公开专利 + 按 Panavision 公布的规格设定观感参数」，**不是复刻**。唯一公开的真 Panavision 处方是 US 7,085,066（后置 1.34× 变形组），原样收录为两个预设。
 
 ---
+
+## 0.9.0 新增：原生全画幅广角变形
+
+- **新预设：Sirui 风格 1.6× 全画幅 35 mm（真实处方）**，出自 [CN 118169848 A](https://patents.google.com/patent/CN118169848A/zh)（广东思锐光学，2022），与市售 Sirui Saturn 35 mm T2.9 1.6× 逐项吻合（18 片 13 组、58 mm 滤镜、415 g）。第一个**按全画幅设计**的预设：整个 36 × 24 mm 传感器解挤压后是 2.4:1。逐位转录核对：垂直焦距 34.96 mm（专利 35），X / Y 两向像面相差 0.03 mm，权利要求里 6 个焦距关系全部满足。全开四角是中心的 26%（设计本身，对角线半视场 42.5°），f/4 起 37%；水平桶形约 −3%、垂直枕形约 +5%。
+- **覆盖报告显示画幅**：`bl.coverage` 给出相对 36 × 24 的 crop factor 和对应的景深系数；全画幅版本另给比 Super 35 原设计实际大多少。2× 镜头用 16:9_NATIVE 时在全画幅上受高度限制（21.3 × 24 mm），只比 S35 大 8%；要真正的全画幅观感，用低压缩比铺满宽度：Panavision 1.34× 全画幅版本（对角线 1.52 倍）或新的 Sirui 1.6×。
+- **演示图换成 0.9 渲染**（0.6 的旧图放在下面 0.6 的介绍里）。
 
 ## 0.8.8 新增：全画幅版本
 
@@ -102,6 +112,17 @@
 
 ## 0.6 新增
 
+0.6 渲染的图（原光窗，CPU / 最早的 GPU 路径，720p 每张约 3–5 分钟）：
+
+| C 系列风格 · 100 mm · f/2.3 | E 系列风格 · 100 mm · f/2.8 | G 系列风格 · 100 mm · f/3 |
+|---|---|---|
+| ![C](docs/images/v0.6/real_c_100mm.jpg) | ![E](docs/images/v0.6/real_e_100mm.jpg) | ![G](docs/images/v0.6/real_g_100mm.jpg) |
+
+| Neil 2× 现代变形 · 100 mm · f/3 | Panavision 后置 1.34× 长焦端 · 100 mm · f/4.1 |
+|---|---|
+| ![Neil](docs/images/v0.6/real_neil_2x_85_100mm.jpg) | ![Panavision](docs/images/v0.6/real_panavision_rear_134_tele_100mm.jpg) |
+
+
 - **Neil 2× 现代变形三个预设**：
   - 中国授权本表格逐位读出；近轴焦距 49.998 / 65.028 / 85.012 mm（专利 50 / 65 / 85），后焦与印刷值相差 ≤ 0.1 mm。
   - G1b 内对焦，一个自由度同时对准两向。
@@ -114,12 +135,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.8.8.zip`](dist/blenderlens-0.8.8.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.9.0.zip`](dist/blenderlens-0.9.0.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.8.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.0.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。
@@ -261,6 +282,7 @@ O.bokeh_aspect(rx, 1200.0, 20000.0)      # 焦外高宽比（解挤压后）
 | **Panavision 后置 1.34×（真实处方）** | [US 7,085,066](https://patents.google.com/patent/US7085066B2/en)（Iain A. Neil / Panavision 2004）原样：变焦镜短焦端 + 8 片后置变形组（3 片 Y 向柱面 + 5 片 X 向柱面），2 个非球面 | 水平 15.8 / 垂直 20.7 mm · f/3.66 · 0.48 m | 1.304 → 1.304（无发腮） | 专利实施例：16:9 画幅解挤压到 2.40:1 |
 | **Neil 2× 现代变形 50 / 65 / 85 mm（真实处方，0.6）** | [CN 111562632 B](https://patents.google.com/patent/CN111562632B/en)（Iain A. Neil / 广东思锐光学 Sirui，2019）原样：同一前变形部分（X 柱面 3 片、Y 柱面 3 片，G1b 两片内对焦）+ 三个可换后组。**美国同族 US 11,287,618 的表格印刷错误多，不能用**（见 `blenderlens/research/RESEARCH.md`） | 垂直 50 / 65 / 85 mm · f/3 · 1.08 m | 2.06 → 1.93（−6.6%） | 专利实施例（不是 Panavision 镜头；设计者与 Panavision 后置组相同） |
 | **Laowa 风格 2× 广角 29 mm（真实处方，0.8.6）** | [CN 112285889 B](https://patents.google.com/patent/CN112285889B/zh) 实施例 1（安徽长庚光学 / Laowa，2020）：负前组（一片移动对焦）→ Y 向柱面组 → X 向柱面组 → 含光阑的后组；专利只给 nd / Vd、没有口径（口径估算后按真实边厚收回） | 水平 14.6 / 垂直 29.0 mm · f/2.9 · 1.68 m | 1.99 → 1.99（内对焦） | 专利实施例；广角选项：16:9_NATIVE 下取景约 25 mm 起覆盖，边缘畸变 −6% |
+| **Sirui 风格 1.6× 全画幅 35 mm（真实处方，0.9.0）** | [CN 118169848 A](https://patents.google.com/patent/CN118169848A/zh)（广东思锐光学，2022；= Sirui Saturn 35 mm T2.9 1.6×）：前球面组（第 2–3 片对焦）→ X 向柱面组 → 含光阑的球面组 → Y 向柱面组 → 非球面；按全画幅设计（36 × 24 → 2.4:1）；专利只给 nd / vd、没有口径（口径估算） | 水平 21.2 / 垂直 35.0 mm · f/2.9 · 0.9 m | 1.648 → 1.648（无发腮；按标称 1.6 解挤压） | 专利实施例；原生全画幅：全开四角 26%，f/4 时 37% |
 | **Panavision 后置 1.34× 长焦端（真实处方）** | 同上，变焦镜取长焦端 Z4（变焦间隔取自 [US 6,122,111](https://patents.google.com/patent/US6122111A/en) TABLE 1，叠加到已核实的 Z1 表上） | 水平 50.9 / 垂直 66.4 mm · f/4.1（垂直）· 0.48 m | 1.305 → 1.305（无发腮） | 变焦镜单独 49.22 mm（专利 49.2） |
 
 - **统一焦段**：Build 时填「Vertical Focal Length」，可把任意预设按比例缩放到同一垂直焦距（压缩比、f 值、像差形态不变；估算口径的预设按新视场重算口径）。Isco 附加镜（E/G）低于约 100 mm 会超出设计视场，所以几个预设能同时物理成立的共同焦段是 100 mm。

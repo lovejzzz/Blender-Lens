@@ -1,7 +1,8 @@
 # 真实场景测试：外滩夜景广场 —— Poly Haven 实扫大理石胸像 + 街灯 + 消防栓 + 湿鹅卵石地面 + 外滩 HDRI。
 # 所有预设统一到同一垂直焦距（默认 100 mm），同一机位、同一对焦距离，只换镜头。
 # 资源（CC0，Poly Haven）放在 assets/，不随仓库提交。
-# Blender -b --factory-startup --python tools/real_scene.py -- <preset.json> [focal_mm] [height] [samples] [hdri_rot_deg]
+# Blender -b --factory-startup --python tools/real_scene.py -- <preset.json> [focal_mm] [height] [samples] [hdri_rot_deg] [gate] [format]
+#   focal_mm 0 = 预设原生焦距；gate 默认 FULL（0.9：README 图用 16:9_NATIVE）；format S35 / FF（0.8.8）
 import bpy, os, sys, math
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -14,6 +15,8 @@ FOCAL = float(args[1]) if len(args) > 1 else 100.0
 HEIGHT = int(args[2]) if len(args) > 2 else 720
 SAMPLES = int(args[3]) if len(args) > 3 else 256
 HDRI_ROT = float(args[4]) if len(args) > 4 else 61.0
+GATE = args[5] if len(args) > 5 else "FULL"
+FMT = args[6] if len(args) > 6 else "S35"
 A = os.path.join(ROOT, "assets")
 
 EYE = 1400.0          # 机位高度（mm）
@@ -26,7 +29,7 @@ GPU = os.environ.get("BL_GPU") == "1"                 # BL_GPU=1：用 BlenderLe
 if GPU:
     import blenderlens.api as _bl
     print("GPU", _bl.enable_gpu(use_gpu=False))
-bpy.ops.blenderlens.build(preset=PRESET, height=HEIGHT, focal_mm=FOCAL)
+bpy.ops.blenderlens.build(preset=PRESET, height=HEIGHT, focal_mm=FOCAL, gate=GATE, format=FMT)
 sc = bpy.context.scene
 cam_ob = sc.camera
 cam_ob.location = (0.0, 0.0, EYE)
@@ -236,7 +239,7 @@ sc.view_settings.view_transform = 'AgX'
 sc.view_settings.look = 'AgX - Medium High Contrast'
 sc.view_settings.exposure = 0.3
 
-tag = PRESET.replace(".json", "")
+tag = PRESET.replace(".json", "") + ("" if GATE == "FULL" else "_" + GATE.replace(":", "x")) + ("" if FMT == "S35" else "_" + FMT)
 os.makedirs(os.path.join(ROOT, "renders", "real"), exist_ok=True)
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "renders", "real", f"real_{tag}_{FOCAL:g}mm.blend"))
 out = os.path.join(ROOT, "renders", "real", f"real_{tag}_{FOCAL:g}mm_{HEIGHT}p.png")
