@@ -1,6 +1,6 @@
-# BlenderLens 0.8.6 交接说明（给接手的 AI）
+# BlenderLens 0.8.7 交接说明（给接手的 AI）
 
-> 本文件随安装包分发，对应扩展版本 **0.8.6**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
+> 本文件随安装包分发，对应扩展版本 **0.8.7**（`blender_manifest.toml` 中的 `version`）。如果版本号对不上，以 manifest 为准，并提醒用户本文件可能已过时。
 
 ## 1. 这是什么
 
@@ -422,6 +422,22 @@ bl.focus_track(cam, frames=(157, 230), rack=[(190, "Oden"), (202, "CRT")])   # �
 - 4K 实测（简单场景、GPU、`passes="temporal"`）：后期 17 → 12 秒，整帧 27.8 → 22 秒。
 
 **E / G 缩到广角时为什么是舷窗**：不是渲染的问题。Isco 前组的 I1–I2 等镜片在估算的口径内两面相交（边缘厚度为负）：离轴光线要在镜片里「倒着走」才能通过。Analytic 渲染（OSL / GPU）正确地挡掉了这些光线；`optics.pupil_transmission` 与 Geometry 模式会放过它们（Geometry 网格在那里自相交），所以覆盖报告用的是与 Analytic 渲染相同的估计器。
+
+## 6.11 排除层的 alpha 修正、排除层提速（0.8.7，MessyRoom Day 5 的反馈）
+
+**问题（0.8.5 / 0.8.6 的 bug）**：`BL_Exclude` 的 alpha 直接用 Cycles 的 alpha，而 Cycles 的 alpha = 1 − Σ(相机光线权重 × 透过) / N。真实镜头的相机权重里带着渐晕（cos⁴、出瞳采样「过 / 不过」），所以**没有雨的地方 alpha 也不是 0**：中心约 0.06–0.12（随采样数变：8 spp 0.12、32 spp 0.08、128 spp 0.057——透明度 > 1 时被截断，偏差 ∝ 1/√spp），四角 0.4–0.7。`BL_Final = 雨 over 场景` 于是把整幅画面压暗（测试场景中心 −5%、四角 −11%；MessyRoom 的 S1 4K 128 spp Laowa：中心 0.924、四角 0.55–0.65）。
+
+**修法**：排除层多渲一张「什么都不显示」的空画面（同一种子、同样采样数、关自适应 → 相机采样逐个相同，只有世界背景，很快），雨的透过率 τ = 雨层透明度 / 空画面透明度——镜头权重逐个约掉。两张都把相机光线权重乘 1/4（OSL 参数 `weight_scale`；GPU 经 `fisheye_polynomial_k0` 传入，见 gpukernel.FIELD_MAP），透明度不会到 1、不会被截断；样本截断（`sample_clamp_*`）随之乘 1/4、关俄罗斯轮盘（轮盘按路径通量决定终止，通量缩小会多杀路径：实测 RMSE +18%），颜色除回去后与不缩放、不用轮盘的渲染逐像素相同（RMSE 0.0623 vs 原来的 0.0624）。
+- 结果：没有雨的像素 alpha = 0（CPU 恰好 0，GPU < 1e-6），BL_Final = Combined + 炫光；alpha 不再随采样数变（32 spp 0.0260 / 8 spp 0.0263）。
+- 颜色：降噪器（OIDN）对输入亮度不是严格线性，排除层 ×1/4 渲、降噪后再除回去，与不缩放的平均差 0.4%（个别像素几个百分点）；不降噪时相同。
+- 文件头 `blenderlens/exclude` 多了 `alpha_mean`、`raw_alpha_mean`（Cycles 原本的）、`empty_alpha_mean`、`weight_scale`。
+
+**0.8.6 及以前已经渲好的帧**：雨层颜色（`BL_Exclude` 的 RGB，预乘）是对的，只有 alpha 有偏。不重渲的合成：`final = Combined + BL_Exclude.rgb + BL_Flare + BL_Veil`（加法，忽略雨挡住的那一点背景——雨的真实 alpha 很小，测试场景平均 0.026）。
+
+**排除层提速**：
+- 只算 Combined：排除层渲染时临时关掉其余渲染层（结果不变）。
+- 可选（会改变结果，默认不开）：`exclude_spp=`（排除层单独的采样数）、`exclude_bounces=`（漫射 / 光泽 / 透射 / 体积弹射上限；透明弹射不限）。`render_still` / `render_frames` / `render_shot` / `render_sequence` 与 `blcli.py shot|sequence --exclude-spp N --exclude-bounces N` 都可用。注意：折射的雨不建议限弹射（雨丝要穿过多层，限了会变「实」、观感变）；`exclude_spp` 降低后雨的噪点变多，但时间降噪不会平均雨，所以只在雨本身干净时用。测试场景（180 p）：排除层 1.1 → 0.49 秒（8 spp）。
+- `LAST_TIMING["exclude_render"]` 记录排除层用时（含空画面）。
 
 ## 7. 输出与解挤压
 

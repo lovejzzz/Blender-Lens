@@ -362,7 +362,7 @@ def apply_settings(cam_ob):
                 blade_rotation=p.blade_rotation, delta_unit=d1, delta_front=d2, comp_phi=phi,
                 dispersion=int(p.dispersion and p.dispersion_mode == 'FULL'), exposure_compensate=int(p.exposure_compensate),
                 ghosts=int(p.ghosts), ghost_gain=p.ghost_gain, coated=int(p.coated), coating_nm=p.coating_nm,
-                coating_type=1 if p.coating_type == 'BROADBAND' else 0, unit_scale=us)
+                coating_type=1 if p.coating_type == 'BROADBAND' else 0, unit_scale=us, weight_scale=float(WEIGHT_SCALE[0]))
     vals.update(_xyz_params())                       # 0.8.2：Rec.709 → 场景工作色彩空间（CPU / OSL 的色散颜色；GPU 用 Cycles 的 rec709_to_rgb）
     keys = cc.keys()
     for k, v in vals.items():
@@ -479,6 +479,9 @@ def set_compensation(cam_ob, level):
     apply_settings(cam_ob)
     return True
 
+WEIGHT_SCALE = [1.0]       # 0.8.7：相机光线权重缩放（排除层的两次辅助渲染临时设 0.25，见 render_frame_multilayer）
+
+
 def _write_gpu_fields(cam, d1, d2, f_number, blades, phi=0.0):
     """GPU 路径的每帧参数通道（见 gpukernel.FIELD_MAP）。自定义相机用不到这些字段；CPU / OSL 路径忽略它们。
     它们跟随对焦 / 光圈的关键帧（frame_change 时 apply_settings 重写），所以动画在 GPU 路径下同样生效。返回是否改写。"""
@@ -488,6 +491,8 @@ def _write_gpu_fields(cam, d1, d2, f_number, blades, phi=0.0):
     c |= _set(cam.dof, "aperture_ratio", 1.0 / max(f_number, 1e-3), 1e-7)
     c |= _set(cam.dof, "aperture_blades", int(blades))
     c |= _set(cam, "fisheye_lens", 50.0 + 1.0e4 * phi, 1e-7)
+    s = float(WEIGHT_SCALE[0])
+    c |= _set(cam, "fisheye_polynomial_k0", s if s < 1.0 else 0.0, 1e-9)
     return c
 
 def gpu_settings(cam_ob):
@@ -745,11 +750,15 @@ def pass_through_objects(scene):
     return out
 
 
-def _aux_render(scene, path, hide=(), data_only=True, need_passes=(), holdout=None, film_transparent=None, holdout_objects=()):
+def _aux_render(scene, path, hide=(), data_only=True, need_passes=(), holdout=None, film_transparent=None, holdout_objects=(),
+                only_combined=False, samples=None, bounces=None, adaptive=None, denoise=None, weight_scale=None):
     """辅助渲染（多层 EXR，float32，不压缩）：hide 里的物体渲染时隐藏；data_only = 只要数据层（8 采样、0 次弹射、
     不降噪——Position / Depth 只在第 0 个采样写；Cryptomatte 按全部采样累积，补洞要靠它认物体）；need_passes：临时打开的视图层开关
     （(对象路径, 属性)）；holdout：{集合名: True/False} 临时设视图层集合的 holdout；holdout_objects：临时设成 holdout 的物体；
-    film_transparent：临时设。全部恢复。"""
+    film_transparent：临时设。only_combined（0.8.7）：只要 Combined——其余渲染层开关全部临时关掉（Cycles 少算、少占内存；
+    降噪器照样用它内部的引导数据，Combined 不变）。samples / bounces：临时设采样数 / 弹射上限（None = 不改）。
+    weight_scale（0.8.7）：调用方已把相机权重乘了这个数——样本截断（sample_clamp_*，绝对值）跟着乘，并关掉俄罗斯轮盘
+    （它按路径通量决定是否提前终止，通量缩小会多杀路径、多出噪点）：除回去之后与不缩放、不用轮盘的渲染逐像素相同。全部恢复。"""
     vl = bpy.context.view_layer if bpy.context.view_layer in scene.view_layers[:] else scene.view_layers[0]
     c, r, ims = scene.cycles, scene.render, scene.render.image_settings
     undo = []
@@ -761,6 +770,28 @@ def _aux_render(scene, path, hide=(), data_only=True, need_passes=(), holdout=No
             setv(ob, "hide_render", True)
         for ob in holdout_objects:
             setv(ob, "is_holdout", True)
+        if only_combined:
+            from . import passes as PS
+            for (path_, attr) in PS.FLAG_PASSES:
+                setv(getattr(vl, path_) if path_ else vl, attr, False)
+        if samples is not None:
+            setv(c, "samples", int(samples))
+        if adaptive is not None:
+            setv(c, "use_adaptive_sampling", bool(adaptive))
+        if denoise is not None:
+            setv(c, "use_denoising", bool(denoise))
+        if bounces is not None:
+            b = int(bounces)
+            for attr in ("max_bounces", "diffuse_bounces", "glossy_bounces", "transmission_bounces", "volume_bounces"):
+                # 透明弹射不限：雨丝重叠时要穿过多层透明，限了雨会变「实」（实测 alpha +48%）
+                if getattr(c, attr, None) is not None and getattr(c, attr) > b:
+                    setv(c, attr, b)
+        if weight_scale is not None:
+            for attr in ("sample_clamp_direct", "sample_clamp_indirect"):
+                if getattr(c, attr, 0.0) > 0.0:
+                    setv(c, attr, getattr(c, attr) * float(weight_scale))
+            setv(c, "min_light_bounces", c.max_bounces)              # 弹射数 ≤ 下限的路径不做轮盘
+            setv(c, "min_transparent_bounces", c.transparent_max_bounces)
         if data_only:
             setv(c, "samples", 8); setv(c, "use_denoising", False); setv(c, "use_adaptive_sampling", False)   # Cryptomatte 按全部采样累积：
                                                                                     # 1 采样时它和 Position 一样有洞，补洞就认不出物体
@@ -1050,7 +1081,8 @@ def reflection_vectors(scene, cam_ob, parts, vl_name, W, H, region, reflectors, 
 LAST_TIMING = {}                                         # 上一次 render_frame_multilayer 各步用时（秒），render_shot 写日志用
 
 def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8, passes="all", vectors=True,
-                            exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide"):
+                            exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide",
+                            exclude_spp=None, exclude_bounces=None):
     """渲染当前帧，写多层（多部分）EXR，保留视图层打开的所有渲染层：
       · 颜色层（Combined、各光组 Combined_<名>、Emit、Diffuse/Glossy/Transmission/Volume…、AO、颜色 AOV、Noisy Image、
         Denoising Albedo）做与 Combined 相同的横向色差（LATERAL_POST 时）→ 各层相加仍约等于 Combined；
@@ -1068,6 +1100,8 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
       （RGBA 预乘，其余物体做 holdout → 被场景挡住的部分自动去掉，胶片透明）。Combined、矢量、置信度都是不含它们的场景层；
       BL_Final = (BL_Exclude over Combined) + BL_Flare + BL_Veil。exclude_mode："hide"（主渲染里完全隐藏 → 场景层与不渲雨
       逐像素相同）或 "camera"（只对相机不可见：保留它们的阴影 / 反射）。
+      排除层的渲染只算 Combined（0.8.7，其余渲染层临时关掉，结果不变）。exclude_spp / exclude_bounces（0.8.7，可选，默认不改）：
+      排除层单独的采样数 / 弹射上限（不含透明弹射）——雨丝这类东西噪点小，可以少用采样省时间，代价是排除层噪点多一点、间接光少一点。
     为了 BL_Vector，会临时打开 Position 与 Cryptomatte Object 层（用户没开的不写进输出）。渲染时临时关闭合成（输出原始渲染层）。
     返回 (BL_Final 的 Image 数据块, 炫光光源名单, 炫光层 H×W×3（行 0 = 底部，与旧接口一致）)。"""
     import os, tempfile, time
@@ -1182,20 +1216,46 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
             others = [o for o in scene.objects if o.name not in ex_names and not o.hide_render
                       and o.type in ('MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'VOLUME', 'POINTCLOUD', 'CURVES', 'GREASEPENCIL')
                       and not o.name.startswith("BL_")]
+            # 0.8.7：排除层的 alpha。Cycles 的 alpha = 1 − Σ(相机光线权重 × 透过) / N：用真实镜头时权重里带着渐晕与出瞳
+            # 采样的「过 / 不过」，alpha 里就混进了渐晕和噪点（且透明度 > 1 时被截断 → 偏亮的 alpha），合成时把没有雨的地方也压暗了。
+            # 做法：同一种子、同样采样数、关自适应，再渲一次「什么都不显示」的空画面（相机采样逐个相同），
+            # 雨的透过率 = 两次透明度之比——镜头权重逐个约掉，没有雨的像素恰好 = 1。两次都把相机权重缩到 1/4，透明度不会被截断；
+            # 样本截断随之缩放、关俄罗斯轮盘（_aux_render weight_scale），颜色除回去后噪点不比不缩放的多（实测 RMSE 相同）。
+            tmp_0 = os.path.join(tempfile.gettempdir(), f"blenderlens_exclude0_{os.getpid()}.exr")
+            everything = [o for o in scene.objects if not o.hide_render and o.type not in ('CAMERA', 'LIGHT')
+                          and not o.name.startswith("BL_")]
+            XS = 0.25
             p.ghosts = False
+            WEIGHT_SCALE[0] = XS
+            apply_settings(cam_ob)
             try:
-                _aux_render(scene, tmp_x, data_only=False, film_transparent=True, holdout_objects=others)
+                _aux_render(scene, tmp_x, data_only=False, film_transparent=True, holdout_objects=others, only_combined=True,
+                            samples=exclude_spp, bounces=exclude_bounces, adaptive=False, weight_scale=XS)
+                _aux_render(scene, tmp_0, data_only=False, film_transparent=True, hide=everything, only_combined=True,
+                            samples=exclude_spp, adaptive=False, denoise=False, weight_scale=XS)
             finally:
+                WEIGHT_SCALE[0] = 1.0
                 p.ghosts = ghosts_was
                 apply_settings(cam_ob)
             try:
                 ex_part = next(PS.read_one(tmp_x, h) for h in PS.heads(tmp_x) if h["pass_"] == "Combined")
+                e0 = next(PS.read_one(tmp_0, h) for h in PS.heads(tmp_0) if h["pass_"] == "Combined")
             finally:
                 if not keep_tmp:
-                    try:
-                        os.remove(tmp_x)
-                    except OSError:
-                        pass
+                    for f_ in (tmp_x, tmp_0):
+                        try:
+                            os.remove(f_)
+                        except OSError:
+                            pass
+            ch = ex_part["channels"]
+            T_e = 1.0 - ch["A"].astype(np.float32); T_0 = 1.0 - e0["channels"]["A"].astype(np.float32)
+            tau = np.where(T_0 > 1e-6, np.clip(T_e / np.maximum(T_0, 1e-6), 0.0, 1.0), 1.0).astype(np.float32)
+            for c_ in "RGB":
+                ch[c_] = (ch[c_].astype(np.float32) / XS)
+            ch["A"] = 1.0 - tau
+            ex_stats = dict(alpha_mean=round(float(ch["A"].mean()), 5), raw_alpha_mean=round(float(1.0 - T_e.mean()), 5),
+                            empty_alpha_mean=round(float(1.0 - T_0.mean()), 5), weight_scale=XS)
+            del T_e, T_0, tau, e0
             T["exclude_render"] = time.perf_counter() - t1; t1 = time.perf_counter()
         hs = PS.heads(tmp)
         parts = [PS.read_one(tmp, h) for h in hs if in_mem(h["pass_"])]
@@ -1245,7 +1305,7 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
             exc = ex_part["channels"]
             new.append(PS.new_part(comb, "BL_Exclude", dict(R=exc["R"], G=exc["G"], B=exc["B"], A=exc["A"])))
             comb["header"]["blenderlens/exclude"] = json.dumps(dict(collections=list(exclude_collections), objects=len(ex_objs),
-                                                                    mode=exclude_mode))
+                                                                    mode=exclude_mode, exclude_spp=exclude_spp, **ex_stats))
         del veil
         fill = fill_first_sample_passes(scene, cam_ob, parts, vl.name, W, H, region)
         comb["header"]["blenderlens/fill"] = json.dumps(fill)
@@ -1431,17 +1491,27 @@ def fill_first_sample_passes(scene, cam_ob, parts, vl_name, W, H, region=None, m
         mw = cam_ob.matrix_world
         dg = bpy.context.evaluated_depsgraph_get()
         from mathutils import Vector
+        tree = owners = None
+        if n > 20000:                                    # 0.8.7：光线多时用 BVH 树（同一几何，约 5 倍快）
+            tree, owners = _scene_bvh(dg)
+
+        def cast(o_, d_):
+            if tree is None:
+                h, l, _n, _i, ob_, _m = scene.ray_cast(dg, o_, d_)
+                return h, l, (ob_.name if h else None)
+            l, _n, fi, _d = tree.ray_cast(o_, d_)
+            return l is not None, l, (owners[fi] if l is not None else None)
         for k in range(n):
             if not (np.isfinite(Po[k]).all() and np.isfinite(Do[k]).all()):
                 continue
             o = mw @ Vector((-Po[k, 0] / us, Po[k, 1] / us, -Po[k, 2] / us))
             d = (mw.to_3x3() @ Vector((-Do[k, 0], Do[k, 1], -Do[k, 2]))).normalized()
-            hit, loc, _n, _i, ob, _m = scene.ray_cast(dg, o + d * (20.0 / us), d)
+            hit, loc, hname = cast(o + d * (20.0 / us), d)
             for _ in range(8):                          # 0.8.5：透射面（skip）穿过去，取后面第一个非透射面
-                if not (hit and ob.name in skip):
+                if not (hit and hname in skip):
                     break
-                hit, loc, _n, _i, ob, _m = scene.ray_cast(dg, loc + d * (1.0 / us), d)
-            if hit and not ob.name.startswith("BL_"):
+                hit, loc, hname = cast(loc + d * (1.0 / us), d)
+            if hit and not hname.startswith("BL_"):
                 P[rows[k], cols[k]] = tuple(loc); n_cast += 1
                 missing[rows[k], cols[k]] = False
     filled = obj & (np.abs(P).sum(-1) > 0) & ~(np.abs(np.stack([pos["channels"][c] for c in "XYZ"], -1)).sum(-1) > 0)
@@ -1756,7 +1826,7 @@ def render_with_flare(scene, filepath, n_grid=260, blur_px=0.8):
     return render_frame(scene, filepath, flare=True, n_grid=n_grid, blur_px=blur_px)
 
 def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_layer_path=None, passes=None, vectors=True,
-                 exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide"):
+                 exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None):
     """渲染当前帧并做插件的后期：LATERAL_POST 的横向色差、正向炫光层（flare=True）。
     返回 (合成后的 Image 数据块（线性）, 炫光光源名单, 炫光层 H×W×3)。filepath 按扩展名写出（PNG/TIFF 16 位按场景色彩管理，EXR 线性）。
     flare_layer_path：另存炫光层为线性 EXR（单独调色 / 时域稳定用）。
@@ -1768,7 +1838,7 @@ def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_lay
     if passes is not None:
         return render_frame_multilayer(scene, filepath, flare=flare, n_grid=n_grid, blur_px=blur_px, passes=passes, vectors=vectors,
                                        exr_codec=exr_codec, half_color=half_color, exclude_collections=exclude_collections,
-                                       exclude_mode=exclude_mode)
+                                       exclude_mode=exclude_mode, exclude_spp=exclude_spp, exclude_bounces=exclude_bounces)
     cam_ob = scene.camera
     p = cam_ob.data.blenderlens
     ghosts_was = p.ghosts

@@ -246,7 +246,8 @@ def cmd_shot(a):
              f"preset={a.preset!r}, focal_mm={a.focal_mm or 0.0}, gate={a.gate or '16:9_NATIVE'!r}, passes={passes!r}, "
              f"spp={a.spp!r}, follow={not a.no_follow}, guard={not a.no_guard}, height={a.height!r}, flare={bool(a.flare)}, "
              f"exposure={a.exposure!r}, guard_min_gb={a.guard_gb}, exr_codec={a.exr_codec!r}, "
-             f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, focus_target={a.focus_target!r})")
+             f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, focus_target={a.focus_target!r}, "
+             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r})")
     s.append("res = dict(records=res['records'], summary=res.get('summary'), exposure=res.get('exposure'), "
              "stopped=res.get('stopped'), log=res['out_dir'])")
     s.append(f"print({MARK!r} + dump(res))")
@@ -271,7 +272,8 @@ def cmd_sequence(a):
     passes = a.passes if a.passes in (None, "all", "temporal") else [x.strip() for x in a.passes.split(",")]
     s.append(f"res = bl.render_sequence({shots!r}, out_dir={os.path.abspath(a.out)!r}, preset={a.preset!r}, passes={passes!r}, "
              f"spp={a.spp!r}, guard={not a.no_guard}, flare={bool(a.flare)}, exposure={a.exposure!r}, height={a.height!r}, "
-             f"exclude_collections={a.exclude.split(',') if a.exclude else None!r})")
+             f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, "
+             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r})")
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=96 * 3600)
 
@@ -327,11 +329,13 @@ def main():
     p.add_argument("--no-follow", action="store_true"); p.add_argument("--no-guard", action="store_true")
     p.add_argument("--guard-gb", type=float, default=4.0); p.add_argument("--gpu", action="store_true")
     p.add_argument("--exclude", help="排除集合（逗号分隔，如 FX_rain）"); p.add_argument("--focus-target", help="对焦跟住的物体名")
+    p.add_argument("--exclude-spp", type=int, help="排除层单独的采样数（0.8.7，默认同主渲染）"); p.add_argument("--exclude-bounces", type=int)
     p = sub.add_parser("sequence"); p.add_argument("--blend", required=True); p.add_argument("--out", required=True)
     p.add_argument("--shots", help="JSON 列表或文件"); p.add_argument("--markers", action="store_true")
     p.add_argument("--preset"); p.add_argument("--passes"); p.add_argument("--spp", type=int); p.add_argument("--height", type=int)
     p.add_argument("--flare", action="store_true"); p.add_argument("--exposure", default="keep", choices=["keep", "pinhole", "pinhole_centre"])
     p.add_argument("--exclude"); p.add_argument("--no-guard", action="store_true"); p.add_argument("--gpu", action="store_true")
+    p.add_argument("--exclude-spp", type=int); p.add_argument("--exclude-bounces", type=int)
     p = sub.add_parser("denoise"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True)
     p.add_argument("--frames", required=True); p.add_argument("--strength", type=float, default=1.0)
     p.add_argument("--radius", type=int, default=3); p.add_argument("--name", default="f")

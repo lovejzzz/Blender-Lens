@@ -29,6 +29,11 @@ Same real 3D scene (Poly Haven CC0 models and HDRI), same focal length, same cam
 
 ---
 
+## Fixed in 0.8.7: the rain layer no longer darkens the frame
+
+- **`BL_Exclude` alpha**: in 0.8.5 / 0.8.6 the exclude layer's alpha also carried lens vignetting and a sample-clamping bias, so `BL_Final` was darkened where there was no rain (about 5–8% in the centre, more in the corners). Alpha is now divided by the transparency of an empty frame, so pixels without rain have alpha exactly 0 and `BL_Final` = scene + rain + flare. For frames already rendered, the rain colour is correct: composite additively, `Combined + BL_Exclude.rgb + BL_Flare + BL_Veil`.
+- **Cheaper exclude pass**: it renders only Combined; optional `exclude_spp=` / `exclude_bounces=` (`blcli.py shot --exclude-spp`), off by default.
+
 ## What's new in 0.8.6: wide anamorphic (MessyRoom Day 5)
 
 - **Laowa-style 2× wide 29 mm**, a real modern 2× wide anamorphic from CN 112285889 B (cylinders in the middle, not a front attachment). Scaled to a 21–28 mm framing on a 16:9 native gate, it has about −6% edge distortion against −58% for the C-style, and vertical lines bend 17–43 px at 4K against 101 px.
@@ -111,12 +116,12 @@ From the 0.8 "accuracy and sampling" milestone in [`blenderlens/research/ROADMAP
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.8.6.zip`](dist/blenderlens-0.8.6.zip) from this repository.
+1. Download [`dist/blenderlens-0.8.7.zip`](dist/blenderlens-0.8.7.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.8.6.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.8.7.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.

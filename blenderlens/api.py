@@ -155,7 +155,7 @@ def lens_info(cam_ob, coverage=False):
 
 
 def render_still(filepath, scene=None, flare=True, n_grid=260, passes=None, vectors=True, exr_codec=None, half_color=None,
-                 exclude_collections=None, exclude_mode="hide"):
+                 exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None):
     """渲染当前帧。flare=True：叠加正向追迹的炫光层（Render with Flare）。返回写出的路径。
     passes（0.8.3）："all" 或渲染层名列表 → 写多层 EXR（保留所有渲染层、BL_Flare / BL_Veil / BL_Final / BL_Vector，
     见 rig.render_frame_multilayer）；None = 只写成片（旧行为）。
@@ -166,7 +166,8 @@ def render_still(filepath, scene=None, flare=True, n_grid=260, passes=None, vect
     if rig.gpu_unsupported(scene):
         scene.cycles.device = 'CPU'
     rig.render_frame(scene, filepath, flare=flare, n_grid=n_grid, passes=passes, vectors=vectors,
-                     exr_codec=exr_codec, half_color=half_color, exclude_collections=exclude_collections, exclude_mode=exclude_mode)    # 含 LATERAL_POST 的横向色差
+                     exr_codec=exr_codec, half_color=half_color, exclude_collections=exclude_collections, exclude_mode=exclude_mode,
+                     exclude_spp=exclude_spp, exclude_bounces=exclude_bounces)    # 含 LATERAL_POST 的横向色差
     return bpy.path.abspath(filepath)
 
 
@@ -223,7 +224,7 @@ def exposure_vs_pinhole(cam_ob, n=25):
 
 def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", seed=0, animated_seed=True,
                   flare=False, skip_existing=True, lock=True, stale_hours=12.0, file_ext=".exr", passes=None, vectors=True,
-                  exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide"):
+                  exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None):
     """逐帧渲染（命令行 -b 用）：确定性、可断点续渲、跳过已有帧、多机分帧。
     · 种子：seed + 帧号（animated_seed=False 时恒为 seed），同一帧任何机器渲染结果相同；
     · 断点续渲：先写 <名>.partial，完成后原子改名；已存在的帧跳过；
@@ -267,7 +268,8 @@ def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", see
                 scene.cycles.device = 'CPU'
             tmp = path + ".partial" + file_ext
             rig.render_frame(scene, tmp, flare=flare, passes=passes, vectors=vectors, exr_codec=exr_codec, half_color=half_color,
-                             exclude_collections=exclude_collections, exclude_mode=exclude_mode)
+                             exclude_collections=exclude_collections, exclude_mode=exclude_mode,
+                             exclude_spp=exclude_spp, exclude_bounces=exclude_bounces)
             os.replace(tmp, path)
             done.append(fr)
         finally:

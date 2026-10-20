@@ -274,6 +274,7 @@ shader {name}(
   float comp_phi = 0.0 [[ string help = "发腮补偿板的光焦度 φ（1/mm，水平 −φ、垂直 +φ），由插件按对焦距离写入" ]],
   int dispersion = 1 [[ string widget = "checkBox", string help = "三波长色散（仅 Analytic）" ]],
   int exposure_compensate = 1 [[ string widget = "checkBox", string help = "收光圈时补偿曝光（关闭 = 物理 T 值变暗）" ]],
+  float weight_scale = 1.0 [[ float min = 0.001, float max = 1.0, string help = "相机光线权重整体缩放（0.8.7：插件的排除层渲染临时设 < 1，让透明度不被截断；平时 1）" ]],
   float pupil_margin = {PM:.6g} [[ float min = 1.0, float max = 3.0, string help = "出瞳采样盘相对近轴出瞳的放大倍数（0.8.6：按镜头自动，广角时 > 1.4）" ]],
   int ghosts = 0 [[ string widget = "checkBox", string help = "序列鬼影追迹（两次反射，炫光/一字拉丝；仅 Analytic）" ]],
   float ghost_fraction = 0.5 [[ float min = 0.05, float max = 0.95, string help = "走鬼影路径的采样比例" ]],
@@ -360,6 +361,7 @@ shader {name}(
   float c2 = d[2] * d[2];
   float w = c2 * c2 * pupil_margin * pupil_margin * area_w * EXPOSURE_NORM;   // cos⁴θ × 采样域/出瞳面积比 ÷ 轴上透过率 → 轴上满光瞳 = 1
   if (!exposure_compensate) w *= k_stop * k_stop;         // 采样盘随光圈缩放，物理变暗需显式乘面积比
+  w *= clamp(weight_scale, 0.001, 1.0);
 
   if (mode == 1) {{
     position = point(-p[0], p[1], p[2]) * unit_scale;

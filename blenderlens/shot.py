@@ -63,13 +63,14 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
                 passes=None, spp=None, follow=True, guard=True, scene=None, height=None, flare=False, name="f",
                 exposure="keep", stop=True, focus=True, seed=0, units="SCENE", exr_codec=None, half_color=None,
                 guard_min_gb=4.0, guard_wait_s=1800.0, file_ext=".exr", lock=True, exclude_collections=None, exclude_mode="hide",
-                settings=None, focus_target=None, rack=None):
+                settings=None, focus_target=None, rack=None, exclude_spp=None, exclude_bounces=None):
     """渲一个镜头 → 日志 dict（同时写 <out_dir>/<name>_log.json）。
     source_camera：源相机（物体或名字）；None = 场景当前的相机（若它不是 BlenderLens 相机）。follow=False 时可以不给。
     frames：帧号序列；None = 场景的起止帧。preset：None = 用场景里已有的 BlenderLens 相机；给了 = 搭一支新镜头
     （focal_mm、gate、units、height 同 bl.build）。passes / exr_codec / half_color / flare 同 bl.render_frames。
     spp：采样数（None = 不改）。exposure："keep" 或 "pinhole"（见文件头）。
     exclude_collections（0.8.5）：如 ["FX_rain"]，单独成层 BL_Exclude，不进场景层 / 矢量 / 时间降噪。
+    exclude_spp / exclude_bounces（0.8.7，可选）：排除层单独的采样数 / 弹射上限（默认与主渲染相同）。
     settings（0.8.5）：镜头设置 dict（同 bl.configure，如 {"f_number": 2.8, "mumps_correction": 1}），搭好 / 跟随之后写入；
     focus_target / rack：对焦跟住一个点 / 拉焦（同 bl.focus_track），覆盖源相机的对焦。"""
     import bpy
@@ -107,7 +108,7 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
     log = dict(version=api.version(), started=time.strftime("%Y-%m-%d %H:%M:%S"),
                host=platform.node(), blend=bpy.data.filepath, camera=cam.name, source=src.name if src else None,
                frames=[frames[0], frames[-1]], n_frames=len(frames), passes=passes, flare=flare, spp=spp,
-               exclude_collections=list(exclude_collections or []),
+               exclude_collections=list(exclude_collections or []), exclude_spp=exclude_spp, exclude_bounces=exclude_bounces,
                out_dir=out, records=[])
     if os.path.exists(log_path):                          # 续渲：接着旧日志
         try:
@@ -151,7 +152,7 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
     save()
     try:
         _render_loop(sc, frames, out, name, file_ext, guard, guard_min_gb, guard_wait_s, seed, flare, lock, passes, exr_codec,
-                     half_color, exclude_collections, exclude_mode, log, save)
+                     half_color, exclude_collections, exclude_mode, log, save, exclude_spp, exclude_bounces)
     finally:
         restore_exposure()
     log["finished"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -190,7 +191,7 @@ def _scale_film_exposure(sc, k):
 
 
 def _render_loop(sc, frames, out, name, file_ext, guard, guard_min_gb, guard_wait_s, seed, flare, lock, passes, exr_codec,
-                 half_color, exclude_collections, exclude_mode, log, save):
+                 half_color, exclude_collections, exclude_mode, log, save, exclude_spp=None, exclude_bounces=None):
     import bpy
     from . import api, rig
     for fr in frames:
@@ -220,7 +221,8 @@ def _render_loop(sc, frames, out, name, file_ext, guard, guard_min_gb, guard_wai
         rig.LAST_TIMING.clear()
         done = api.render_frames(sc, frames=[fr], out_dir=out, name=name, seed=seed, flare=flare, lock=lock,
                                  file_ext=file_ext, passes=passes, exr_codec=exr_codec, half_color=half_color,
-                                 exclude_collections=exclude_collections, exclude_mode=exclude_mode)
+                                 exclude_collections=exclude_collections, exclude_mode=exclude_mode,
+                                 exclude_spp=exclude_spp, exclude_bounces=exclude_bounces)
         rec.update(rendered=bool(done), seconds=round(time.perf_counter() - t0, 2), timing=dict(rig.LAST_TIMING),
                    rss_gb=_rss_gb(), max_rss_gb=_max_rss_gb(), avail_gb_after=_available_gb(),
                    size_mb=round(os.path.getsize(path) / 1e6, 1) if os.path.exists(path) else None)

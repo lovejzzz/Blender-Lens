@@ -32,6 +32,8 @@ FIELD_MAP = [
     ("data.dof.aperture_blades", "blades", "叶片数", "光圈叶片数（0 = 圆形）"),
     ("data.dof.use_dof", "—", "True", "让 Blender 同步上面两个 dof 字段"),
     ("data.fisheye_lens", "fisheye_lens", "50 + 10000·φ", "发腮补偿板光焦度 φ（1/mm；0.8）"),
+    ("data.fisheye_polynomial_k0", "fisheye_lens_polynomial_bias", "权重缩放 s（0 < s < 1 时生效，否则 1）",
+     "相机光线权重缩放（0.8.7，排除层渲染用）。注意 stereo.pole_merge_angle_* 只在全景立体时同步，不能用"),
 ]
 
 EXPECTED_ORIGINAL = '''#else
@@ -353,6 +355,8 @@ ccl_device_inline Spectrum blenderlens_camera_sample(KernelGlobals kg,
   const float f_number = fmaxf(cam->inv_aperture_ratio, BL_N0);
   const int blades = (int)(cam->blades + 0.5f);
   const float comp_phi = (cam->fisheye_lens - 50.0f) * 1e-4f;   /* 发腮补偿板光焦度 φ（1/mm） */
+  const float ws_raw = cam->fisheye_lens_polynomial_bias;   /* 0.8.7：权重缩放（Blender 默认 k0 ≈ −1.2e-5 → 1） */
+  const float weight_scale = (ws_raw > 0.0f && ws_raw < 1.0f) ? fmaxf(ws_raw, 1e-3f) : 1.0f;
 
   /* 与 OSL 的 camera_shader_raster_position() 相同：rastertocamera 把像素映射到 [0,1]² */
   const ProjectionTransform rastertocamera = cam->rastertocamera;   /* Metal：取地址前先拷到本地（地址空间） */
@@ -412,6 +416,7 @@ ccl_device_inline Spectrum blenderlens_camera_sample(KernelGlobals kg,
   if (!BL_EXPOSURE_COMP) {
     w *= k_stop * k_stop;
   }
+  w *= weight_scale;
 
   /* 连续波长色散（0.8.2）：λ 的随机数与场景里的 5.3 色散材质共用（补丁 ④⑤⑥），按 Cycles 的 sample_wavelength 映射；
    * 颜色权重 = 传感器响应(λ) / pdf，换到工作色彩空间。
