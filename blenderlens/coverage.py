@@ -36,7 +36,7 @@ def _pu():
 class _Estimator:
     """出瞳平面采样盘上的 cos⁴ 加权通光量（OSL 的直射光路估计器）。"""
 
-    def __init__(self, rx, focus_mm, f_number, m):
+    def __init__(self, rx, focus_mm, f_number, m, margin=None):
         try:
             from . import oslgen as G
         except ImportError:
@@ -50,10 +50,11 @@ class _Estimator:
         sh = mv[0] * d1 + mv[1] * d2
         k = O.nominal_f_number(rx) / f_number
         self.z_exp, self.z_stop, self.r_stop = z_exp + sh, z_stop + sh, r_stop * k
-        try:
-            margin = float(G.pupil_table(rx)["r_samp"]) / r_exp
-        except Exception:                                   # noqa: BLE001
-            margin = 1.4
+        if margin is None:                                  # 不指定时按出瞳表的采样盘（与渲染一致）；指定时不建表（优化器里用，快）
+            try:
+                margin = float(G.pupil_table(rx)["r_samp"]) / r_exp
+            except Exception:                               # noqa: BLE001
+                margin = 1.4
         r_s = r_exp * k * margin
         u = (np.arange(m) + 0.5) / m * 2 - 1
         gx, gy = np.meshgrid(u * r_s, u * r_s)
@@ -240,10 +241,10 @@ def format_info(rx):
     return out
 
 
-def relative_illumination(rx, points, focus_mm=math.inf, f_number=None, m=72):
+def relative_illumination(rx, points, focus_mm=math.inf, f_number=None, m=72, margin=None):
     """画面上任意点（传感器坐标的比例 (u, v)，−1…1，1 = 光窗边缘）的相对照度（中心 = 1），与渲染同一估计器。"""
     W, H = rx["sensor"]["width"], rx["sensor"]["height"]
     f_number = max(f_number or 0.0, O.nominal_f_number(rx))
-    est = _Estimator(rx, focus_mm, f_number, m=m)
+    est = _Estimator(rx, focus_mm, f_number, m=m, margin=margin)
     c = est((0.0, 0.0)) or 1e-9
     return [est((u * W / 2, v * H / 2)) / c for u, v in points]

@@ -585,7 +585,10 @@ def laowa_2x():
           "focus": {"mechanism": "G1 最靠像面的一片负透镜（L7–L8）移动：D(6) 减小、D(8) 增大同样多（专利 ∞ 16.279 / 4.000，1500 mm 15.414 / 4.865）",
                     "groups": [{"ids": ["L7", "L8"], "moves": [1, 0]}], "solve": ["Ry"], "min_distance_mm": None},
           "sensor": {"format": "专利像面：按主光线追迹，半画角 ωx 41.5° / ωy 16.7° 落在 ±12.0 / ±8.8 mm → 24.0 × 17.6 mm（S35 级）",
-                     "width": 24.0, "height": 17.6}}
+                     "width": 24.0, "height": 17.6,
+                     "format_circle_mm": 27.52,
+                     "format_circle_note": "0.9.1：原光窗 24.0 × 17.6 的四角本身照不到（f/4 时 0）；画幅版本（全画幅 / IMAX）按「四角 ≥ 35%（f/4）」"
+                                           "的有效像圈直径 27.52 mm 放大（全画幅 × 1.573 时四角 35%）"}}
     rx = O.normalize(rx)
     z1 = O.layout(rx)[0]["z"]
     rx["focus"]["min_distance_mm"] = round(1500.0 + z1, 1)          # 专利近摄表：物面到第一面 1500 mm
@@ -736,6 +739,13 @@ if __name__ == "__main__":
     sirui_ff35()
     for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json"):   # C 是手工维护的 JSON，这一步幂等
         add_compensator_file(fn)
+    # 0.9.1：C 风格 50 mm 全画幅版（同焦段、变形器重配成 1.65×、整支重新优化；参数在 tools/reopt_c_series_style_ff.json）
+    import reoptimize as RO
+    RO.use("c_ff2")
+    RO.build_preset(os.path.join(os.path.dirname(os.path.abspath(__file__)), "reopt_c_series_style_ff.json"))
+    # 0.9.1：C 风格 50 mm 65 mm 5 齿孔版（1.3×，参照 Ultra Panavision 70 / Hawk65；参数在 tools/reopt_c_series_style_65.json）
+    RO.use("c_65")
+    RO.build_preset(os.path.join(os.path.dirname(os.path.abspath(__file__)), "reopt_c_series_style_65.json"))
     for fn in ("e_series_style.json", "panavision_rear_134.json", "panavision_rear_134_tele.json",
                "neil_2x_50.json", "neil_2x_65.json", "neil_2x_85.json"):
         rx = O.load(os.path.join(PDIR, fn))

@@ -753,12 +753,13 @@ def pass_through_objects(scene):
 
 
 def _aux_render(scene, path, hide=(), data_only=True, need_passes=(), holdout=None, film_transparent=None, holdout_objects=(),
-                only_combined=False, samples=None, bounces=None, adaptive=None, denoise=None, weight_scale=None):
+                only_combined=False, samples=None, bounces=None, adaptive=None, denoise=None, weight_scale=None, clamp=None):
     """辅助渲染（多层 EXR，float32，不压缩）：hide 里的物体渲染时隐藏；data_only = 只要数据层（8 采样、0 次弹射、
     不降噪——Position / Depth 只在第 0 个采样写；Cryptomatte 按全部采样累积，补洞要靠它认物体）；need_passes：临时打开的视图层开关
     （(对象路径, 属性)）；holdout：{集合名: True/False} 临时设视图层集合的 holdout；holdout_objects：临时设成 holdout 的物体；
     film_transparent：临时设。only_combined（0.8.7）：只要 Combined——其余渲染层开关全部临时关掉（Cycles 少算、少占内存；
     降噪器照样用它内部的引导数据，Combined 不变）。samples / bounces：临时设采样数 / 弹射上限（None = 不改）。
+    clamp（0.9.1）：(直接, 间接) 临时设样本截断（0 = 不截断；在 weight_scale 缩放之前设）。
     weight_scale（0.8.7）：调用方已把相机权重乘了这个数——样本截断（sample_clamp_*，绝对值）跟着乘，并关掉俄罗斯轮盘
     （它按路径通量决定是否提前终止，通量缩小会多杀路径、多出噪点）：除回去之后与不缩放、不用轮盘的渲染逐像素相同。全部恢复。"""
     vl = bpy.context.view_layer if bpy.context.view_layer in scene.view_layers[:] else scene.view_layers[0]
@@ -788,6 +789,8 @@ def _aux_render(scene, path, hide=(), data_only=True, need_passes=(), holdout=No
                 # 透明弹射不限：雨丝重叠时要穿过多层透明，限了雨会变「实」（实测 alpha +48%）
                 if getattr(c, attr, None) is not None and getattr(c, attr) > b:
                     setv(c, attr, b)
+        if clamp is not None:
+            setv(c, "sample_clamp_direct", float(clamp[0])); setv(c, "sample_clamp_indirect", float(clamp[1]))
         if weight_scale is not None:
             for attr in ("sample_clamp_direct", "sample_clamp_indirect"):
                 if getattr(c, attr, 0.0) > 0.0:
@@ -1120,9 +1123,36 @@ def reflection_vectors(scene, cam_ob, parts, vl_name, W, H, region, reflectors, 
 
 LAST_TIMING = {}                                         # 上一次 render_frame_multilayer 各步用时（秒），render_shot 写日志用
 
+def check_exclude_filters(clamp, knee):
+    """exclude_clamp / exclude_knee 的格式检查（渲染之前调用）：clamp = (直接 ≥ 0, 间接 ≥ 0)，knee = (0 ≤ 起点 < 上限)。"""
+    if clamp is not None:
+        if len(clamp) != 2 or min(float(v) for v in clamp) < 0:
+            raise ValueError(f"exclude_clamp 要 (直接, 间接)，都 ≥ 0（0 = 不截断），收到 {clamp!r}")
+    if knee is not None:
+        if len(knee) != 2 or not float(knee[1]) > float(knee[0]) >= 0.0:
+            raise ValueError(f"exclude_knee 要 (起点, 上限)，0 ≤ 起点 < 上限，收到 {knee!r}")
+
+
+def exclude_knee_apply(ch, knee):
+    """排除层亮度软压缩（0.9.1）：ch = {"R","G","B": 数组}（预乘），knee = (起点 a, 上限 b)。亮度 L ≤ a 不变；
+    L > a 时 L' = a + (b − a)·(1 − exp(−(L − a)/(b − a)))（在 a 处一阶连续，L → ∞ 时趋向 b），RGB 等比缩放（色相不变）。
+    原地修改，返回统计 {knee_pixels, max_before, max_after}。"""
+    a, b = float(knee[0]), float(knee[1])
+    if not b > a >= 0.0:
+        raise ValueError(f"exclude_knee 要 0 ≤ 起点 < 上限，收到 {knee}")
+    R, G, B = (ch[c].astype(np.float32) for c in "RGB")
+    L = 0.2126 * R + 0.7152 * G + 0.0722 * B
+    over = L > a
+    Ln = np.where(over, a + (b - a) * (1.0 - np.exp(-(np.maximum(L, a) - a) / (b - a))), L)
+    k = np.where(over, Ln / np.maximum(L, 1e-12), 1.0).astype(np.float32)
+    for c, X in zip("RGB", (R, G, B)):
+        ch[c] = X * k
+    return dict(knee_pixels=int(over.sum()), max_before=round(float(L.max()), 4), max_after=round(float(Ln.max()), 4))
+
+
 def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8, passes="all", vectors=True,
                             exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide",
-                            exclude_spp=None, exclude_bounces=None):
+                            exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None):
     """渲染当前帧，写多层（多部分）EXR，保留视图层打开的所有渲染层：
       · 颜色层（Combined、各光组 Combined_<名>、Emit、Diffuse/Glossy/Transmission/Volume…、AO、颜色 AOV、Noisy Image、
         Denoising Albedo）做与 Combined 相同的横向色差（LATERAL_POST 时）→ 各层相加仍约等于 Combined；
@@ -1142,11 +1172,17 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
       逐像素相同）或 "camera"（只对相机不可见：保留它们的阴影 / 反射）。
       排除层的渲染只算 Combined（0.8.7，其余渲染层临时关掉，结果不变）。exclude_spp / exclude_bounces（0.8.7，可选，默认不改）：
       排除层单独的采样数 / 弹射上限（不含透明弹射）——雨丝这类东西噪点小，可以少用采样省时间，代价是排除层噪点多一点、间接光少一点。
+      exclude_clamp / exclude_knee（0.9.1，MessyRoom Day 5：雨滴把车灯 / 亮窗折射成一帧一闪的亮点）：
+        exclude_clamp=(直接, 间接)：只对排除层那次渲染的样本截断（Cycles sample_clamp，0 = 不截断；主渲染不变）；
+        exclude_knee=(起点, 上限)：排除层（预乘 RGB）按亮度软压缩——起点以下不变，以上平滑地趋向上限（色相不变），
+        雨的样子保留、单帧的强亮点压下去；BL_Final 用压缩后的排除层合成。雨在时间上不连贯（每帧移动几十厘米），
+        所以是逐像素的软压缩，不是时间滤波。两者都写进 EXR 头的 blenderlens/exclude。
     为了 BL_Vector，会临时打开 Position 与 Cryptomatte Object 层（用户没开的不写进输出）。渲染时临时关闭合成（输出原始渲染层）。
     返回 (BL_Final 的 Image 数据块, 炫光光源名单, 炫光层 H×W×3（行 0 = 底部，与旧接口一致）)。"""
     import os, tempfile, time
     from . import flare as FL, passes as PS
     T = {}; t0 = time.perf_counter()
+    check_exclude_filters(exclude_clamp, exclude_knee)
     M = {}
     def _mem(stage):
         import resource, sys
@@ -1270,7 +1306,7 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
             apply_settings(cam_ob)
             try:
                 _aux_render(scene, tmp_x, data_only=False, film_transparent=True, holdout_objects=others, only_combined=True,
-                            samples=exclude_spp, bounces=exclude_bounces, adaptive=False, weight_scale=XS)
+                            samples=exclude_spp, bounces=exclude_bounces, adaptive=False, weight_scale=XS, clamp=exclude_clamp)
                 t_e0 = time.perf_counter()
                 if EMPTY_FRAME_MODE[0] == "scene":
                     _empty_frame_render(scene, cam_ob, tmp_0, samples=exclude_spp, weight_scale=XS)
@@ -1297,9 +1333,10 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
             tau = np.where(T_0 > 1e-6, np.clip(T_e / np.maximum(T_0, 1e-6), 0.0, 1.0), 1.0).astype(np.float32)
             for c_ in "RGB":
                 ch[c_] = (ch[c_].astype(np.float32) / XS)
+            knee_stats = exclude_knee_apply(ch, exclude_knee) if exclude_knee else {}
             ch["A"] = 1.0 - tau
             ex_stats = dict(alpha_mean=round(float(ch["A"].mean()), 5), raw_alpha_mean=round(float(1.0 - T_e.mean()), 5),
-                            empty_alpha_mean=round(float(1.0 - T_0.mean()), 5), weight_scale=XS)
+                            empty_alpha_mean=round(float(1.0 - T_0.mean()), 5), weight_scale=XS, **knee_stats)
             del T_e, T_0, tau, e0
             T["exclude_render"] = time.perf_counter() - t1; t1 = time.perf_counter()
         hs = PS.heads(tmp)
@@ -1350,7 +1387,9 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
             exc = ex_part["channels"]
             new.append(PS.new_part(comb, "BL_Exclude", dict(R=exc["R"], G=exc["G"], B=exc["B"], A=exc["A"])))
             comb["header"]["blenderlens/exclude"] = json.dumps(dict(collections=list(exclude_collections), objects=len(ex_objs),
-                                                                    mode=exclude_mode, exclude_spp=exclude_spp, **ex_stats))
+                                                                    mode=exclude_mode, exclude_spp=exclude_spp,
+                                                                    exclude_clamp=list(exclude_clamp) if exclude_clamp else None,
+                                                                    exclude_knee=list(exclude_knee) if exclude_knee else None, **ex_stats))
         del veil
         fill = fill_first_sample_passes(scene, cam_ob, parts, vl.name, W, H, region)
         comb["header"]["blenderlens/fill"] = json.dumps(fill)
@@ -1871,7 +1910,7 @@ def render_with_flare(scene, filepath, n_grid=260, blur_px=0.8):
     return render_frame(scene, filepath, flare=True, n_grid=n_grid, blur_px=blur_px)
 
 def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_layer_path=None, passes=None, vectors=True,
-                 exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None):
+                 exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None):
     """渲染当前帧并做插件的后期：LATERAL_POST 的横向色差、正向炫光层（flare=True）。
     返回 (合成后的 Image 数据块（线性）, 炫光光源名单, 炫光层 H×W×3)。filepath 按扩展名写出（PNG/TIFF 16 位按场景色彩管理，EXR 线性）。
     flare_layer_path：另存炫光层为线性 EXR（单独调色 / 时域稳定用）。
@@ -1883,7 +1922,7 @@ def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_lay
     if passes is not None:
         return render_frame_multilayer(scene, filepath, flare=flare, n_grid=n_grid, blur_px=blur_px, passes=passes, vectors=vectors,
                                        exr_codec=exr_codec, half_color=half_color, exclude_collections=exclude_collections,
-                                       exclude_mode=exclude_mode, exclude_spp=exclude_spp, exclude_bounces=exclude_bounces)
+                                       exclude_mode=exclude_mode, exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee)
     cam_ob = scene.camera
     p = cam_ob.data.blenderlens
     ghosts_was = p.ghosts

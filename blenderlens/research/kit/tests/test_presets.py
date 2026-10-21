@@ -127,7 +127,11 @@ def rms_spot(rx, dist, fx, fy):
     P_, D_, wt = FL._source_rays(lens, (pnt[0] + t * dv[0], pnt[1] + t * dv[1], dist), 100)
     idx, X, Y, w, Dout = lens.trace(P_, D_, FL.Lens.seq_direct(len(S)), O.LAMBDA_D, True, 0.0, 1.38)
     return math.hypot(X.std(), Y.std())
-for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json"):
+MFD_TOL = {"c_series_style_ff.json": 1.25, "c_series_style_65.json": 2.1}   # 最近对焦时补偿后最差光斑 / 画高 ≤ 原版 C × 这个倍数（65 mm 版水平视场宽，近摄时水平 0.7 处约软一倍，HANDOFF §6.14）
+def lev_c(v):
+    r = copy.deepcopy(P("c_series_style.json")); r["focus"]["compensator"]["level"] = v
+    return r
+for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json", "c_series_style_ff.json", "c_series_style_65.json"):
     base = P(fn)
     mfd = base["focus"]["min_distance_mm"]
     def lev(v):
@@ -143,7 +147,12 @@ for fn in ("c_series_style.json", "e_series_style.json", "g_series_style.json"):
     ok(not clash, f"{fn}: no edge clash at MFD with full correction")
     a0 = max(rms_spot(lev(0.0), mfd, f, g) for f, g in ((0, 0), (0.7, 0), (0, 0.7)))
     a1 = max(rms_spot(lev(1.0), mfd, f, g) for f, g in ((0, 0), (0.7, 0), (0, 0.7)))
-    ok(a1 < 1.35 * a0, f"{fn}: sharpness at MFD kept (worst RMS spot {1000 * a0:.0f} → {1000 * a1:.0f} µm)")
+    if fn in ("c_series_style_ff.json", "c_series_style_65.json"):   # 重新设计的全画幅 / 65 mm 版：与原版在它自己光窗上比（光斑 / 画高），补偿后不比原版糊
+        a_o = max(rms_spot(lev_c(1.0), lev_c(1.0)["focus"]["min_distance_mm"], f, g) for f, g in ((0, 0), (0.7, 0), (0, 0.7)))
+        ok(a1 / base["sensor"]["height"] < MFD_TOL[fn] * a_o / P("c_series_style.json")["sensor"]["height"],
+           f"{fn}: sharpness at MFD (worst RMS spot / frame height {1000 * a1 / base['sensor']['height']:.2f}‰ vs original C {1000 * a_o / P('c_series_style.json')['sensor']['height']:.2f}‰)")
+    else:
+        ok(a1 < 1.35 * a0, f"{fn}: sharpness at MFD kept (worst RMS spot {1000 * a0:.0f} → {1000 * a1:.0f} µm)")
     ok(O.comp_phi(lev(1.0), 0.0) == 0.0, f"{fn}: compensator plate is flat at infinity")
 # ── Sirui 1.6× 全画幅 35 mm（CN 118169848 A）：专利只给 fY 35 与权利要求里的 6 个比值；后截距没给 → X / Y 两向近轴像面必须重合 ──
 rx = P("sirui_ff_35.json"); S = O.layout(rx)
@@ -172,4 +181,35 @@ for k, v in vals.items():
 d1, d2 = O.solve_focus(rx, rx["focus"]["min_distance_mm"])
 ok(not [e for e in O.edge_report(rx, d1, d2) if e["min_gap"] < 0], "Sirui FF 35: no clash at MFD (0.9 m)")
 ok(rx["groups"][0]["surfaces"][0]["aperture"]["clear"] * 2 < 58.0, "Sirui FF 35: estimated front element fits the 58 mm filter thread")
+# ── C 风格 50 mm 全画幅版（0.9.1，tools/reoptimize.py c_ff2）：同焦段、1.65×、用满 36 × 24，风格 = 原版在 S35 上的 ──
+import coverage as CV
+import reoptimize as RO
+rx, orig = P("c_series_style_ff.json"), P("c_series_style.json")
+S, So = O.layout(rx), O.layout(orig)
+(fx, bx), (fy, by) = O.paraxial_infinity(S, "Rx"), O.paraxial_infinity(S, "Ry")
+ok(abs(fy - 50.0) < 0.05 and abs(fy / fx - 1.65) < 0.01 and O.desqueeze(rx) == 1.65, f"C FF: fY {fy:.3f} mm, squeeze {fy / fx:.4f}, desqueeze {O.desqueeze(rx)}")
+ok(abs(bx - by) < 0.05 and by >= 0.9 * O.paraxial_infinity(So, "Ry")[1] - 0.01, f"C FF: X / Y image planes coincide, BFL {by:.2f} mm ≥ 90% of original")
+ok((rx["sensor"]["width"], rx["sensor"]["height"]) == (36.0, 24.0) and O.format_factor(rx, "FF") == 1.0, "C FF: native full-frame gate, FF version = itself")
+cn, co = CV.coverage_report(rx, 1e7, 4.0), CV.coverage_report(orig, 1e7, 4.0)
+dd = max(abs(cn["distortion_pct"][k] - co["distortion_pct"][k]) for k in cn["distortion_pct"])
+ok(dd < 3.5, f"C FF: distortion within {dd:.2f} points of the original on its own gate")
+ok(cn["relative_illumination"]["corner"] > 0.75, f"C FF: corner RI at f/4 {cn['relative_illumination']['corner']:.2f} (original {co['relative_illumination']['corner']:.2f})")
+qn = RO.quality(RO.open_apertures(rx), 36.0, 24.0)
+qo = RO.quality(RO.open_apertures(orig), orig["sensor"]["width"], orig["sensor"]["height"])
+ratio = max(a["per_mille_of_height"] / b["per_mille_of_height"] for a, b in zip(qn, qo))
+ok(ratio < 1.3, f"C FF: sharpness profile (spot / frame height) within ×{ratio:.2f} of the original at every field point")
+# ── C 风格 50 mm 65 mm 5 齿孔版（0.9.1，tools/reoptimize.py c_65）：1.3×、用满 52.48 × 23.01 ──
+rx = P("c_series_style_65.json"); S = O.layout(rx)
+(fx, bx), (fy, by) = O.paraxial_infinity(S, "Rx"), O.paraxial_infinity(S, "Ry")
+ok(abs(fy - 50.0) < 0.05 and abs(fy / fx - 1.3) < 0.02 and O.desqueeze(rx) == 1.3, f"C 65: fY {fy:.3f} mm, squeeze {fy / fx:.4f}, desqueeze {O.desqueeze(rx)}")
+ok(abs(bx - by) < 0.05 and by >= 0.9 * O.paraxial_infinity(So, "Ry")[1] - 0.01, f"C 65: X / Y image planes coincide, BFL {by:.2f} mm ≥ 90% of original")
+ok((rx["sensor"]["width"], rx["sensor"]["height"]) == O.FORMAT_SIZES["65MM"], "C 65: native 65 mm 5-perf gate")
+d1, d2 = O.solve_focus(rx, rx["focus"]["min_distance_mm"])
+ok(not [e for e in O.edge_report(rx, d1, d2) if e["min_gap"] < 0], "C 65: no clash at MFD")
+c6 = CV.coverage_report(rx, 1e7, 4.0)
+ok(abs(c6["edge_vertical_bow_px"] - co["edge_vertical_bow_px"]) < 5, f"C 65: vertical-line bow at 4K {c6['edge_vertical_bow_px']:.1f} px (original {co['edge_vertical_bow_px']:.1f})")
+ok(c6["relative_illumination"]["corner"] > 0.65, f"C 65: corner RI at f/4 {c6['relative_illumination']['corner']:.2f}")
+q6 = RO.quality(RO.open_apertures(rx), *O.FORMAT_SIZES["65MM"])
+ratio = max(a["per_mille_of_height"] / b["per_mille_of_height"] for a, b in zip(q6, qo))
+ok(ratio < 1.4, f"C 65: sharpness profile within ×{ratio:.2f} of the original at every field point")
 print("ALL PRESET TESTS PASSED")

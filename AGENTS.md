@@ -26,8 +26,8 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `bl.preview(path, quality='draft')` | 低清快速渲染 + 图像统计；渲完恢复分辨率与采样 |
 | `bl.contact_sheet(path, [ {...}, {...} ])` | 多组设置并排成一张图（A/B），渲完恢复原设置 |
 | `bl.temporal_check(mode="moving")` / `bl.temporal_denoise(in_dir, out_dir, frames)` / `bl.render_shot(source_camera, frames, out_dir, ...)` | 0.8.4：运镜闪烁 / 时间降噪 / 渲一个镜头（HANDOFF §6.8） |
-| `bl.render_sequence(shots)` / `bl.shots_from_markers()` / `bl.focus_track(cam, target, frames, rack)` / `exclude_collections=[...]` | 0.8.5：多镜头 / 对焦跟随 / 雨等排除层；透射面与倒影的矢量自动（HANDOFF §6.9） |
-| `bl.build(preset, format="FF")` / `bl.coverage(cam)` | 0.8.8 全画幅版本（整支镜头连同光窗等比放大）/ 0.8.6 覆盖与畸变报告（HANDOFF §6.10、§6.12） |
+| `bl.render_sequence(shots)` / `bl.shots_from_markers()` / `bl.focus_track(cam, target, frames, rack)` / `exclude_collections=[...]` | 0.8.5：多镜头 / 对焦跟随 / 雨等排除层；透射面与倒影的矢量自动（HANDOFF §6.9）；0.9.1 `exclude_clamp` / `exclude_knee` 压雨层亮点（§6.15） |
+| `bl.build(preset, format="FF" / "IMAX" / "65MM")` / `bl.coverage(cam)` | 画幅版本（整支镜头等比放大，0.9.1 起用满整个片门，解挤压后比例随压缩比）/ 覆盖与畸变报告（HANDOFF §6.10、§6.12、§6.14） |
 | `bl.build / set_focus / set_stop / set_mumps_correction / lens_info / render_still / render_frames / follow_camera / enable_gpu` | 原有稳定接口，见 `blenderlens/HANDOFF.md` §6 |
 
 距离一律用米（`focus_m`）；镜头内部毫米；场景单位任意。GPU（Metal）必须在本进程第一次 GPU 渲染之前 `bl.enable_gpu()`。
@@ -50,6 +50,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `blenderlens/coverage.py` | 覆盖与畸变报告（0.8.6）：与 Analytic 渲染同一估计器的相对照度、像圈、畸变、竖线弯曲 | 否 |
 | `blenderlens/agent.py` / `api.py` / `ui.py` | AI 接口 / 稳定脚本接口 / 面板与属性 | 是 |
 | `tools/build_presets.py` | 从专利转录数据生成 E/G/Panavision/Neil 处方，并给 C/E/G 加补偿板 | 否 |
+| `tools/reoptimize.py` | 同焦段重新设计（0.9.1）：焦距不变、解析重配变形器压缩比、整支优化（玻璃 / 片数不变），风格目标 = 原版在 S35 上的软硬比例 / 畸变 % / 暗角；参数存 `tools/reopt_*.json`，由 build_presets 生成 `c_series_style_ff` / `_65` | 否 |
 | `tools/build_pupil_tables.py` | 预设出瞳表（改了处方的光学部分或 `pupil.py` 后必须重跑） | 否 |
 | `blenderlens/research/` | `ROADMAP.md`（计划与验收）、`RESEARCH.md`（来源、核对、修正记录）、专利原件 | – |
 

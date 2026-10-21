@@ -243,11 +243,16 @@ def cmd_shot(a):
              f"spp={a.spp!r}, follow={not a.no_follow}, guard={not a.no_guard}, height={a.height!r}, flare={bool(a.flare)}, "
              f"exposure={a.exposure!r}, guard_min_gb={a.guard_gb}, exr_codec={a.exr_codec!r}, "
              f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, focus_target={a.focus_target!r}, "
-             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r})")
+             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r}, exclude_clamp={_pair(a.exclude_clamp)!r}, exclude_knee={_pair(a.exclude_knee)!r})")
     s.append("res = dict(records=res['records'], summary=res.get('summary'), exposure=res.get('exposure'), "
              "stopped=res.get('stopped'), log=res['out_dir'])")
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=48 * 3600)
+
+
+def _pair(v):
+    """「a,b」→ (a, b)（float）；None → None。"""
+    return None if not v else tuple(float(x) for x in v.split(","))
 
 
 def cmd_sequence(a):
@@ -269,7 +274,7 @@ def cmd_sequence(a):
     s.append(f"res = bl.render_sequence({shots!r}, out_dir={os.path.abspath(a.out)!r}, preset={a.preset!r}, passes={passes!r}, "
              f"spp={a.spp!r}, guard={not a.no_guard}, flare={bool(a.flare)}, exposure={a.exposure!r}, height={a.height!r}, "
              f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, "
-             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r}"
+             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r}, exclude_clamp={_pair(a.exclude_clamp)!r}, exclude_knee={_pair(a.exclude_knee)!r}"
              + (f", format={a.format!r}" if a.format else "") + ")")
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=96 * 3600)
@@ -297,12 +302,12 @@ def main():
     p = sub.add_parser("info"); p.add_argument("preset"); p.add_argument("--focus-m", type=float)
     p.add_argument("--coverage", action="store_true", help="覆盖与畸变报告（像圈、四角照度、畸变、竖线弯曲）"); p.add_argument("--stop", type=float)
     p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
-    p.add_argument("--format", choices=["S35", "FF"], help="画幅版本：S35 原设计 / FF 全画幅版本（0.8.8）")
+    p.add_argument("--format", choices=["S35", "FF", "IMAX", "65MM"], help="画幅版本：S35 原设计 / FF 全画幅（0.8.8）/ IMAX 15/70 / 65MM 5 齿孔（0.9.1）")
     sub.add_parser("describe")
     p = sub.add_parser("render")
     p.add_argument("--preset"); p.add_argument("--blend"); p.add_argument("--scene", default="demo", choices=["demo"])
     p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
-    p.add_argument("--format", choices=["S35", "FF"], help="画幅版本：S35 原设计 / FF 全画幅版本（0.8.8）")
+    p.add_argument("--format", choices=["S35", "FF", "IMAX", "65MM"], help="画幅版本：S35 原设计 / FF 全画幅（0.8.8）/ IMAX 15/70 / 65MM 5 齿孔（0.9.1）")
     p.add_argument("--focus-m", type=float); p.add_argument("--stop", type=float)
     p.add_argument("--set", action="append", help="设置=值（值按 JSON 解析，如 coating_type=BROADBAND、mumps_correction=0.5）")
     p.add_argument("--variants", help="对比图：JSON 列表或 JSON 文件，每项一组设置")
@@ -322,7 +327,7 @@ def main():
     p = sub.add_parser("shot"); p.add_argument("--blend", required=True); p.add_argument("--source")
     p.add_argument("--frames", required=True, help="40-56、40-56:2 或 1,5,9"); p.add_argument("--out", required=True)
     p.add_argument("--preset"); p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
-    p.add_argument("--format", choices=["S35", "FF"], help="画幅版本：S35 原设计 / FF 全画幅版本（0.8.8）")
+    p.add_argument("--format", choices=["S35", "FF", "IMAX", "65MM"], help="画幅版本：S35 原设计 / FF 全画幅（0.8.8）/ IMAX 15/70 / 65MM 5 齿孔（0.9.1）")
     p.add_argument("--passes", help="all / temporal / 逗号分隔的渲染层名"); p.add_argument("--spp", type=int)
     p.add_argument("--height", type=int); p.add_argument("--flare", action="store_true")
     p.add_argument("--exposure", default="keep", choices=["keep", "pinhole", "pinhole_centre"]); p.add_argument("--exr-codec")
@@ -330,13 +335,15 @@ def main():
     p.add_argument("--guard-gb", type=float, default=4.0); p.add_argument("--gpu", action="store_true")
     p.add_argument("--exclude", help="排除集合（逗号分隔，如 FX_rain）"); p.add_argument("--focus-target", help="对焦跟住的物体名")
     p.add_argument("--exclude-spp", type=int, help="排除层单独的采样数（0.8.7，默认同主渲染）"); p.add_argument("--exclude-bounces", type=int)
+    p.add_argument("--exclude-clamp", help="排除层的样本截断 直接,间接（0.9.1，如 2,1）"); p.add_argument("--exclude-knee", help="排除层亮度软压缩 起点,上限（0.9.1，如 0.05,0.10）")
     p = sub.add_parser("sequence"); p.add_argument("--blend", required=True); p.add_argument("--out", required=True)
     p.add_argument("--shots", help="JSON 列表或文件"); p.add_argument("--markers", action="store_true")
     p.add_argument("--preset"); p.add_argument("--passes"); p.add_argument("--spp", type=int); p.add_argument("--height", type=int)
     p.add_argument("--flare", action="store_true"); p.add_argument("--exposure", default="keep", choices=["keep", "pinhole", "pinhole_centre"])
-    p.add_argument("--format", choices=["S35", "FF"])
+    p.add_argument("--format", choices=["S35", "FF", "IMAX", "65MM"])
     p.add_argument("--exclude"); p.add_argument("--no-guard", action="store_true"); p.add_argument("--gpu", action="store_true")
     p.add_argument("--exclude-spp", type=int); p.add_argument("--exclude-bounces", type=int)
+    p.add_argument("--exclude-clamp"); p.add_argument("--exclude-knee")
     p = sub.add_parser("denoise"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True)
     p.add_argument("--frames", required=True); p.add_argument("--strength", type=float, default=1.0)
     p.add_argument("--radius", type=int, default=3); p.add_argument("--name", default="f")

@@ -24,7 +24,7 @@ Rendered with 0.9.0: same real 3D scene (Poly Haven CC0 models and HDRI) and cam
 > Panavision has never published the production prescriptions of its C / E / G / T / Primo anamorphic series. The C / E / G presets combine **public patents of the same era and construction** with look parameters set from Panavision's published specs — they are **not replicas**. The only public Panavision anamorphic prescription, US 7,085,066 (a rear 1.34× anamorphic group), is included as-is in two presets.
 
 **At a glance**
-- 10 presets: three Panavision-style front anamorphics, the real Panavision rear 1.34× at both zoom ends, a modern 2× by Iain Neil (Sirui patent) at 50 / 65 / 85 mm, a Laowa 2× wide 29 mm, and a native full-frame Sirui 1.6× 35 mm — plus a full-frame version of every Super 35 preset.
+- 12 presets: three Panavision-style front anamorphics, the real Panavision rear 1.34× at both zoom ends, a modern 2× by Iain Neil (Sirui patent) at 50 / 65 / 85 mm, a Laowa 2× wide 29 mm, a native full-frame Sirui 1.6× 35 mm, and C-style 50 mm redesigns for full frame (1.65×) and 65 mm (1.3×) — plus full-frame, IMAX 15/70 and 65 mm versions of every preset.
 - Cycles OSL custom camera (CPU / OptiX) plus a **GPU path for Apple Metal** (about 19× faster than CPU, 57× faster than 0.4).
 - Catalog-accurate glass dispersion (Ohara / Schott), single-layer or broadband multilayer coatings, Auto Panatar-style mumps correction.
 - Deterministic forward-traced flares, diffraction starbursts, ISO 9358-calibrated veiling glare.
@@ -32,6 +32,16 @@ Rendered with 0.9.0: same real 3D scene (Poly Haven CC0 models and HDRI) and cam
 - **AI-native**: a self-describing API, a JSON command line, tiered tests with a metric baseline, and `AGENTS.md`.
 
 ---
+
+## What's new in 0.9.1: formats fill the whole gate, 65 mm, and C-style lenses redesigned for full frame and 65 mm
+
+- **Formats fill the whole gate.** Every format version now uses the entire sensor or film gate, and the desqueezed aspect follows each lens's squeeze (a 2× lens on 36 × 24 is 3:1, a 1.3× lens on 65 mm is 2.97:1). The lens is scaled so its design image circle just covers the gate (C / E / G × 1.502 on full frame, Neil × 1.558, Panavision × 1.590).
+- **New format: 65 mm 5-perf** (`format="65MM"`, 52.48 × 23.01 mm, the Panavision System 65 / Ultra Panavision 70 camera gate), alongside full frame and IMAX 15/70. Real IMAX 15/70 never used anamorphic lenses, so IMAX stays a scaled version only.
+- **Two new presets, designed by BlenderLens rather than taken from a patent**: what the C-style 50 mm would be if its maker brought out a full-frame version and a 65 mm version. The focal length stays at 50 mm and the anamorphic attachment is re-powered to a lower squeeze, as real large-format anamorphics do (Ultra Vista 1.65×, Hawk65 1.3×, Ultra Panavision 70 1.25×). The whole lens is then re-optimized with the same glass and element count, so that on the new gate the lens matches the original on its own Super 35 gate, position by position: monochromatic sharpness, lateral colour, distortion and vignetting.
+  - **C-style 50 mm full frame, 1.65×** (36 × 24 → 2.48:1): blur relative to frame height within ×0.9–1.12 of the original at every field point, lateral colour about the same, vertical lines bow −25.5 px at 4K (original −27.3), corners 0.80 at f/4 (original 0.88). Close-focus squeeze stays at 1.65 with the compensator recomputed for the new design.
+  - **C-style 50 mm 65 mm 5-perf, 1.3×** (52.48 × 23.01 → 2.97:1): within ×0.9–1.39 of the original, corners 0.73 at f/4. Its weak spot is the 0.5–0.7 horizontal zone, which is about 50% softer vertically. The limit of this construction at a 41° half-diagonal; a real manufacturer would add an element.
+- **Rain-layer specks (MessyRoom feedback)**: `exclude_clamp=(direct, indirect)` clamps samples in the exclude (rain) render only, and `exclude_knee=(start, limit)` soft-compresses its luminance so raindrops refracting headlamps no longer flash single-frame white specks. `BL_Final` is composited from the compressed layer. Command line: `--exclude-clamp`, `--exclude-knee`.
+- The optimizer is `tools/reoptimize.py`; parameters live in `tools/reopt_*.json`, and `tools/build_presets.py` regenerates both presets.
 
 ## What's new in 0.9.0: a native full-frame wide anamorphic
 
@@ -143,12 +153,12 @@ Gallery rendered with 0.6 (full gate, CPU / first GPU path, about 3–5 minutes 
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.9.0.zip`](dist/blenderlens-0.9.0.zip) from this repository.
+1. Download [`dist/blenderlens-0.9.1.zip`](dist/blenderlens-0.9.1.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.9.0.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.1.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.
@@ -293,6 +303,8 @@ The complete reference (every parameter, FAQ, known limitations) is [`blenderlen
 | **Neil 2× modern anamorphic 50 / 65 / 85 mm (real prescription, 0.6)** | [CN 111562632 B](https://patents.google.com/patent/CN111562632B/en) (Iain A. Neil / Guangdong Sirui Optical, 2019) as published: one shared front anamorphic section (3 X-cylinders, 3 Y-cylinders, two-element G1b internal focus) + three interchangeable rear groups. **The tables in the US family member US 11,287,618 contain many misprints and cannot be used** (see `blenderlens/research/RESEARCH.md`) | vertical 50 / 65 / 85 mm · f/3 · 1.08 m | 2.06 → 1.93 (−6.6%) | Patent embodiment (not a Panavision lens; same designer as the Panavision rear group) |
 | **Laowa-style 2× wide 29 mm (real prescription, 0.8.6)** | [CN 112285889 B](https://patents.google.com/patent/CN112285889B/zh) example 1 (Venus Optics / Laowa, 2020): negative front group (one element focuses) → Y-cylinder group → X-cylinder group → rear group with the stop; only nd / Vd and no apertures are published (apertures estimated and capped to real edge thicknesses) | horizontal 14.6 / vertical 29.0 mm · f/2.9 · 1.68 m | 1.99 → 1.99 (internal focus) | Patent embodiment; the wide option: covers 16:9_NATIVE from about 25 mm "framing" with −6% edge distortion |
 | **Sirui-style 1.6× full-frame 35 mm (real prescription, 0.9.0)** | [CN 118169848 A](https://patents.google.com/patent/CN118169848A/zh) (Guangdong Sirui Optical, 2022; = Sirui Saturn 35 mm T2.9 1.6×): front spherical group (elements 2–3 focus) → X-cylinder group → spherical group with the stop → Y-cylinder group → aspheric element; designed for full frame (36 × 24 → 2.4:1); only nd / vd and no apertures are published (apertures estimated) | horizontal 21.2 / vertical 35.0 mm · f/2.9 · 0.9 m | 1.648 → 1.648 (no mumps; desqueezed at the nominal 1.6) | Patent embodiment; full frame natively: corners 26% wide open, 37% at f/4 |
+| **C-style 50 mm full frame 1.65× (BlenderLens design, 0.9.1)** | The C-style lens with its attachment re-powered to 1.65× and the whole lens re-optimized (same glass and element count) to match the original's look on full frame; `tools/reoptimize.py` | vertical 50 mm · f/2.3 · 0.76 m | 1.65 → 1.65 (compensated) | Not a real lens: what a full-frame version could be; 36 × 24 → 2.48:1 |
+| **C-style 50 mm 65 mm 5-perf 1.3× (BlenderLens design, 0.9.1)** | Same approach at 1.3× (Hawk65 / Ultra Panavision 70 class) on the 52.48 × 23.01 gate | vertical 50 mm · f/2.3 · 0.76 m | 1.30 → 1.30 (compensated) | Not a real lens; 2.97:1; softer in the 0.5–0.7 horizontal zone |
 | **Panavision rear 1.34×, tele end (real prescription)** | As above, zoom at the tele end Z4 (zoom spacings from [US 6,122,111](https://patents.google.com/patent/US6122111A/en) TABLE 1, applied to the verified Z1 table) | horizontal 50.9 / vertical 66.4 mm · f/4.1 (vertical) · 0.48 m | 1.305 → 1.305 (no mumps) | Zoom alone 49.22 mm (patent 49.2) |
 
 - **Common focal length**: set "Vertical Focal Length" at Build to scale any preset to the same vertical focal length (squeeze, f-number and aberration character unchanged; presets with estimated apertures are re-estimated for the new field of view). The Isco attachment (E/G) exceeds its design field below about 100 mm, so 100 mm is the common focal length at which all presets are physically valid.

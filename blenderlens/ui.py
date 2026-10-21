@@ -106,8 +106,10 @@ class BL_OT_build(bpy.types.Operator):
                             description="把整支镜头按比例缩放到这个垂直焦距（变形镜头按垂直方向命名焦距）；0 = 预设原生焦距。"
                                         "估算口径的组会按新视场重算口径")
     format: EnumProperty(name="Format", default='S35',
-                         items=[('S35', "Super 35 (Original Design)", optics.FORMATS["S35"]),
-                                ('FF', "Full Frame Version", optics.FORMATS["FF"])],
+                         items=[('S35', "Original Design", optics.FORMATS["S35"]),
+                                ('FF', "Full Frame Version", optics.FORMATS["FF"]),
+                                ('IMAX', "IMAX 15/70 Version", optics.FORMATS["IMAX"]),
+                                ('65MM', "65 mm 5-perf Version", optics.FORMATS["65MM"])],
                          description="画幅版本：原设计（Super 35 级）或全画幅版本（整支镜头等比放大，覆盖与观感逐点相同，焦距 × k、景深更浅）")
     coated: BoolProperty(name="MgF₂ Coating", default=True,
                          description="Geometry 模式镜片材质的镀膜；之后由相机设置（处方 look 的初值）统一控制")
@@ -158,19 +160,41 @@ class BL_OT_build(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class BL_MT_build_ff(bpy.types.Menu):
-    """全画幅版本（0.8.8）：每支镜头整体等比放大，覆盖 36 × 24 mm 机身（焦距 × k，观感与原设计逐点相同，景深更浅）"""
-    bl_idname = "BL_MT_build_ff"
-    bl_label = "Build Lens (Full Frame)"
+class _BuildFormatMenu:
+    FMT = 'FF'
+    LABEL = "全画幅"
 
     def draw(self, context):
         for fn, name, _tag in _preset_items(self, context):
             rx = optics.load(os.path.join(optics.PRESCRIPTION_DIR, fn))
-            k = optics.format_factor(rx, "FF")
+            k = optics.format_factor(rx, self.FMT)
             fy = optics.paraxial_infinity(optics.layout(rx), "Ry")[0] * k
-            op = self.layout.operator(BL_OT_build.bl_idname, text=f"{name}  →  全画幅 {fy:.0f} mm")
+            W, H = optics.FORMAT_SIZES[self.FMT]
+            op = self.layout.operator(BL_OT_build.bl_idname, text=f"{name}  →  {self.LABEL} {fy:.0f} mm · {W * optics.desqueeze(rx) / H:.2f}:1")
             op.preset = fn
-            op.format = 'FF'
+            op.format = self.FMT
+
+
+class BL_MT_build_ff(_BuildFormatMenu, bpy.types.Menu):
+    """全画幅版本：用满 36 × 24 mm，整支镜头等比放大到设计像圈罩住传感器（焦距 × k，观感与原设计逐点相同，景深更浅）"""
+    bl_idname = "BL_MT_build_ff"
+    bl_label = "Build Lens (Full Frame)"
+
+
+class BL_MT_build_imax(_BuildFormatMenu, bpy.types.Menu):
+    """IMAX 15/70 版本：用满 70.41 × 52.63 mm 片门（0.9.1）"""
+    bl_idname = "BL_MT_build_imax"
+    bl_label = "Build Lens (IMAX 15/70)"
+    FMT = 'IMAX'
+    LABEL = "IMAX"
+
+
+class BL_MT_build_65(_BuildFormatMenu, bpy.types.Menu):
+    """65 mm 5 齿孔版本：用满 52.48 × 23.01 mm 片门（0.9.1）"""
+    bl_idname = "BL_MT_build_65"
+    bl_label = "Build Lens (65 mm 5-perf)"
+    FMT = '65MM'
+    LABEL = "65 mm"
 
 
 class BL_OT_rebuild_apertures(bpy.types.Operator):
@@ -344,6 +368,8 @@ class BL_PT_sidebar(bpy.types.Panel):
         lay = self.layout
         lay.operator_menu_enum(BL_OT_build.bl_idname, "preset", text="Build Lens", icon='OUTLINER_OB_CAMERA')
         lay.menu(BL_MT_build_ff.bl_idname, text="Build Lens (Full Frame)", icon='OUTLINER_OB_CAMERA')
+        lay.menu(BL_MT_build_imax.bl_idname, text="Build Lens (IMAX 15/70)", icon='OUTLINER_OB_CAMERA')
+        lay.menu(BL_MT_build_65.bl_idname, text="Build Lens (65 mm 5-perf)", icon='OUTLINER_OB_CAMERA')
         cam_ob = context.scene.camera
         if cam_ob and cam_ob.type == 'CAMERA' and any(c.name.startswith("BL_Rig") for c in cam_ob.children):
             _draw_settings(lay, cam_ob)
@@ -392,7 +418,7 @@ def _frame_change(scene, depsgraph=None):
             rig.apply_settings(ob)
 
 
-classes = (BLCameraSettings, BL_OT_build, BL_MT_build_ff, BL_OT_rebuild_apertures, BL_OT_mark_flare, BL_OT_render_flare,
+classes = (BLCameraSettings, BL_OT_build, BL_MT_build_ff, BL_MT_build_imax, BL_MT_build_65, BL_OT_rebuild_apertures, BL_OT_mark_flare, BL_OT_render_flare,
            BL_OT_gpu_enable, BL_OT_gpu_remove, BL_OT_export, BL_PT_sidebar, BL_PT_camera)
 
 def register():

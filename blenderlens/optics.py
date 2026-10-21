@@ -952,36 +952,49 @@ def apply_gate(rx, gate="FULL", width=None, height=None):
 # 这里是等比放大，是「同一支镜头的全画幅版」最直接、可验证的做法。
 
 FORMATS = {
-    "S35": "原设计（Super 35 级光窗）",
-    "FF": "全画幅版本：整支镜头连同光窗等比放大到 36 × 24 mm 以内（同一个设计做大一号，焦距 × k）",
+    "S35": "原设计（专利 / 原设计的光窗）",
+    "FF": "全画幅版本：用满 36 × 24 mm 传感器；整支镜头等比放大到它自己的设计像圈刚好罩住传感器（焦距 × k）",
+    "IMAX": "IMAX 15/70 版本：用满 70.41 × 52.63 mm 片门；整支镜头等比放大到设计像圈刚好罩住片门（焦距 × k）",
+    "65MM": "65 mm 5 齿孔版本：用满 52.48 × 23.01 mm 片门（Ultra Panavision 70 / System 65 的摄影片门）；整支镜头等比放大到设计像圈刚好罩住片门（焦距 × k）",
 }
-FF_SIZE = (36.0, 24.0)
+FORMAT_SIZES = {"FF": (36.0, 24.0), "IMAX": (70.41, 52.63), "65MM": (52.48, 23.01)}
+FF_SIZE = FORMAT_SIZES["FF"]
 
 def format_factor(rx, fmt="S35"):
-    """画幅版本的放大倍数 k（S35 = 1）。按处方原光窗（full_aperture）算。"""
+    """画幅版本的放大倍数 k（S35 = 1）。0.9.1 起：传感器 / 片门用满（解挤压后的比例 = 片门宽高比 × 压缩比，每支镜头不同），
+    k = 片门半对角线 / 原设计像圈半径（原光窗半对角线）——画面角落在镜头里的相对位置与原设计的光窗角落相同，暗角、猫眼、
+    畸变的程度一致。原生就是这个画幅的预设（像圈已罩住）k = 1。"""
     if fmt in (None, "", "S35"):
         return 1.0
-    if fmt != "FF":
+    if fmt not in FORMAT_SIZES:
         raise ValueError(f"画幅版本只有 {list(FORMATS)}（收到 {fmt!r}）")
-    s = rx["sensor"].get("full_aperture") or rx["sensor"]
-    return min(FF_SIZE[0] / s["width"], FF_SIZE[1] / s["height"])
+    W, H = FORMAT_SIZES[fmt]
+    s = rx["sensor"]
+    R = 0.5 * s["format_circle_mm"] if s.get("format_circle_mm") else image_circle_radius(rx)
+    return max(1.0, math.hypot(W, H) / 2.0 / R)
 
 def to_format(rx, fmt="S35"):
-    """处方 → 指定画幅版本（见上）。S35 原样返回。"""
-    k = format_factor(rx, fmt)
-    if k == 1.0:
+    """处方 → 指定画幅版本：镜片、间隔、口径、光阑、对焦行程、补偿凸轮全部 × k（与原设计逐点相同，只是大一号），
+    光窗 = 整个传感器 / 片门（原设计光窗 × k 记在 full_aperture，16:9_NATIVE 按它的像圈算，再收进传感器）。"""
+    if fmt in (None, "", "S35"):
         return rx
+    k = format_factor(rx, fmt)
+    W, H = FORMAT_SIZES[fmt]
+    import copy
     fy = paraxial_infinity(layout(rx), "Ry")[0]
-    rx = rescale_to_vertical_efl(rx, fy * k, reestimate=False)        # 口径也按 k 等比（不重新估算）：逐点相同
+    rx = rescale_to_vertical_efl(rx, fy * k, reestimate=False) if k != 1.0 else copy.deepcopy(rx)
     s = rx["sensor"]
-    for d in [s] + ([s["full_aperture"]] if s.get("full_aperture") else []):
-        d["width"], d["height"] = round(d["width"] * k, 4), round(d["height"] * k, 4)
-    s["format"] = f'全画幅版本：{s["width"]:.2f} × {s["height"]:.2f} mm（原设计 × {k:.4f}）'
-    s["max_gate"] = list(FF_SIZE)
-    m = rx["meta"]
-    m["format"] = dict(name=fmt, factor=round(k, 5), from_vertical_efl=round(fy, 3))
-    m.pop("rescaled", None)
-    m["short_name"] = f'{m.get("short_name", m["name"]).split(" @ ")[0]} 全画幅 {fy * k:.0f} mm'
+    fa = s.get("full_aperture") or {"width": s["width"], "height": s["height"], "format": s.get("format")}
+    s["full_aperture"] = {"width": round(fa["width"] * k, 4), "height": round(fa["height"] * k, 4), "format": fa.get("format")}
+    s["width"], s["height"] = W, H
+    s["max_gate"] = [W, H]
+    name = {"FF": "全画幅", "IMAX": "IMAX 15/70", "65MM": "65 mm 5 齿孔"}[fmt]
+    s["format"] = f'{name}：{W:g} × {H:g} mm（解挤压后 {W * desqueeze(rx) / H:.2f}:1；原设计 × {k:.4f}）'
+    if k != 1.0:
+        m = rx["meta"]
+        m["format"] = dict(name=fmt, factor=round(k, 5), from_vertical_efl=round(fy, 3))
+        m.pop("rescaled", None)
+        m["short_name"] = f'{m.get("short_name", m["name"]).split(" @ ")[0]} {name} {fy * k:.0f} mm'
     return rx
 
 def prepare(rx, fmt="S35", focal_mm=0.0, gate="FULL", width=None, height=None):
@@ -990,7 +1003,7 @@ def prepare(rx, fmt="S35", focal_mm=0.0, gate="FULL", width=None, height=None):
     if focal_mm and focal_mm > 0:
         rx = rescale_to_vertical_efl(rx, focal_mm)
     rx = apply_gate(rx, gate, width, height)
-    mg = rx["sensor"].get("max_gate") or (list(FF_SIZE) if fmt == "FF" else None)
+    mg = rx["sensor"].get("max_gate") or (list(FORMAT_SIZES[fmt]) if fmt in FORMAT_SIZES else None)
     if mg and gate == "16:9_NATIVE":
         # 原生 16:9 满像圈的光窗可以比处方光窗高；全画幅机身（全画幅版本、原生全画幅预设的 sensor.max_gate）的传感器
         # 只有 36 × 24 → 等比收进去（自定义光窗不收）

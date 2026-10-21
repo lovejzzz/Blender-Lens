@@ -5,6 +5,7 @@
 #   0.8.7：没有雨的像素 alpha 恰好 0、BL_Final = Combined + 炫光（不再被渐晕 / 截断偏差压暗）；R 的场景层运动补偿闪烁与 N 相差 ≤ 5%（hide 模式下逐像素相同）；
 #   temporal_denoise(R) 的 BL_Final 与「temporal_denoise(N) 的场景层 + 雨层 over」逐像素一致；BL_Final(R) = 雨 over 场景 + 炫光。
 #   0.8.7：exclude_spp=8 / exclude_bounces=2 时场景层逐像素不变、雨的覆盖（alpha 平均）差 < 15%，并报告排除层用时。
+#   0.9.1：exclude_knee 后排除层亮度 ≤ 上限、起点以下不变、场景层不变、BL_Final 一致；exclude_clamp 压低峰值、覆盖不变；错误参数渲染前报错。
 # 运行：Blender -b --factory-startup --python tests/bl_exclude.py
 import os, sys, json, math, shutil
 import bpy, bmesh
@@ -152,11 +153,43 @@ rep["exclude_spp_option"] = dict(
     scene_identical=float(np.abs(PS.rgb(PS.find(F, "Combined")) - PS.rgb(PS.find(Cp, "Combined"))).max()) <= 1e-3 * float(PS.rgb(PS.find(F, "Combined")).max()),   # GPU 有 ~3e-4 的不确定性
     alpha_mean=[round(float(rgba(F, "BL_Exclude")[..., 3].mean()), 4), round(float(rgba(Cp, "BL_Exclude")[..., 3].mean()), 4)],
     exclude_render_s=[t_full, t_cheap])
+# 0.9.1（MessyRoom Day 5：雨滴把车灯折射成一帧一闪的亮点）：exclude_knee 软压缩、exclude_clamp 只截断排除层
+lum = lambda X: 0.2126 * X[..., 0] + 0.7152 * X[..., 1] + 0.0722 * X[..., 2]
+Lf = lum(rgba(F, "BL_Exclude")); rainy = rgba(F, "BL_Exclude")[..., 3] > 0.01
+ka = float(np.percentile(Lf[rainy], 50)); kb = 2.0 * ka
+bl.render_still(os.path.join(dS, "knee.exr"), flare=False, passes="temporal", exclude_collections=["FX_rain"],
+                exclude_knee=(ka, kb), **LOSSLESS)
+bl.render_still(os.path.join(dS, "clamp.exr"), flare=False, passes="temporal", exclude_collections=["FX_rain"],
+                exclude_clamp=(ka, ka), **LOSSLESS)
+Kn, Cl = PS.read(os.path.join(dS, "knee.exr")), PS.read(os.path.join(dS, "clamp.exr"))
+Lk, Lc = lum(rgba(Kn, "BL_Exclude")), lum(rgba(Cl, "BL_Exclude"))
+below = Lf <= 0.9 * ka
+ref = max(float(Lf.max()), 1e-9)
+finK = PS.rgb(PS.find(Kn, "BL_Final")); exK = rgba(Kn, "BL_Exclude")
+reconK = exK[..., :3] + (1 - exK[..., 3:]) * PS.rgb(PS.find(Kn, "Combined"))
+bad = []
+for kw in (dict(exclude_knee=(0.2, 0.1)), dict(exclude_clamp=(-1, 0)), dict(exclude_knee=(0.1,))):
+    try:
+        bl.render_still(os.path.join(dS, "bad.exr"), flare=False, exclude_collections=["FX_rain"], **kw); bad.append(False)
+    except ValueError:
+        bad.append(True)
+rep["exclude_filters"] = dict(
+    knee=[round(ka, 5), round(kb, 5)], max_lum=[round(float(Lf.max()), 5), round(float(Lk.max()), 5), round(float(Lc.max()), 5)],
+    knee_max_ok=bool(Lk.max() <= kb * 1.002), knee_below_unchanged=float(np.abs(Lk - Lf)[below].max() / ref) if below.any() else 0.0,
+    knee_scene_identical=float(np.abs(PS.rgb(PS.find(Kn, "Combined")) - PS.rgb(PS.find(F, "Combined"))).max()) <= 1e-3 * float(PS.rgb(PS.find(F, "Combined")).max()),
+    knee_final_recon=float(np.abs(finK - reconK).max() / max(float(np.abs(reconK).max()), 1e-9)),
+    clamp_lowers_peak=bool(Lc.max() < 0.9 * Lf.max()),
+    clamp_alpha_same=round(abs(float(rgba(Cl, "BL_Exclude")[..., 3].mean()) / max(float(rgba(F, "BL_Exclude")[..., 3].mean()), 1e-9) - 1), 4),
+    header=json.loads(PS.find(Kn, "Combined")["header"]["blenderlens/exclude"]).get("exclude_knee"),
+    bad_values_rejected=bad)
+xf = rep["exclude_filters"]
 eo = rep["exclude_spp_option"]
 nr = rep["norain"]
 rep["PASS"] = bool(eo["scene_identical"] and abs(eo["alpha_mean"][1] / max(eo["alpha_mean"][0], 1e-9) - 1) < 0.15
                    and rep["exclude_vs_rain_only_rgb_maxdiff"] < 0.06 and rep["exclude_vs_rain_only_rgb_meanrel"] < 0.01 and rep["exclude_alpha_mean"] > 0.002
                    and nr["frac"] > 0.3 and nr["alpha_max"] < 1e-5 and nr["final_vs_comb_maxrel"] < 1e-3
                    and rep["scene_flicker_rel_diff"] <= 0.05 and rep["final_recon_rel"] < 1e-3
-                   and rep["stable_vs_norain_plus_rain_rel"] < 2e-3 and rep["final_with_rain_flicker"] > rep["scene_flicker"]["R"])
+                   and rep["stable_vs_norain_plus_rain_rel"] < 2e-3 and rep["final_with_rain_flicker"] > rep["scene_flicker"]["R"]
+                   and xf["knee_max_ok"] and xf["knee_below_unchanged"] < 2e-3 and xf["knee_scene_identical"] and xf["knee_final_recon"] < 1e-3
+                   and xf["clamp_lowers_peak"] and xf["clamp_alpha_same"] < 0.02 and xf["header"] is not None and all(xf["bad_values_rejected"]))
 print("EXCLUDE", json.dumps(rep))

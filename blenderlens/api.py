@@ -52,8 +52,9 @@ def build(preset="c_series_style.json", scene=None, *, prescription=None, focal_
     preset：自带预设文件名，或任意 JSON 路径；prescription：直接给处方 dict（优先）。
     focal_mm：缩放到这个垂直焦距（0 = 原生）；gate：'FULL' / '2.39' / '16:9'（抽取，裁切）/ '16:9_NATIVE'（原生 16:9 满像圈，不裁切）/ 'CUSTOM'（配 gate_size_mm=(w, h)）。
     units：'AUTO' / 'SCENE'（保留米制等场景单位）/ 'MM'。
-    format（0.8.8）：'S35'（原设计）/ 'FF'（全画幅版本：整支镜头连同光窗等比放大到 36 × 24 mm 以内，焦距 × k，覆盖与观感
-    与原设计逐点相同，景深更浅）。focal_mm 在全画幅版本上再缩放（光窗保持全画幅）。见 optics.FORMATS。"""
+    format：'S35'（原设计）/ 'FF'（全画幅）/ 'IMAX'（IMAX 15/70）/ '65MM'（65 mm 5 齿孔，0.9.1）：用满整个传感器 / 片门（解挤压后的比例 = 片门
+    宽高比 × 压缩比），整支镜头等比放大到设计像圈罩住片门（焦距 × k，覆盖与观感与原设计逐点相同，景深更浅）。
+    focal_mm 在该版本上再缩放（光窗不变）。见 optics.FORMATS。"""
     scene = scene or bpy.context.scene
     if prescription is not None:
         rx = optics.normalize(prescription)
@@ -155,7 +156,7 @@ def lens_info(cam_ob, coverage=False):
 
 
 def render_still(filepath, scene=None, flare=True, n_grid=260, passes=None, vectors=True, exr_codec=None, half_color=None,
-                 exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None):
+                 exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None):
     """渲染当前帧。flare=True：叠加正向追迹的炫光层（Render with Flare）。返回写出的路径。
     passes（0.8.3）："all" 或渲染层名列表 → 写多层 EXR（保留所有渲染层、BL_Flare / BL_Veil / BL_Final / BL_Vector，
     见 rig.render_frame_multilayer）；None = 只写成片（旧行为）。
@@ -167,7 +168,7 @@ def render_still(filepath, scene=None, flare=True, n_grid=260, passes=None, vect
         scene.cycles.device = 'CPU'
     rig.render_frame(scene, filepath, flare=flare, n_grid=n_grid, passes=passes, vectors=vectors,
                      exr_codec=exr_codec, half_color=half_color, exclude_collections=exclude_collections, exclude_mode=exclude_mode,
-                     exclude_spp=exclude_spp, exclude_bounces=exclude_bounces)    # 含 LATERAL_POST 的横向色差
+                     exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee)    # 含 LATERAL_POST 的横向色差
     return bpy.path.abspath(filepath)
 
 
@@ -224,7 +225,7 @@ def exposure_vs_pinhole(cam_ob, n=25):
 
 def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", seed=0, animated_seed=True,
                   flare=False, skip_existing=True, lock=True, stale_hours=12.0, file_ext=".exr", passes=None, vectors=True,
-                  exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None):
+                  exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None):
     """逐帧渲染（命令行 -b 用）：确定性、可断点续渲、跳过已有帧、多机分帧。
     · 种子：seed + 帧号（animated_seed=False 时恒为 seed），同一帧任何机器渲染结果相同；
     · 断点续渲：先写 <名>.partial，完成后原子改名；已存在的帧跳过；
@@ -234,8 +235,11 @@ def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", see
     · 每帧都会按关键帧更新对焦 / 光圈（frame_set → apply_settings），GPU 路径同样生效。
     · passes（0.8.3）："all" 或渲染层名列表 → 每帧写多层 EXR（所有渲染层 + BL_Flare / BL_Veil / BL_Final / BL_Vector）；
       0.8.4：预设 "temporal"、exr_codec、half_color 同 render_still。
+    · exclude_collections / exclude_spp / exclude_bounces 同 render_still；exclude_clamp=(直接, 间接)、exclude_knee=(起点, 上限)
+      （0.9.1）：排除层（雨）的亮点控制——只对排除层的样本截断、排除层亮度软压缩，见 rig.render_frame_multilayer。
     返回本次渲染的帧号列表。"""
     import socket, time as _time
+    rig.check_exclude_filters(exclude_clamp, exclude_knee)          # 渲染之前就报错
     scene = scene or bpy.context.scene
     cam = camera(scene)
     if cam is None:
@@ -269,7 +273,7 @@ def render_frames(scene=None, frames=None, out_dir="//frames", name="frame", see
             tmp = path + ".partial" + file_ext
             rig.render_frame(scene, tmp, flare=flare, passes=passes, vectors=vectors, exr_codec=exr_codec, half_color=half_color,
                              exclude_collections=exclude_collections, exclude_mode=exclude_mode,
-                             exclude_spp=exclude_spp, exclude_bounces=exclude_bounces)
+                             exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee)
             os.replace(tmp, path)
             done.append(fr)
         finally:
