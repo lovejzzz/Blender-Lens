@@ -25,6 +25,16 @@
 
 ---
 
+## 0.9.2 新增：渲镜头更快、单帧亮点、内置时间质检
+
+- **更快**：`bl.enable_gpu(denoise_gpu=True)` 把 OIDN 降噪放到 GPU 上（Blender 默认在 CPU 上做）。3842 × 1624 一帧从 53 秒降到 38 秒。结果与 CPU 降噪不逐位相同，所以不默认打开，`bl.diagnose()` 会提示。Cryptomatte 解码快了 20 倍，物体多的场景里 fill 和运动矢量这两步明显变快。
+- **`passes="delivery"`**：只写时间降噪真正要读的层，加上 BlenderLens 自己的层。3842 × 1624 时每帧 EXR 从 71 MB 降到 20 MB。
+- **单帧亮点**：`temporal_denoise(..., spike_suppress=True)` 会把孤立的亮点压到按运动对齐后的前后帧水平，正常高光不动。`bl.spike_report()` 按层、按帧统计这些亮点并出热图，`render_shot` 每个镜头渲完会自动做一次。
+- **镜头级临时覆盖**：`render_shot` 和 `render_sequence` 的每个镜头可以设 `visibility={"墙": {"visible_camera": False}}`，以及渲染前 / 后的 `pre` / `post` 回调，渲完自动还原。
+- **`bl.verify_inputs()`**：给相机的每一项输入算指纹（处方、镜头数据、OSL、GPU 头文件、出瞳表、补丁）。用来确认两个版本对同一支镜头的渲染输入完全相同；每帧 EXR 头里也写同样的指纹。
+- **`exclude_motion_blur=True`**：只给雨层开运动模糊，雨滴拉成线，主渲染不变。
+- **`bl.coverage` 新增横向色差**：按 4K 像素给出。C 风格在画面边缘和四角约 2.4–2.5 px。
+
 ## 0.9.1 新增：画幅用满片门、65 mm、C 风格的全画幅与 65 mm 重新设计
 
 - **画幅用满整个片门**：所有画幅版本都用满整个传感器 / 片门，解挤压后的比例随每支镜头的压缩比（2× 镜头在 36 × 24 上是 3:1，1.3× 在 65 mm 上是 2.97:1）；整支镜头按设计像圈刚好罩住片门来放大（全画幅时 C / E / G × 1.502、Neil × 1.558、Panavision × 1.590）。
@@ -145,12 +155,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.9.1.zip`](dist/blenderlens-0.9.1.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.9.2.zip`](dist/blenderlens-0.9.2.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.9.1.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.2.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。

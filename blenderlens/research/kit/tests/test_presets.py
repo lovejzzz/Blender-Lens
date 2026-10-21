@@ -212,4 +212,13 @@ ok(c6["relative_illumination"]["corner"] > 0.65, f"C 65: corner RI at f/4 {c6['r
 q6 = RO.quality(RO.open_apertures(rx), *O.FORMAT_SIZES["65MM"])
 ratio = max(a["per_mille_of_height"] / b["per_mille_of_height"] for a, b in zip(q6, qo))
 ok(ratio < 1.4, f"C 65: sharpness profile within ×{ratio:.2f} of the original at every field point")
+# ── 0.9.2：横向色差进覆盖报告（光斑重心，4K 像素）；相机输入指纹稳定、随处方变化 ──
+import verify as VF
+cr = CV.coverage_report(O.prepare(P("c_series_style.json"), "S35", 0, "FULL"), 3000.0, 4.0)["lateral_color_px"]
+ok(cr["corner"]["F_C"] is not None and 0.3 < cr["corner"]["F_C"][2] < 6.0 and cr["edge_h"]["F_C"][2] > cr["edge_v"]["F_C"][2],
+   f"C: lateral colour at 4K corner {cr['corner']['F_C'][2]} px (F−C, spot centroids), edge h/v {cr['edge_h']['F_C'][2]} / {cr['edge_v']['F_C'][2]} px")
+v1, v2 = VF.verify_inputs("c_series_style.json", "FULL"), VF.verify_inputs("c_series_style.json", "FULL")
+v3 = VF.verify_inputs("c_series_style.json", "16:9_NATIVE")
+ok(v1["inputs"] == v2["inputs"] and v1["inputs"]["all"] != v3["inputs"]["all"] and v1["inputs"]["pupil_table_source"] == "shipped",
+   f"verify_inputs: stable ({v1['inputs']['all']}), changes with the gate, shipped pupil table")
 print("ALL PRESET TESTS PASSED")

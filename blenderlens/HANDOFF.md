@@ -552,6 +552,42 @@ bl.focus_track(cam, frames=(157, 230), rack=[(190, "Oden"), (202, "CRT")])   # �
 
 **场景层的亮点**（湿路面凹凸 + 车灯反射，Noisy Image 最大 120）：不是镜头的问题，用 Cycles 自己的设置——`scene.cycles.blur_glossy`（Filter Glossy，0.5–1：把粗糙度很低的光泽反弹在间接光里放宽，专门压这类焦散亮点）、`sample_clamp_indirect` 降到 2–3（代价是间接高光略暗）、光源用 Light Tree（5.x 默认开）；Principled 的凹凸很细时把路面粗糙度从近 0 提到 0.05–0.1 也很有效。BlenderLens 的相机不改变这些路径。
 
+## 6.16 速度、孤立亮点、时间质检、镜头级覆盖、相机输入指纹、横向色差（0.9.2，MessyRoom Day 5 全片复盘）
+
+MessyRoom 的数据（0.9.1，S35 C 50 FULL 原生，3842 × 1624，128 spp，GPU）：每帧 render 102–115 s、exclude 63–74 s、fill 22–32 s、vector 6–14 s；每帧 EXR 267 MB、内存峰值 32.7 GB。
+
+**速度**
+- **GPU 降噪**（最大的一项）：Blender 默认 OIDN 在 CPU 上（`scene.cycles.denoising_use_gpu = False`）。在 3842 × 1624、1.4 万实例的测试场景上，改 GPU 后主渲染 31 → 24 s、排除层 13.3 → 5.4 s，整帧 52.6 → 37.9 s（−28%）。结果与 CPU 降噪不逐位相同，所以不自动开：`bl.enable_gpu(denoise_gpu=True)` 或直接设场景；`bl.diagnose()` 在「GPU 渲染 + CPU 降噪」时给 info `denoise_on_cpu`。要和已渲的镜头逐位一致时保持现状。
+- **Cryptomatte 解码**（fill 与 BL_Vector 各调一次）：原来每个物体在整幅图上比一遍（3,000 个物体、4K：每次 4.7 s），改成一次排序（`np.unique(return_inverse)`）0.47 s，结果逐像素相同；同一帧里第二次调用直接用缓存。
+- fill 的其余部分：邻域补洞本身不到 1 s；沿主光线 ray_cast 在 1.4 万实例的场景里约 1.4 ms / 条（Blender 的 `scene.ray_cast` 随实例数变慢），MessyRoom 的 3,461 条约 5 s——没改（只对整个发光物体这类邻域补不上的像素做）。
+- **exclude_spp 的取值**（1920 × 812，雨后 5 个强度 40 的光源，exclude_knee (0.05, 0.10)，对照 = 同样 128 spp 换种子的差）：
+
+| exclude_spp | BL_Final 亮度差（平均 / p99） | 排除层亮度差 | 雨的平均亮度 | 排除层用时 |
+|---|---|---|---|---|
+| 128（换种子 = 噪点底） | 0.0159 / 0.095 | 0.0054 | 0.0328 | 5.5 s |
+| 64 | 0.0174 / 0.101 | 0.0064 | 0.0312（−5%） | 4.7 s |
+| 32 | 0.0205 / 0.116 | 0.0080 | 0.0289（−12%） | 4.2 s |
+| 16 | 0.0251 / 0.141 | 0.0106 | 0.0260（−21%） | 3.8 s |
+
+  要点：**开 knee 时降采样会让雨变暗**——采样少、单像素噪点大，knee 把噪点的尖峰也压了（Jensen 不等式）；不开 knee 时没有这个偏差。全分辨率 128 → 32 spp 排除层 19.4 → 14.0 s，因为降噪（CPU）是大头；开 GPU 降噪后排除层 5.2–5.4 s。建议：先开 GPU 降噪；exclude_spp 取 64（雨暗 5%）或保持 128；不加 "auto"（默认值不变，避免与已渲镜头不一致）。
+- **passes="delivery"**：只写 temporal_denoise 真正读的层（Combined、Denoising Specular Albedo / Roughness）+ 插件层（BL_Final、BL_Vector、BL_VectorConfidence、BL_Flare、BL_Veil、BL_Exclude…）。3842 × 1624、DWAB：每帧 71.2 → 20.3 MB（temporal → delivery）。
+
+**孤立亮点**（「每帧换位置的小亮点」：车灯在湿路面上的倒影，降噪后残留）
+- 定义（与 MessyRoom 的测法一致，`blenderlens/spikes.py`）：按 BL_Vector 把前后帧对齐到当前帧，显示亮度（Rec.709 亮度夹到 [0, 1]、sRGB 编码）比前后两帧都高 delta（0.06）以上且 > min_lum（0.25），且前后链上的矢量置信度 ≥ conf（0.8）。
+- `bl.temporal_denoise(..., spike_suppress=True / dict(delta, min_lum, conf))`：场景层（降噪后的 Combined）的孤立亮点逐通道压到 max(前, 后)；正常高光在前后帧也亮、不动；雨（BL_Exclude）不动。每帧个数写进报告与 EXR 头 `blenderlens/spikes_suppressed`。命令行 `blcli.py denoise --spike-suppress 1` 或 `0.06,0.25`。
+- `bl.spike_report(in_dir, frames, layers=("Combined", "BL_Exclude", "BL_Final"))`：每帧每层的个数与最大超出量、整段热图 PNG（每像素出现次数，5×5 累加）、`<name>_spikes.json`；对 temporal_denoise 的输出用 `in_dir=(输出目录, 原目录)`（矢量在原目录）。`bl.render_shot(..., qc=True)`（默认开）渲完自动做，写进 `<name>_log.json` 的 `spike_report`（含最差的 5 帧）。
+- 测试（`tests/bl_render_shot.py`）：第 2 帧注入 3×3 的亮点（50），spike_report 找到，spike_suppress 后中心 49.9 → 0.75。
+
+**镜头级覆盖**（S1 的「wild wall」）：`render_shot(visibility={"物体": {"visible_camera": False, ...}}, pre=fn, post=fn)`；`render_sequence` 的每个镜头 dict 里也可以写（命令行 --shots JSON 只支持 visibility）。名字不存在 → 渲染前 ValueError；渲完（包括出错）全部还原。
+
+**相机输入指纹**：`bl.verify_inputs(preset, gate, format, focal_mm)` / `blcli.py verify <preset> --gate FULL`：prepare 后的处方、lens_data、OSL 源码、GPU 头文件、出瞳表（随包的按文件字节）、补丁文本各一个 sha1 和总的 `all`；每帧 EXR 头 `blenderlens/inputs` 写同样的内容（`all` 与 verify_inputs 一致，测试覆盖）。C 风格 S35 FULL 原生：`all` = d9c5286ff99e9af2（0.9.0 / 0.9.1 / 0.9.2 相同）。
+
+**排除层运动模糊**：`exclude_motion_blur=True`（快门 0.5 帧）或快门帧数：只在排除层和它的空画面两次渲染里开 Cycles 运动模糊，相机对象自己的运动模糊关掉；主渲染不变。验证：GN 实例的雨（每帧落 370 mm）竖直相关长度 25 → 34 px（拉成线），雨一滴都没有时 alpha 最大 7.7e-7（归一化仍精确）。限制：Cycles 要能在帧间对上实例（数量 / 顺序不变）；GPU 路径开运动模糊时波长分层退回哈希（色噪略多）。
+
+**横向色差进覆盖报告**：`bl.coverage` 的 `lateral_color_px`——边缘 / 四角（97%）处 F−C 与 400–700 nm 两个波长光斑重心之差，换算成解挤压后、4K 高度输出的像素（另给只用主光线的 chief_F_C，慧差大时偏大一倍左右）。f/4、3 m：C 风格边缘 2.4 px、四角 2.5 px（F−C；400–700 nm 5.5–5.8 px）；Neil 50 四角 1.9；Sirui 全画幅 0.3；PV 1.34× 3.0；Laowa 边缘 3.4（四角在 FULL 光窗下不通光 → None）。MessyRoom 的美术调研认为 4K 角落 1–2 px 是「真实」的，C 风格略大（这是 1968 年设计的 Rosin 附加镜的性质）。
+
+**对焦呼吸**（MessyRoom 问）：已建模——对焦组按真实机构移动，焦距随之变化。C 风格垂直焦距 ∞ 50.0 / 5 m 50.3 / 3 m 50.5 / 1.5 m 51.1 / 0.76 m 52.5 mm（最近对焦视野窄约 5%）；补偿开满时压缩比恒为 2.011。
+
 ## 7. 输出与解挤压
 
 输出宽度 = 高 × 传感器宽高比 × 解挤压比。渲染结果是**已解挤压、方形像素**的正常画面，不需要后期再拉伸。压缩比随视场变化（水平畸变），例如 C 从中心 2.01 到边缘 2.27，属于镜头特征。

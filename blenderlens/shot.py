@@ -59,11 +59,53 @@ def _max_rss_gb():
     return round(r / (1e9 if sys.platform == "darwin" else 1e6), 2)
 
 
+def _with_overrides(scene, visibility, pre, post, fn):
+    """0.9.2：镜头级的临时覆盖——visibility={物体名: {属性: 值}}、pre / post(scene)；渲完（含出错）全部还原。"""
+    import bpy
+    sc = scene or bpy.context.scene
+    undo = []
+    for name, attrs in (visibility or {}).items():
+        ob = bpy.data.objects.get(name)
+        if ob is None:
+            raise ValueError(f"visibility：找不到物体 {name!r}")
+        for a, v in attrs.items():
+            if not hasattr(ob, a):
+                raise ValueError(f"visibility：物体 {name!r} 没有属性 {a!r}")
+    try:
+        for name, attrs in (visibility or {}).items():
+            ob = bpy.data.objects[name]
+            for a, v in attrs.items():
+                undo.append((ob, a, getattr(ob, a))); setattr(ob, a, v)
+        if pre:
+            pre(sc)
+        return fn()
+    finally:
+        try:
+            if post:
+                post(sc)
+        finally:
+            for ob, a, v in reversed(undo):
+                setattr(ob, a, v)
+
+
 def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, focal_mm=0.0, gate="16:9_NATIVE",
                 passes=None, spp=None, follow=True, guard=True, scene=None, height=None, flare=False, name="f",
                 exposure="keep", stop=True, focus=True, seed=0, units="SCENE", exr_codec=None, half_color=None,
                 guard_min_gb=4.0, guard_wait_s=1800.0, file_ext=".exr", lock=True, exclude_collections=None, exclude_mode="hide",
-                settings=None, focus_target=None, rack=None, exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None, format="S35"):
+                settings=None, focus_target=None, rack=None, exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None, exclude_motion_blur=None, format="S35",
+                qc=True, visibility=None, pre=None, post=None):
+    """见 _render_shot 的说明（参数完全相同）。"""
+    locals_ = dict(locals())
+    return _with_overrides(scene, visibility, pre, post,
+                           lambda: _render_shot(**{k_: v_ for k_, v_ in locals_.items()}))
+
+
+def _render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, focal_mm=0.0, gate="16:9_NATIVE",
+                passes=None, spp=None, follow=True, guard=True, scene=None, height=None, flare=False, name="f",
+                exposure="keep", stop=True, focus=True, seed=0, units="SCENE", exr_codec=None, half_color=None,
+                guard_min_gb=4.0, guard_wait_s=1800.0, file_ext=".exr", lock=True, exclude_collections=None, exclude_mode="hide",
+                settings=None, focus_target=None, rack=None, exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None, exclude_motion_blur=None, format="S35",
+                qc=True, visibility=None, pre=None, post=None):
     """渲一个镜头 → 日志 dict（同时写 <out_dir>/<name>_log.json）。
     source_camera：源相机（物体或名字）；None = 场景当前的相机（若它不是 BlenderLens 相机）。follow=False 时可以不给。
     frames：帧号序列；None = 场景的起止帧。preset：None = 用场景里已有的 BlenderLens 相机；给了 = 搭一支新镜头
@@ -72,6 +114,11 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
     exclude_collections（0.8.5）：如 ["FX_rain"]，单独成层 BL_Exclude，不进场景层 / 矢量 / 时间降噪。
     exclude_spp / exclude_bounces（0.8.7，可选）：排除层单独的采样数 / 弹射上限（默认与主渲染相同）。
     exclude_clamp / exclude_knee（0.9.1，可选）：排除层的亮点控制，见 bl.render_frames。
+    qc（0.9.2）：渲完做时间质检（bl.spike_report：Combined / BL_Exclude / BL_Final 每帧的孤立亮点 + 热图 PNG），结果写进日志
+      spike_report；可给 dict(delta=0.06, min_lum=0.25, conf=0.8)。False 关。需要 passes（多层输出）且至少 3 帧。
+    visibility / pre / post（0.9.2，MessyRoom 的「wild wall」）：本镜头渲染期间临时改物体属性，渲完（包括出错时）自动还原：
+      visibility={"物体名": {"visible_camera": False, "hide_render": True, ...}}（任何物体属性；名字不存在 → 渲染前 ValueError）；
+      pre(scene) / post(scene)：可调用对象，渲染前 / 后各调一次（post 在 finally 里）。
     settings（0.8.5）：镜头设置 dict（同 bl.configure，如 {"f_number": 2.8, "mumps_correction": 1}），搭好 / 跟随之后写入；
     focus_target / rack：对焦跟住一个点 / 拉焦（同 bl.focus_track），覆盖源相机的对焦。"""
     import bpy
@@ -109,7 +156,7 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
     log = dict(version=api.version(), started=time.strftime("%Y-%m-%d %H:%M:%S"),
                host=platform.node(), blend=bpy.data.filepath, camera=cam.name, source=src.name if src else None,
                frames=[frames[0], frames[-1]], n_frames=len(frames), passes=passes, flare=flare, spp=spp,
-               exclude_collections=list(exclude_collections or []), exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee,
+               exclude_collections=list(exclude_collections or []), exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee, exclude_motion_blur=exclude_motion_blur,
                out_dir=out, records=[])
     if os.path.exists(log_path):                          # 续渲：接着旧日志
         try:
@@ -153,10 +200,21 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
     save()
     try:
         _render_loop(sc, frames, out, name, file_ext, guard, guard_min_gb, guard_wait_s, seed, flare, lock, passes, exr_codec,
-                     half_color, exclude_collections, exclude_mode, log, save, exclude_spp, exclude_bounces, exclude_clamp, exclude_knee)
+                     half_color, exclude_collections, exclude_mode, log, save, exclude_spp, exclude_bounces, exclude_clamp, exclude_knee, exclude_motion_blur)
     finally:
         restore_exposure()
     log["finished"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    if qc and passes is not None and len(frames) >= 3:      # 0.9.2：时间质检——孤立亮点（MessyRoom Day 5：平均亮度检查发现不了）
+        try:
+            from . import spikes as SP
+            qr = SP.spike_report(out, frames, name=name, file_ext=file_ext, heatmap_dir=out,
+                                 **(qc if isinstance(qc, dict) else {}))
+            log["spike_report"] = dict(total=qr["total"], heatmaps=qr["heatmaps"], settings=qr["settings"],
+                                       worst=sorted(((r.get("BL_Final", {}).get("count", 0), r["frame"]) for r in qr["per_frame"]
+                                                     if "frame" in r), reverse=True)[:5],
+                                       file=os.path.join(out, f"{name}_spikes.json"))
+        except Exception as e:                            # 质检失败不影响已渲好的帧
+            log["spike_report"] = dict(error=repr(e))
     save()
     return log
 
@@ -192,7 +250,7 @@ def _scale_film_exposure(sc, k):
 
 
 def _render_loop(sc, frames, out, name, file_ext, guard, guard_min_gb, guard_wait_s, seed, flare, lock, passes, exr_codec,
-                 half_color, exclude_collections, exclude_mode, log, save, exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None):
+                 half_color, exclude_collections, exclude_mode, log, save, exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None, exclude_motion_blur=None):
     import bpy
     from . import api, rig
     for fr in frames:
@@ -223,7 +281,7 @@ def _render_loop(sc, frames, out, name, file_ext, guard, guard_min_gb, guard_wai
         done = api.render_frames(sc, frames=[fr], out_dir=out, name=name, seed=seed, flare=flare, lock=lock,
                                  file_ext=file_ext, passes=passes, exr_codec=exr_codec, half_color=half_color,
                                  exclude_collections=exclude_collections, exclude_mode=exclude_mode,
-                                 exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee)
+                                 exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee, exclude_motion_blur=exclude_motion_blur)
         rec.update(rendered=bool(done), seconds=round(time.perf_counter() - t0, 2), timing=dict(rig.LAST_TIMING),
                    rss_gb=_rss_gb(), max_rss_gb=_max_rss_gb(), avail_gb_after=_available_gb(),
                    size_mb=round(os.path.getsize(path) / 1e6, 1) if os.path.exists(path) else None)

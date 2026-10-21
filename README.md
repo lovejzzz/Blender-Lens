@@ -33,6 +33,16 @@ Rendered with 0.9.0: same real 3D scene (Poly Haven CC0 models and HDRI) and cam
 
 ---
 
+## What's new in 0.9.2: faster shots, single-frame specks, built-in temporal QC
+
+- **Faster**: `bl.enable_gpu(denoise_gpu=True)` moves OIDN denoising to the GPU (Blender keeps it on the CPU by default): a 3842 × 1624 frame went from 53 s to 38 s. The result isn't bit-identical to CPU denoising, so it stays opt-in, and `bl.diagnose()` points it out. Cryptomatte decoding is 20× faster (it drove the slow `fill` and `vector` steps in scenes with thousands of objects).
+- **`passes="delivery"`**: writes only the layers that `temporal_denoise` reads plus BlenderLens's own layers, cutting the per-frame EXR from 71 MB to 20 MB at 3842 × 1624.
+- **Single-frame specks**: `temporal_denoise(..., spike_suppress=True)` caps isolated bright pixels at their motion-aligned neighbours; normal highlights are left alone. `bl.spike_report()` counts them per layer and frame and writes a heat map, and `render_shot` does this automatically after every shot.
+- **Per-shot overrides**: `visibility={"Wall": {"visible_camera": False}}` plus `pre` / `post` hooks in `render_shot` and in each `render_sequence` shot; everything is restored afterwards.
+- **`bl.verify_inputs()`**: hashes every camera input (prescription, lens data, OSL, GPU header, pupil table, patches), so you can check whether two versions render a lens identically. The same fingerprint is written into every EXR header.
+- **`exclude_motion_blur=True`**: motion blur for the rain layer only, so drops become streaks; the main render is unchanged.
+- **Lateral colour in `bl.coverage`**, in pixels at 4K. The C-style lens measures about 2.4–2.5 px at the edges and corners.
+
 ## What's new in 0.9.1: formats fill the whole gate, 65 mm, and C-style lenses redesigned for full frame and 65 mm
 
 - **Formats fill the whole gate.** Every format version now uses the entire sensor or film gate, and the desqueezed aspect follows each lens's squeeze (a 2× lens on 36 × 24 is 3:1, a 1.3× lens on 65 mm is 2.97:1). The lens is scaled so its design image circle just covers the gate (C / E / G × 1.502 on full frame, Neil × 1.558, Panavision × 1.590).
@@ -153,12 +163,12 @@ Gallery rendered with 0.6 (full gate, CPU / first GPU path, about 3–5 minutes 
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.9.1.zip`](dist/blenderlens-0.9.1.zip) from this repository.
+1. Download [`dist/blenderlens-0.9.2.zip`](dist/blenderlens-0.9.2.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.9.1.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.2.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.

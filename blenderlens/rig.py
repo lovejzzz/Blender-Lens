@@ -1152,7 +1152,7 @@ def exclude_knee_apply(ch, knee):
 
 def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8, passes="all", vectors=True,
                             exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide",
-                            exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None):
+                            exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None, exclude_motion_blur=None):
     """渲染当前帧，写多层（多部分）EXR，保留视图层打开的所有渲染层：
       · 颜色层（Combined、各光组 Combined_<名>、Emit、Diffuse/Glossy/Transmission/Volume…、AO、颜色 AOV、Noisy Image、
         Denoising Albedo）做与 Combined 相同的横向色差（LATERAL_POST 时）→ 各层相加仍约等于 Combined；
@@ -1162,7 +1162,7 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
       · BL_Vector：按本镜头的真实成像（主光线、当前对焦）算的运动矢量，像素单位、y 向上，约定与 Cycles 的 Vector 相同：
         X,Y = 上一帧位置 − 当前位置，Z,W = 当前位置 − 下一帧位置。相机运动 + 刚体物体运动（按 Cryptomatte 识别物体）；
         形变（骨骼、形状键）不计。Cycles 自己的 Vector 层对自定义相机不对（源码 TODO：退回相机坐标），原样保留但不要用。
-    passes："all"、预设 "temporal"（时间降噪需要的层，会临时打开 Depth / 去噪数据 / 体积层）、或渲染层名列表
+    passes："all"、预设 "temporal"（时间降噪需要的层，会临时打开 Depth / 去噪数据 / 体积层）、"delivery"（0.9.2：只留 temporal_denoise 读的层，文件约小一半）、或渲染层名列表
       （可混用预设名与 "lightgroups"，如 ["temporal", "lightgroups"]）；插件层总是写入。
     exr_codec / half_color（0.8.4）：输出压缩与颜色层精度。颜色层 half + 压缩，数据层（Depth、Position、BL_Vector…）恒为
       float32，遇有损压缩时改用 ZIP。默认：用了预设 → "DWAB" + half；否则沿用场景的输出设置（EXR 压缩、色深）。
@@ -1177,6 +1177,8 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
         exclude_knee=(起点, 上限)：排除层（预乘 RGB）按亮度软压缩——起点以下不变，以上平滑地趋向上限（色相不变），
         雨的样子保留、单帧的强亮点压下去；BL_Final 用压缩后的排除层合成。雨在时间上不连贯（每帧移动几十厘米），
         所以是逐像素的软压缩，不是时间滤波。两者都写进 EXR 头的 blenderlens/exclude。
+      exclude_motion_blur（0.9.2，可选）：True（快门 0.5 帧）或快门帧数——只在排除层与它的空画面那两次渲染里开 Cycles 运动模糊，
+        相机对象自己的运动模糊关掉（场景层没有运动模糊，雨不该带上相机的拖影）；主渲染不变。
     为了 BL_Vector，会临时打开 Position 与 Cryptomatte Object 层（用户没开的不写进输出）。渲染时临时关闭合成（输出原始渲染层）。
     返回 (BL_Final 的 Image 数据块, 炫光光源名单, 炫光层 H×W×3（行 0 = 底部，与旧接口一致）)。"""
     import os, tempfile, time
@@ -1304,6 +1306,13 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
             p.ghosts = False
             WEIGHT_SCALE[0] = XS
             apply_settings(cam_ob)
+            mb_undo = []
+            if exclude_motion_blur:                       # 0.9.2：只给排除层（雨）开运动模糊；相机自己的运动模糊关掉（场景层没有）。
+                shutter = 0.5 if exclude_motion_blur is True else float(exclude_motion_blur)
+                for owner, attr, v in ((scene.render, "use_motion_blur", True), (scene.render, "motion_blur_shutter", shutter),
+                                       (getattr(cam_ob, "cycles", None), "use_motion_blur", False)):
+                    if owner is not None and hasattr(owner, attr):
+                        mb_undo.append((owner, attr, getattr(owner, attr))); setattr(owner, attr, v)
             try:
                 _aux_render(scene, tmp_x, data_only=False, film_transparent=True, holdout_objects=others, only_combined=True,
                             samples=exclude_spp, bounces=exclude_bounces, adaptive=False, weight_scale=XS, clamp=exclude_clamp)
@@ -1315,6 +1324,8 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
                                 samples=exclude_spp, adaptive=False, denoise=False, weight_scale=XS)
                 T["exclude_empty"] = time.perf_counter() - t_e0
             finally:
+                for owner, attr, v in reversed(mb_undo):
+                    setattr(owner, attr, v)
                 WEIGHT_SCALE[0] = 1.0
                 p.ghosts = ghosts_was
                 apply_settings(cam_ob)
@@ -1389,10 +1400,16 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
             comb["header"]["blenderlens/exclude"] = json.dumps(dict(collections=list(exclude_collections), objects=len(ex_objs),
                                                                     mode=exclude_mode, exclude_spp=exclude_spp,
                                                                     exclude_clamp=list(exclude_clamp) if exclude_clamp else None,
-                                                                    exclude_knee=list(exclude_knee) if exclude_knee else None, **ex_stats))
+                                                                    exclude_knee=list(exclude_knee) if exclude_knee else None,
+                                                                    exclude_motion_blur=exclude_motion_blur, **ex_stats))
         del veil
         fill = fill_first_sample_passes(scene, cam_ob, parts, vl.name, W, H, region)
         comb["header"]["blenderlens/fill"] = json.dumps(fill)
+        try:                                             # 0.9.2：相机输入指纹（与 bl.verify_inputs 同一算法），混用版本时比头就行
+            from . import verify as VF
+            comb["header"]["blenderlens/inputs"] = json.dumps(VF.fingerprint(read_prescription()))
+        except Exception as e:
+            comb["header"]["blenderlens/inputs"] = json.dumps(dict(error=repr(e)[:120]))
         _mem("fill"); T["fill"] = time.perf_counter() - t1; t1 = time.perf_counter()
         glass = None
         if vectors and through:                          # 0.8.5：BL_Vector / Depth 取第一个非透射命中；透射面自己的进 *Surface 层
@@ -1910,7 +1927,7 @@ def render_with_flare(scene, filepath, n_grid=260, blur_px=0.8):
     return render_frame(scene, filepath, flare=True, n_grid=n_grid, blur_px=blur_px)
 
 def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_layer_path=None, passes=None, vectors=True,
-                 exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None):
+                 exr_codec=None, half_color=None, exclude_collections=None, exclude_mode="hide", exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None, exclude_motion_blur=None):
     """渲染当前帧并做插件的后期：LATERAL_POST 的横向色差、正向炫光层（flare=True）。
     返回 (合成后的 Image 数据块（线性）, 炫光光源名单, 炫光层 H×W×3)。filepath 按扩展名写出（PNG/TIFF 16 位按场景色彩管理，EXR 线性）。
     flare_layer_path：另存炫光层为线性 EXR（单独调色 / 时域稳定用）。
@@ -1922,7 +1939,7 @@ def render_frame(scene, filepath, flare=True, n_grid=260, blur_px=0.8, flare_lay
     if passes is not None:
         return render_frame_multilayer(scene, filepath, flare=flare, n_grid=n_grid, blur_px=blur_px, passes=passes, vectors=vectors,
                                        exr_codec=exr_codec, half_color=half_color, exclude_collections=exclude_collections,
-                                       exclude_mode=exclude_mode, exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee)
+                                       exclude_mode=exclude_mode, exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee, exclude_motion_blur=exclude_motion_blur)
     cam_ob = scene.camera
     p = cam_ob.data.blenderlens
     ghosts_was = p.ghosts

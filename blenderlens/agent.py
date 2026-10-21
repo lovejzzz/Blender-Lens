@@ -225,6 +225,11 @@ def diagnose(scene=None):
                           "第一次 GPU 渲染前调用 bl.enable_gpu()；Geometry 模式只能 CPU"))
     elif getattr(c, "device", 'CPU') == 'CPU' and not gpukernel.is_active():
         out.append(_issue("info", "cpu_only", "正在用 CPU 渲染；Metal 上 GPU 路径快约 19 倍", "bl.enable_gpu()（本次启动后第一次 GPU 渲染之前）"))
+    if (getattr(c, "device", 'CPU') == 'GPU' and gpukernel.is_active() and getattr(c, "use_denoising", False)
+            and getattr(c, "denoising_use_gpu", True) is False):
+        out.append(_issue("info", "denoise_on_cpu", "GPU 渲染、但 OIDN 降噪在 CPU 上：4K 时降噪占主渲染约 1/4、排除层约 3/5（0.9.2 实测）",
+                          "scene.cycles.denoising_use_gpu = True 或 bl.enable_gpu(denoise_gpu=True)——结果与 CPU 降噪不逐位相同，"
+                          "要和已渲的镜头逐位一致时保持现状"))
     rx = rig.read_prescription()
     mfd = cam.get("bl_min_focus_mm") or 0.0
     want = mfd and p.focus_distance > 0 and p.focus_distance * rig.mm_per_unit(sc) < mfd - 1e-6

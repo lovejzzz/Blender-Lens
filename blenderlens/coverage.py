@@ -101,6 +101,91 @@ def _chief_dir(LM, sx, sy):
     return Do[0] if np.isfinite(Do).all() else None
 
 
+def _chief_tan(LM, sx, sy, lam):
+    """传感器点 → 物方主光线的 (tan θx, tan θy)，波长 lam（µm）。"""
+    P0 = np.array([[sx, sy, 0.0]])
+    D0 = np.array([[-sx, -sy, LM.z_exp]]); D0 /= np.linalg.norm(D0)
+    Po, Do = _lp()._trace_out(LM.S, LM.z_stop, LM.r_stop, P0, D0, lam)
+    if not np.isfinite(Do).all():
+        return None
+    return Do[0, 0] / Do[0, 2], Do[0, 1] / Do[0, 2]
+
+
+def _flare():
+    try:
+        from . import flare as FL
+    except ImportError:
+        import flare as FL
+    return FL
+
+
+def lateral_color_px(LM, W, H, desq, out_h=2160, frac=0.97, rx=None, focus_mm=math.inf, f_number=None, n_grid=90):
+    """横向色差（0.9.2，MessyRoom 的美术调研：4K 角落 1–2 px 被认为是真实的）：同一个物点，两个波长在像面上的光斑重心之差，
+    换算成解挤压后、out_h 行输出上的像素（渲染里看到的色边就是各波长光斑重心的错位）。另给只用主光线的值（chief_*，
+    慧差大时会比重心大一倍左右，只作参考）。→ {edge_h / edge_v / corner: {"F_C": [x, y, 合], "400_700": [...], "chief_F_C": [...]}}；
+    x、y 带符号：蓝相对红向外为正。"""
+    FL = _flare()
+    out_w = out_h * W / H * desq
+    pts = dict(edge_h=(frac * W / 2, 0.0), edge_v=(0.0, frac * H / 2), corner=(frac * W / 2, frac * H / 2))
+    lens = FL.Lens(rx, focus_mm, f_number) if rx is not None else None
+    res = {}
+    for name, (sx, sy) in pts.items():
+        row = {}
+        # 主光线（线性化：同一物方方向，s_λ ≈ s − (tan_λ − tan_d) / (∂tan/∂s)）
+        t0 = _chief_tan(LM, sx, sy, O.LAMBDA_D); h = 1e-3
+        tx1 = _chief_tan(LM, sx + h, sy, O.LAMBDA_D); ty1 = _chief_tan(LM, sx, sy + h, O.LAMBDA_D)
+        b, r = _chief_tan(LM, sx, sy, 0.4861), _chief_tan(LM, sx, sy, 0.6563)
+        if None not in (t0, tx1, ty1, b, r):
+            dtx, dty = (tx1[0] - t0[0]) / h, (ty1[1] - t0[1]) / h
+            dx = -((b[0] - r[0]) / dtx) if abs(dtx) > 1e-12 and sx else 0.0
+            dy = -((b[1] - r[1]) / dty) if abs(dty) > 1e-12 and sy else 0.0
+            px, py = dx / W * out_w * (1 if sx >= 0 else -1), dy / H * out_h * (1 if sy >= 0 else -1)
+            row["chief_F_C"] = [round(float(px), 2), round(float(py), 2), round(float(math.hypot(px, py)), 2)]
+        # 光斑重心：物点 = 本像点的 d 线主光线反向追到对焦距离（∞ 时取很远），从物点向前片发一束均匀光线，各波长重心之差
+        if lens is not None:
+            try:
+                S_ = lens.S
+                pnt, dv = O.trace_reverse(S_, (sx, sy, 0.0), O.aim_through_stop(S_, (sx, sy), (0.0, 0.0), lens.z_stop), clip=False)
+                dist_ = focus_mm if math.isfinite(focus_mm) else 1.0e7
+                t = (dist_ - pnt[2]) / dv[2]
+                src = (pnt[0] + t * dv[0], pnt[1] + t * dv[1], dist_)
+                seq = FL.Lens.seq_direct(len(S_))
+                for ng in (n_grid, 4 * n_grid):             # 先粗找通光区（极广角的边缘可能一条都过不去，再密一些找）
+                    P_, D_, wt = FL._source_rays(lens, src, ng)
+                    idx, X, Y, w, Do = lens.trace(P_, D_, seq, O.LAMBDA_D, False, 0.0, 1.38)
+                    if len(X):
+                        break
+                if 0 < len(X) < 400:                        # 广角边缘：能过镜头的只占前片一小块 → 在那一块（外扩一格）里重新加密
+                    z0 = S_[0]["z"] + 5.0
+                    Tg = P_[np.asarray(idx)] + D_[np.asarray(idx)] * ((z0 - P_[np.asarray(idx), 2]) / D_[np.asarray(idx), 2])[:, None]
+                    ext = O._outer_extent(S_[0])
+                    cell = 2.04 * max(ext) / ng
+                    x0, x1 = Tg[:, 0].min() - cell, Tg[:, 0].max() + cell
+                    y0, y1 = Tg[:, 1].min() - cell, Tg[:, 1].max() + cell
+                    gx, gy = np.meshgrid(np.linspace(x0, x1, n_grid), np.linspace(y0, y1, n_grid))
+                    T_ = np.stack([gx.ravel(), gy.ravel(), np.full(gx.size, z0)], 1)
+                    D_ = T_ - np.asarray(src, float); dd = np.linalg.norm(D_, axis=1); D_ = D_ / dd[:, None]
+                    P_ = np.repeat(np.asarray(src, float)[None, :], len(T_), 0)
+                    wt = (-D_[:, 2]) / (dd * dd); wt = wt / wt.mean()
+                cen = {}
+                for lam in (0.4861, 0.6563, 0.400, 0.700):
+                    idx, X, Y, w, Do = lens.trace(P_, D_, seq, lam, False, 0.0, 1.38)
+                    if len(X) < 8:
+                        raise ValueError("光线过不去")
+                    ww = np.asarray(w) * wt[np.asarray(idx)]
+                    cen[lam] = (float(np.average(X, weights=ww)), float(np.average(Y, weights=ww)))
+                for tag, (lb, lr) in (("F_C", (0.4861, 0.6563)), ("400_700", (0.400, 0.700))):
+                    dx, dy = cen[lb][0] - cen[lr][0], cen[lb][1] - cen[lr][1]
+                    px = dx / W * out_w * (1 if sx >= 0 else -1) if sx else 0.0
+                    py = dy / H * out_h * (1 if sy >= 0 else -1) if sy else 0.0
+                    row[tag] = [round(float(px), 2), round(float(py), 2), round(float(math.hypot(px, py)), 2)]
+            except Exception:                              # 角落追不过去（缩得太短、不覆盖）→ 该点没有结果
+                row["F_C"] = row["400_700"] = None
+        res[name] = row
+    res["out_height"] = out_h
+    return res
+
+
 def _lp():
     try:
         from . import lenspack as LP
@@ -193,6 +278,10 @@ def coverage_report(rx, focus_mm=math.inf, f_number=None, out_h=2160, n=21, ri_c
         if x_mid is not None and x_top is not None:
             out_w = out_h * W / H * O.desqueeze(rx)
             bow_px = round(float((abs(x_top) - abs(x_mid)) / W * out_w), 2)
+    try:
+        lateral_px = lateral_color_px(LM, W, H, O.desqueeze(rx), out_h, rx=rx, focus_mm=focus_mm, f_number=f_number)
+    except Exception as e:                                 # 色差只是附加信息，失败不影响覆盖报告
+        lateral_px = dict(error=repr(e)[:120])
     covers = rel["corner"] >= ri_cover
     hard_edge = r_circle < diag                        # 像圈比光窗对角线小：画面里有「舷窗」黑边
     warnings = []
@@ -208,7 +297,7 @@ def coverage_report(rx, focus_mm=math.inf, f_number=None, out_h=2160, n=21, ri_c
                 half_field_deg=dict(current_diag=None if cur is None else round(cur, 2),
                                     current_diag_estimated=cur_est,
                                     max_covered_diag=None if cov is None else round(cov, 2)),
-                distortion_pct=dist_pct, edge_vertical_bow_px=bow_px, bow_out_height=out_h,
+                distortion_pct=dist_pct, edge_vertical_bow_px=bow_px, bow_out_height=out_h, lateral_color_px=lateral_px,
                 f_number=f_number, focus_mm=None if not math.isfinite(focus_mm) else focus_mm, warnings=warnings)
 
 

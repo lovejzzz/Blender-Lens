@@ -98,13 +98,17 @@ class _Frames:
 
 def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular", "emitters"), vfade_px=(2.0, 8.0),
                      radius=3, clamp=5, margin=0.25, fb_px=0.5, use_confidence=True, name="f", file_ext=".exr",
-                     out_name=None, half=True, exr_codec=None, use_reflection=True):
+                     out_name=None, half=True, exr_codec=None, use_reflection=True, spike_suppress=None):
     """→ dict(frames, out_dir, per_frame=[{frame, frames_used_mean, weight_mean, file}], settings)。
     in_dir：多层 EXR 所在目录（<name>_<帧4位>.exr，需要 Combined、BL_Vector；最好有 BL_VectorConfidence、BL_Flare、BL_Veil，
     以及 protect 用的去噪数据层——passes="temporal" 全有）。frames：要输出的帧（窗口里缺的邻帧自动跳过）。
     strength：0–1 混合强度上限。radius：每边用几帧。clamp / margin：钳制邻域与外扩比例。fb_px：前后一致性容差（1080 行等效）。
     half / exr_codec：输出精度与压缩（默认 half + DWAB；要逐像素比对时用无损的 "PIZ" / "ZIP"）。
-    use_reflection（0.8.5）：有 BL_VectorReflection / BL_ReflectionShare 时，倒影为主（占比 > 0.5）的像素按倒影的运动对齐。"""
+    use_reflection（0.8.5）：有 BL_VectorReflection / BL_ReflectionShare 时，倒影为主（占比 > 0.5）的像素按倒影的运动对齐。
+    spike_suppress（0.9.2，MessyRoom Day 5）：None（默认，不做）/ True / dict(delta=0.06, min_lum=0.25, conf=0.8)——
+      场景层（降噪后的 Combined）里的孤立亮点：按 BL_Vector 对齐的前后两帧都可信（链上置信度 ≥ conf、前后一致性通过）、
+      当前像素的显示亮度比两帧都高 delta 以上且 > min_lum 时，逐通道压到 max(前, 后)。正常高光在前后帧也亮，不动；
+      雨（BL_Exclude）不动（它在时间上本来就不连贯，用 render 的 exclude_knee）。每帧的个数写进报告与 EXR 头。"""
     try:
         import bpy
         in_dir, out_dir = bpy.path.abspath(in_dir), bpy.path.abspath(out_dir)
@@ -121,7 +125,7 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
     v0, v1 = vfade_px
     rep = dict(in_dir=in_dir, out_dir=out_dir, frames=frames, per_frame=[],
                settings=dict(strength=strength, protect=list(protect), vfade_px=list(vfade_px), radius=radius, clamp=clamp,
-                             margin=margin, fb_px=fb_px, use_confidence=use_confidence))
+                             margin=margin, fb_px=fb_px, use_confidence=use_confidence, spike_suppress=spike_suppress))
     for t in frames:
         if t not in have:
             rep["per_frame"].append(dict(frame=t, error="缺这一帧"))
@@ -136,6 +140,7 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
         m = (hi - lo) * margin
         lo -= m; hi += m
         acc = comb * Wk[0]; wsum = np.full((H, W), Wk[0], np.float32)
+        nb1 = {}                                          # 0.9.2：k = 1 的对齐邻帧（不钳制）与可信度，孤立亮点抑制用
         used = np.ones((H, W), np.float32)
         for direction in (-1, 1):
             x, y = xx.copy(), yy.copy()
@@ -161,7 +166,10 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
                 fb = np.hypot(bx - x, by - y) * k1080
                 ok = (fb <= fb_px) & (nx >= 0) & (nx <= W - 1) & (ny >= 0) & (ny <= H - 1)
                 chain *= ok
-                s = np.clip(MO.bilinear(nb["Combined"], nx, ny), lo, hi)
+                raw = MO.bilinear(nb["Combined"], nx, ny)
+                if k == 1:
+                    nb1[direction] = (raw, chain.copy())
+                s = np.clip(raw, lo, hi)
                 wk = Wk[k] * chain
                 acc += s * wk[..., None]; wsum += wk
                 used += chain > 0.5
@@ -181,6 +189,13 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
                 mirror = np.clip((spec - 0.08) / 0.12, 0, 1) * np.clip((0.35 - cur["rough"]) / 0.2, 0, 1)
                 w *= 1.0 - mirror
         stable = comb + w[..., None] * (tavg - comb)
+        n_spikes = None
+        if spike_suppress and -1 in nb1 and 1 in nb1:
+            from . import spikes as SP
+            sp_kw = dict(SP.DEFAULTS, **(spike_suppress if isinstance(spike_suppress, dict) else {}))
+            (pv, cpv), (nv, cnv) = nb1[-1], nb1[1]
+            valid = (cpv >= sp_kw["conf"]) & (cnv >= sp_kw["conf"])
+            stable, n_spikes = SP.suppress(stable, pv, nv, valid, sp_kw["delta"], sp_kw["min_lum"])
         over = stable
         if "BL_Exclude" in cur:                           # 0.8.5：排除层（雨、粒子）不平均，原样 over 回去
             over = cur["BL_Exclude"] + (1.0 - cur["exclude_a"])[..., None] * stable
@@ -189,6 +204,8 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
         tmpl = dict(name="ViewLayer.Combined", view_layer="ViewLayer", pass_="Combined", header={})
         hdr = {k: v for k, v in cur["header"].items() if isinstance(v, str) and k.startswith("blenderlens/")}
         hdr["blenderlens/temporal_denoise"] = json.dumps(rep["settings"])
+        if n_spikes is not None:
+            hdr["blenderlens/spikes_suppressed"] = str(n_spikes)
         tmpl["header"] = hdr
         parts = [PS.new_part(tmpl, "BL_Final", dict(R=final[..., 0], G=final[..., 1], B=final[..., 2], A=alpha)),
                  PS.new_part(tmpl, "BL_TemporalFrames", dict(X=used)),
@@ -198,7 +215,8 @@ def temporal_denoise(in_dir, out_dir, frames, strength=1.0, protect=("specular",
         os.replace(path + ".partial" + file_ext, path)
         rep["per_frame"].append(dict(frame=t, file=path, frames_used_mean=round(float(used.mean()), 3),
                                      weight_mean=round(float(w.mean()), 3),
-                                     changed_mean=round(float(np.abs(stable - comb).mean() / max(float(np.abs(comb).mean()), 1e-9)), 5)))
+                                     changed_mean=round(float(np.abs(stable - comb).mean() / max(float(np.abs(comb).mean()), 1e-9)), 5),
+                                     **({"spikes_suppressed": n_spikes} if n_spikes is not None else {})))
     with open(os.path.join(out_dir, f"{out_name}_temporal_denoise.json"), "w") as fh:
         json.dump(rep, fh, ensure_ascii=False, indent=1)
     return rep

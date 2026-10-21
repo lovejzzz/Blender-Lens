@@ -32,6 +32,11 @@
 | 8.6 | **Geometry 模式亚像素平移**（旧问题 §7.2） | 单片透镜复现 → 查像素中心约定 | 偏移 < 0.05 px | 小 |
 | 8.7 | **外部数据回归** | 新测试 `test_reference.py`：前置预设的散景高宽比随离焦趋向挤压比；后置 PV 1.34× 散景接近圆（ASC / FDTimes 的定性结论）；呼吸方向以垂直为主（E 系列、Hawk 的描述）；最近对焦距离与 Panavision 公布值比对 | 全部通过或在文档里解释差异 | 小 |
 
+## 0.9.2 —— 速度、孤立亮点、时间质检（2026-10-21，MessyRoom Day 5 全片复盘；见 HANDOFF §6.16）
+
+✅ GPU 降噪选项与 diagnose 提示（整帧 −28%）；Cryptomatte 解码 20 倍快（fill / vector）；passes="delivery"（每帧 −71%）；exclude_spp 的实测与建议（开 knee 时降采样让雨变暗）。✅ temporal_denoise 的孤立亮点抑制、bl.spike_report 与 render_shot 的自动质检（热图）。✅ 镜头级 visibility / pre / post。✅ bl.verify_inputs + EXR 头的相机输入指纹。✅ exclude_motion_blur。✅ 覆盖报告的横向色差（4K 像素）。
+没做：GPU 版的 fill（Cryptomatte 修好后 CPU 已足够）；exclude_spp="auto"（默认值不变）；场景层亮点的渲染端处理（属于 Cycles 设置：Filter Glossy、粗糙度、clamp）。
+
 ## 0.9.1 —— 画幅用满片门、65 mm 5 齿孔、C 风格全画幅 / 65 mm 重新设计（2026-10-20，用户需求；见 HANDOFF §6.14、RESEARCH §6.20）
 
 ✅ 所有画幅版本用满整个片门（解挤压后的比例随压缩比），k 按设计像圈。✅ 新画幅 `65MM`（52.48 × 23.01）；IMAX 15/70（等比放大版本）。✅ `tools/reoptimize.py`：焦距不变、解析重配变形器压缩比、整支优化；风格目标 = 原版在 S35 上的软硬比例 / 畸变 % / 暗角。✅ 新预设 `c_series_style_ff`（50 mm 1.65× 全画幅）与 `c_series_style_65`（50 mm 1.3× 65 mm 5 齿孔）。

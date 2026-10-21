@@ -237,17 +237,24 @@ def cmd_shot(a):
     s = [f"import bpy\nbpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})"]
     if a.gpu:
         s.append("bl.enable_gpu(use_gpu=True)")
-    passes = a.passes if a.passes in (None, "all", "temporal") else [x.strip() for x in a.passes.split(",")]
+    passes = a.passes if a.passes in (None, "all", "temporal", "delivery") else [x.strip() for x in a.passes.split(",")]
     s.append(f"res = bl.render_shot(source_camera={a.source!r}, frames={_frames(a.frames)!r}, out_dir={os.path.abspath(a.out)!r}, "
              f"preset={a.preset!r}, focal_mm={a.focal_mm or 0.0}, gate={a.gate or '16:9_NATIVE'!r}, format={a.format or 'S35'!r}, passes={passes!r}, "
              f"spp={a.spp!r}, follow={not a.no_follow}, guard={not a.no_guard}, height={a.height!r}, flare={bool(a.flare)}, "
              f"exposure={a.exposure!r}, guard_min_gb={a.guard_gb}, exr_codec={a.exr_codec!r}, "
              f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, focus_target={a.focus_target!r}, "
-             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r}, exclude_clamp={_pair(a.exclude_clamp)!r}, exclude_knee={_pair(a.exclude_knee)!r})")
+             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r}, exclude_clamp={_pair(a.exclude_clamp)!r}, exclude_knee={_pair(a.exclude_knee)!r}, exclude_motion_blur={a.exclude_motion_blur!r})")
     s.append("res = dict(records=res['records'], summary=res.get('summary'), exposure=res.get('exposure'), "
              "stopped=res.get('stopped'), log=res['out_dir'])")
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=48 * 3600)
+
+
+def cmd_verify(a):
+    """相机输入指纹（0.9.2）：处方 / lens_data / OSL / GPU 头文件 / 出瞳表 / 补丁的 sha1；不启动 Blender。"""
+    sys.path.insert(0, os.path.join(ROOT, "blenderlens"))
+    import verify
+    return verify.verify_inputs(_preset_file(a.preset), gate=a.gate or "FULL", format=a.format or "S35", focal_mm=a.focal_mm or 0.0)
 
 
 def _pair(v):
@@ -270,11 +277,11 @@ def cmd_sequence(a):
     s = [f"import bpy\nbpy.ops.wm.open_mainfile(filepath={os.path.abspath(a.blend)!r})"]
     if a.gpu:
         s.append("bl.enable_gpu(use_gpu=True)")
-    passes = a.passes if a.passes in (None, "all", "temporal") else [x.strip() for x in a.passes.split(",")]
+    passes = a.passes if a.passes in (None, "all", "temporal", "delivery") else [x.strip() for x in a.passes.split(",")]
     s.append(f"res = bl.render_sequence({shots!r}, out_dir={os.path.abspath(a.out)!r}, preset={a.preset!r}, passes={passes!r}, "
              f"spp={a.spp!r}, guard={not a.no_guard}, flare={bool(a.flare)}, exposure={a.exposure!r}, height={a.height!r}, "
              f"exclude_collections={a.exclude.split(',') if a.exclude else None!r}, "
-             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r}, exclude_clamp={_pair(a.exclude_clamp)!r}, exclude_knee={_pair(a.exclude_knee)!r}"
+             f"exclude_spp={a.exclude_spp!r}, exclude_bounces={a.exclude_bounces!r}, exclude_clamp={_pair(a.exclude_clamp)!r}, exclude_knee={_pair(a.exclude_knee)!r}, exclude_motion_blur={a.exclude_motion_blur!r}"
              + (f", format={a.format!r}" if a.format else "") + ")")
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=96 * 3600)
@@ -283,7 +290,8 @@ def cmd_sequence(a):
 def cmd_denoise(a):
     """时间降噪（0.8.4）：读多层 EXR，写 BL_Final 的稳定版 + 每像素用了几帧的图。"""
     s = [f"res = bl.temporal_denoise({os.path.abspath(a.inp)!r}, {os.path.abspath(a.out)!r}, frames={_frames(a.frames)!r}, "
-         f"strength={a.strength}, radius={a.radius}, name={a.name!r})"]
+         f"strength={a.strength}, radius={a.radius}, name={a.name!r}, "
+         f"spike_suppress={(dict(zip(('delta', 'min_lum'), _pair(a.spike_suppress))) if a.spike_suppress not in (None, '1') else (True if a.spike_suppress == '1' else None))!r})"]
     s.append(f"print({MARK!r} + dump(res))")
     return _blender("\n".join(s) + "\n", timeout=12 * 3600)
 
@@ -303,6 +311,9 @@ def main():
     p.add_argument("--coverage", action="store_true", help="覆盖与畸变报告（像圈、四角照度、畸变、竖线弯曲）"); p.add_argument("--stop", type=float)
     p.add_argument("--focal-mm", type=float); p.add_argument("--gate")
     p.add_argument("--format", choices=["S35", "FF", "IMAX", "65MM"], help="画幅版本：S35 原设计 / FF 全画幅（0.8.8）/ IMAX 15/70 / 65MM 5 齿孔（0.9.1）")
+    p = sub.add_parser("verify", help="相机输入指纹（0.9.2）：混用版本时确认逐字节相同")
+    p.add_argument("preset"); p.add_argument("--gate"); p.add_argument("--focal-mm", type=float)
+    p.add_argument("--format", choices=["S35", "FF", "IMAX", "65MM"])
     sub.add_parser("describe")
     p = sub.add_parser("render")
     p.add_argument("--preset"); p.add_argument("--blend"); p.add_argument("--scene", default="demo", choices=["demo"])
@@ -336,6 +347,7 @@ def main():
     p.add_argument("--exclude", help="排除集合（逗号分隔，如 FX_rain）"); p.add_argument("--focus-target", help="对焦跟住的物体名")
     p.add_argument("--exclude-spp", type=int, help="排除层单独的采样数（0.8.7，默认同主渲染）"); p.add_argument("--exclude-bounces", type=int)
     p.add_argument("--exclude-clamp", help="排除层的样本截断 直接,间接（0.9.1，如 2,1）"); p.add_argument("--exclude-knee", help="排除层亮度软压缩 起点,上限（0.9.1，如 0.05,0.10）")
+    p.add_argument("--exclude-motion-blur", type=float, help="排除层单独开运动模糊（0.9.2）：快门（帧），如 0.5")
     p = sub.add_parser("sequence"); p.add_argument("--blend", required=True); p.add_argument("--out", required=True)
     p.add_argument("--shots", help="JSON 列表或文件"); p.add_argument("--markers", action="store_true")
     p.add_argument("--preset"); p.add_argument("--passes"); p.add_argument("--spp", type=int); p.add_argument("--height", type=int)
@@ -343,10 +355,11 @@ def main():
     p.add_argument("--format", choices=["S35", "FF", "IMAX", "65MM"])
     p.add_argument("--exclude"); p.add_argument("--no-guard", action="store_true"); p.add_argument("--gpu", action="store_true")
     p.add_argument("--exclude-spp", type=int); p.add_argument("--exclude-bounces", type=int)
-    p.add_argument("--exclude-clamp"); p.add_argument("--exclude-knee")
+    p.add_argument("--exclude-clamp"); p.add_argument("--exclude-knee"); p.add_argument("--exclude-motion-blur", type=float)
     p = sub.add_parser("denoise"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True)
     p.add_argument("--frames", required=True); p.add_argument("--strength", type=float, default=1.0)
     p.add_argument("--radius", type=int, default=3); p.add_argument("--name", default="f")
+    p.add_argument("--spike-suppress", help="孤立亮点抑制（0.9.2）：1 = 默认阈值，或 delta,min_lum（如 0.06,0.25）")
     p = sub.add_parser("test"); p.add_argument("args", nargs=argparse.REMAINDER)
     argv = sys.argv[1:]
     pretty = "--pretty" in argv and argv[0] != "test"
@@ -355,7 +368,8 @@ def main():
     if a.cmd == "test":
         sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, "tests", "run.py")] + a.args))
     res = dict(presets=cmd_presets, info=cmd_info, describe=cmd_describe, render=cmd_render, diagnose=cmd_diagnose,
-               focus=cmd_focus, temporal=cmd_temporal, shot=cmd_shot, denoise=cmd_denoise, sequence=cmd_sequence)[a.cmd](a)
+               focus=cmd_focus, temporal=cmd_temporal, shot=cmd_shot, denoise=cmd_denoise, sequence=cmd_sequence,
+               verify=cmd_verify)[a.cmd](a)
     print(json.dumps(res, ensure_ascii=False, indent=1 if a.pretty else None, default=str))
     sys.exit(1 if isinstance(res, dict) and "error" in res else 0)
 

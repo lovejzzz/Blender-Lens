@@ -27,6 +27,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `bl.contact_sheet(path, [ {...}, {...} ])` | 多组设置并排成一张图（A/B），渲完恢复原设置 |
 | `bl.temporal_check(mode="moving")` / `bl.temporal_denoise(in_dir, out_dir, frames)` / `bl.render_shot(source_camera, frames, out_dir, ...)` | 0.8.4：运镜闪烁 / 时间降噪 / 渲一个镜头（HANDOFF §6.8） |
 | `bl.render_sequence(shots)` / `bl.shots_from_markers()` / `bl.focus_track(cam, target, frames, rack)` / `exclude_collections=[...]` | 0.8.5：多镜头 / 对焦跟随 / 雨等排除层；透射面与倒影的矢量自动（HANDOFF §6.9）；0.9.1 `exclude_clamp` / `exclude_knee` 压雨层亮点（§6.15） |
+| `bl.spike_report(dir, frames)` / `temporal_denoise(..., spike_suppress=True)` / `render_shot(qc=True, visibility=..., pre=, post=)` / `bl.verify_inputs(preset, gate)` / `passes="delivery"` / `exclude_motion_blur` / `bl.enable_gpu(denoise_gpu=True)` | 0.9.2：孤立亮点质检与抑制、镜头级覆盖、相机输入指纹、精简通道、排除层运动模糊、GPU 降噪（HANDOFF §6.16） |
 | `bl.build(preset, format="FF" / "IMAX" / "65MM")` / `bl.coverage(cam)` | 画幅版本（整支镜头等比放大，0.9.1 起用满整个片门，解挤压后比例随压缩比）/ 覆盖与畸变报告（HANDOFF §6.10、§6.12、§6.14） |
 | `bl.build / set_focus / set_stop / set_mumps_correction / lens_info / render_still / render_frames / follow_camera / enable_gpu` | 原有稳定接口，见 `blenderlens/HANDOFF.md` §6 |
 
@@ -47,7 +48,8 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `blenderlens/rig.py` | 在场景里搭镜头、每帧同步（`apply_settings`）、渲染后期、多层 EXR（`render_frame_multilayer`、`bl_vector`） | 是 |
 | `blenderlens/passes.py` / `focus.py` / `temporal.py` | 多层 EXR 读写（0.8.4：流式、half / DWAB、`temporal` 预设）/ 对焦助手与景深 / 闪烁检查（locked / moving） | 部分 |
 | `blenderlens/motion.py` / `denoise.py` / `shot.py` | 运动补偿工具（纯 numpy）/ 时间降噪 / 一条命令渲一个镜头（0.8.4） | 否 / 否 / 是 |
-| `blenderlens/coverage.py` | 覆盖与畸变报告（0.8.6）：与 Analytic 渲染同一估计器的相对照度、像圈、畸变、竖线弯曲 | 否 |
+| `blenderlens/coverage.py` | 覆盖与畸变报告（0.8.6）：与 Analytic 渲染同一估计器的相对照度、像圈、畸变、竖线弯曲；0.9.2 横向色差（4K 像素） | 否 |
+| `blenderlens/spikes.py` / `verify.py` | 孤立亮点检测、抑制、spike_report（0.9.2）/ 相机输入指纹 verify_inputs（0.9.2） | 否 |
 | `blenderlens/agent.py` / `api.py` / `ui.py` | AI 接口 / 稳定脚本接口 / 面板与属性 | 是 |
 | `tools/build_presets.py` | 从专利转录数据生成 E/G/Panavision/Neil 处方，并给 C/E/G 加补偿板 | 否 |
 | `tools/reoptimize.py` | 同焦段重新设计（0.9.1）：焦距不变、解析重配变形器压缩比、整支优化（玻璃 / 片数不变），风格目标 = 原版在 S35 上的软硬比例 / 畸变 % / 暗角；参数存 `tools/reopt_*.json`，由 build_presets 生成 `c_series_style_ff` / `_65` | 否 |
@@ -86,6 +88,8 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 - 缩放镜头（`rescale_to_vertical_efl`）时所有带长度单位的量都要跟着缩放：发腮补偿凸轮（Δ1 × k、φ ÷ k）0.8.8 前漏了；全画幅版本用 `optics.to_format`（口径不重新估算，逐点等比）。
 - KernelCamera 的 `pole_merge_angle_*` 只在全景立体时同步，自定义相机读到 0：不能用来给 GPU 传参数（`gpukernel.FIELD_MAP` 只用确认会同步的字段）。
 - 跑长任务（Blender 测试、整套测试）放后台；Geometry 模式 CPU 渲染很慢。
+- Blender 默认 OIDN 在 CPU 上：GPU 渲染时 4K 降噪是大头（`denoising_use_gpu`，不逐位相同，别替用户偷偷改）。
+- 开 exclude_knee 时降 exclude_spp 会让雨变暗（knee 压掉噪点尖峰）；横向色差看光斑重心，不看主光线。
 
 ## 看图
 

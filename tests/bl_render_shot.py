@@ -1,4 +1,5 @@
 # 一条命令渲一个镜头（0.8.4，MessyRoom R5）：bl.render_shot
+#   0.9.2：visibility / pre / post（渲完还原）、qc（孤立亮点质检）、spike_report / temporal_denoise(spike_suppress)、EXR 头的相机输入指纹
 #   1. 跟随：BlenderLens 相机每帧与源相机重合，对焦距离与 f 值也跟着源相机（烘焙成关键帧）；
 #   2. exposure="pinhole"：film_exposure 乘 2^(−frame_mean_ev)（0.8.5：渲完恢复原值）；
 #   3. 每帧一个多层 EXR + 日志（用时、各步用时、峰值内存、可用内存、文件大小）；
@@ -38,8 +39,50 @@ sc.frame_start, sc.frame_end = 1, 4
 sc.render.resolution_y = 120
 sc.cycles.use_denoising = False
 rep = {}
+calls = []
+cube = bpy.data.objects["Cube"]
+try:                                                      # 0.9.2：名字不存在 → 渲染前 ValueError
+    bl.render_shot(source_camera="Src", frames=[1], out_dir=os.path.join(OUT, "bad"), preset="c_series_style", height=60,
+                   visibility={"NoSuchObject": {"visible_camera": False}})
+    rep["visibility_bad_name_rejected"] = False
+except ValueError:
+    rep["visibility_bad_name_rejected"] = not os.path.exists(os.path.join(OUT, "bad", "f_0001.exr"))
 log = bl.render_shot(source_camera="Src", frames=range(1, 5), out_dir=OUT, preset="c_series_style", height=120,
-                     passes="temporal", spp=8, exposure="pinhole", guard=True, guard_min_gb=0.0)
+                     passes="temporal", spp=8, exposure="pinhole", guard=True, guard_min_gb=0.0,
+                     visibility={"Cube": {"visible_camera": False}},
+                     pre=lambda scene: calls.append(("pre", cube.visible_camera)),
+                     post=lambda scene: calls.append(("post", cube.visible_camera)))
+rep["visibility"] = dict(calls=calls, restored=cube.visible_camera)
+rep["qc"] = dict(total=log.get("spike_report", {}).get("total"), heatmaps=sorted(os.path.basename(v) for v in (log.get("spike_report", {}).get("heatmaps") or {}).values()),
+                 error=log.get("spike_report", {}).get("error"))
+# 0.9.2：孤立亮点——在第 2 帧注入一个 3×3 的亮点（Combined 与 BL_Final），spike_report 找得到、temporal_denoise(spike_suppress) 压得掉
+import shutil as _sh
+from blenderlens import passes as PS, spikes as SP
+SPK = os.path.join(OUT, "spikes"); _sh.rmtree(SPK, ignore_errors=True); os.makedirs(SPK)
+for t in range(1, 5):
+    _sh.copy(os.path.join(OUT, f"f_{t:04d}.exr"), os.path.join(SPK, f"f_{t:04d}.exr"))
+f2 = os.path.join(SPK, "f_0002.exr"); parts = PS.read(f2)
+H_, W_ = PS.find(parts, "Combined")["channels"]["R"].shape
+yy_, xx_ = H_ // 2, W_ // 2
+for name in ("Combined", "BL_Final"):
+    ch = PS.find(parts, name)["channels"]
+    for c in "RGB":
+        a = ch[c].astype(np.float32).copy(); a[yy_ - 1:yy_ + 2, xx_ - 1:xx_ + 2] = 50.0; ch[c] = a
+PS.write(f2, parts)
+sr = bl.spike_report(SPK, [2, 3], layers=("Combined", "BL_Final"), conf=0.0)
+fr2 = next(r for r in sr["per_frame"] if r["frame"] == 2)
+td = bl.temporal_denoise(SPK, os.path.join(SPK, "out"), frames=[2], half=False, spike_suppress=dict(conf=0.0))
+td0 = bl.temporal_denoise(SPK, os.path.join(SPK, "out0"), frames=[2], half=False)
+fin = PS.rgb(PS.find(PS.read(os.path.join(SPK, "out", "f_0002.exr")), "BL_Final"))
+fin0 = PS.rgb(PS.find(PS.read(os.path.join(SPK, "out0", "f_0002.exr")), "BL_Final"))
+rep["spikes"] = dict(found=fr2.get("BL_Final", {}).get("count"), found_comb=fr2.get("Combined", {}).get("count"),
+                     heatmap=os.path.exists(sr["heatmaps"].get("BL_Final", "")),
+                     center_after=round(float(fin[yy_, xx_].max()), 3), center_without=round(float(fin0[yy_, xx_].max()), 3),
+                     suppressed=td["per_frame"][0].get("spikes_suppressed"),
+                     header=PS.find(PS.read(os.path.join(SPK, "out", "f_0002.exr")), "BL_Final")["header"].get("blenderlens/spikes_suppressed"))
+# 0.9.2：相机输入指纹写进 EXR 头，与 bl.verify_inputs 一致
+hdr = json.loads(PS.find(PS.read(os.path.join(OUT, "f_0001.exr")), "Combined")["header"]["blenderlens/inputs"])
+rep["inputs_header_matches_verify"] = hdr.get("all") == bl.verify_inputs("c_series_style.json", gate="16:9_NATIVE")["inputs"]["all"]
 cam = bl.camera(sc)
 sc.frame_set(3); rig.apply_settings(cam)
 d = (np.array(cam.matrix_world) - np.array(src.matrix_world))
@@ -77,5 +120,10 @@ rep["PASS"] = bool(rep["follow_matrix_err"] < 1e-4 and abs(rep["follow_fstop"] -
                    and rep["log_on_disk"] and rep["resume"] == [(1, False, "exists"), (2, True, None), (3, False, "exists"),
                                                                  (4, False, "exists")]
                    and rep["resume_kept_old"] and rep["guard"]["rendered"] is False and rep["guard"]["stopped"]
-                   and rep["guard"]["avail"] is not None and rep["guard_file_absent"])
+                   and rep["guard"]["avail"] is not None and rep["guard_file_absent"]
+                   and rep["visibility_bad_name_rejected"] and rep["visibility"]["calls"] == [("pre", False), ("post", False)]
+                   and rep["visibility"]["restored"] is True and rep["qc"]["error"] is None and rep["qc"]["total"] is not None
+                   and rep["spikes"]["found"] and rep["spikes"]["found"] >= 1 and rep["spikes"]["heatmap"]
+                   and rep["spikes"]["center_after"] < 0.5 * rep["spikes"]["center_without"] and rep["spikes"]["suppressed"]
+                   and rep["spikes"]["header"] is not None and rep["inputs_header_matches_verify"])
 print("SHOT", json.dumps(rep, default=str))

@@ -6,6 +6,7 @@
 #   temporal_denoise(R) 的 BL_Final 与「temporal_denoise(N) 的场景层 + 雨层 over」逐像素一致；BL_Final(R) = 雨 over 场景 + 炫光。
 #   0.8.7：exclude_spp=8 / exclude_bounces=2 时场景层逐像素不变、雨的覆盖（alpha 平均）差 < 15%，并报告排除层用时。
 #   0.9.1：exclude_knee 后排除层亮度 ≤ 上限、起点以下不变、场景层不变、BL_Final 一致；exclude_clamp 压低峰值、覆盖不变；错误参数渲染前报错。
+#   0.9.2：passes="delivery" 只有需要的层且文件更小；exclude_motion_blur 场景层不变、头里有记录、渲完恢复场景的运动模糊设置。
 # 运行：Blender -b --factory-startup --python tests/bl_exclude.py
 import os, sys, json, math, shutil
 import bpy, bmesh
@@ -183,6 +184,22 @@ rep["exclude_filters"] = dict(
     header=json.loads(PS.find(Kn, "Combined")["header"]["blenderlens/exclude"]).get("exclude_knee"),
     bad_values_rejected=bad)
 xf = rep["exclude_filters"]
+# 0.9.2：passes="delivery"（只留 temporal_denoise 读的层 + 插件层）、exclude_motion_blur（只给排除层开运动模糊）
+bl.render_still(os.path.join(dS, "deliv.exr"), flare=False, passes="delivery", exclude_collections=["FX_rain"], **LOSSLESS)
+bl.render_still(os.path.join(dS, "mblur.exr"), flare=False, passes="temporal", exclude_collections=["FX_rain"],
+                exclude_motion_blur=True, **LOSSLESS)
+Dv, Mb = PS.read(os.path.join(dS, "deliv.exr")), PS.read(os.path.join(dS, "mblur.exr"))
+names_d = sorted({p_["pass_"] for p_ in Dv})
+rep["delivery"] = dict(passes=names_d, size_mb=[round(os.path.getsize(os.path.join(dS, f_)) / 1e6, 3) for f_ in ("full.exr", "deliv.exr")],
+                       has_needed=all(n in names_d for n in ("Combined", "BL_Final", "BL_Vector", "BL_VectorConfidence", "BL_Exclude",
+                                                             "Denoising Specular Albedo", "Denoising Roughness")),
+                       no_extras=not any(n in names_d for n in ("Depth", "Noisy Image", "Volume Direct", "Denoising Normal")))
+rep["exclude_motion_blur"] = dict(
+    scene_identical=float(np.abs(PS.rgb(PS.find(Mb, "Combined")) - PS.rgb(PS.find(F, "Combined"))).max()) <= 1e-3 * float(PS.rgb(PS.find(F, "Combined")).max()),
+    alpha_mean=[round(float(rgba(F, "BL_Exclude")[..., 3].mean()), 4), round(float(rgba(Mb, "BL_Exclude")[..., 3].mean()), 4)],
+    header=json.loads(PS.find(Mb, "Combined")["header"]["blenderlens/exclude"]).get("exclude_motion_blur"),
+    scene_mb_restored=not sc.render.use_motion_blur)
+dl, mbr = rep["delivery"], rep["exclude_motion_blur"]
 eo = rep["exclude_spp_option"]
 nr = rep["norain"]
 rep["PASS"] = bool(eo["scene_identical"] and abs(eo["alpha_mean"][1] / max(eo["alpha_mean"][0], 1e-9) - 1) < 0.15
@@ -191,5 +208,8 @@ rep["PASS"] = bool(eo["scene_identical"] and abs(eo["alpha_mean"][1] / max(eo["a
                    and rep["scene_flicker_rel_diff"] <= 0.05 and rep["final_recon_rel"] < 1e-3
                    and rep["stable_vs_norain_plus_rain_rel"] < 2e-3 and rep["final_with_rain_flicker"] > rep["scene_flicker"]["R"]
                    and xf["knee_max_ok"] and xf["knee_below_unchanged"] < 2e-3 and xf["knee_scene_identical"] and xf["knee_final_recon"] < 1e-3
-                   and xf["clamp_lowers_peak"] and xf["clamp_alpha_same"] < 0.02 and xf["header"] is not None and all(xf["bad_values_rejected"]))
+                   and xf["clamp_lowers_peak"] and xf["clamp_alpha_same"] < 0.02 and xf["header"] is not None and all(xf["bad_values_rejected"])
+                   and dl["has_needed"] and dl["no_extras"] and dl["size_mb"][1] < dl["size_mb"][0]
+                   and mbr["scene_identical"] and mbr["header"] is True and mbr["scene_mb_restored"]
+                   and 0.5 < mbr["alpha_mean"][1] / max(mbr["alpha_mean"][0], 1e-9) < 2.0)
 print("EXCLUDE", json.dumps(rep))
