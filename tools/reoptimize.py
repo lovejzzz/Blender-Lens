@@ -36,11 +36,33 @@ CONFIGS = {
                   field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, dist_tol=0.015, out="c_series_style_ff.json", order_add=20,
                   qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1)), split_color=True),
     # 0.9.1：65 mm 5 齿孔版（真实世界的 65 mm 变形镜头：Ultra Panavision 70 1.25×、Hawk65 1.3×）——同一路线，压缩比 1.3×，片门 52.48 × 23.01
-    "c_65": dict(preset="c_series_style.json", rear="ALL", gaps="ALL", bfl=None, fmt="65MM", style="relative",
+    "c_65": dict(axial_w=0.5, preset="c_series_style.json", rear="ALL", gaps="ALL", bfl=None, fmt="65MM", style="relative",
                  repower=dict(neg=["A1", "A2", "A3", "A4", "A5"], pos=["A6", "A7", "A8"], gap="A5", squeeze=1.3),
                  fy=50.0, sq=1.3, spot_w=1 / 0.15,
                  qpts=((0, 0), (0.5, 0), (0.7, 0), (0.85, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1)),
                  field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, dist_tol=0.015, out="c_series_style_65.json", order_add=21, split_color=True),
+    # 0.9.3：同一路线推广到 E / G（Isco 前置，按 Panavision 大画幅 1.65×）与 Neil 50 / 65 / 85（思锐，按思锐自家全画幅的 1.6×）。
+    # 变形器结构不同，用数值重配（repower_numeric）：Isco 缩放 X 子系统前半 I7–I9、调 I9 后的间隔；Neil 缩放最前的 X 柱面 S3–S4、调 S16 后的间隔
+    "e_ff": dict(axial_w=0.5, preset="e_series_style.json", rear="ALL", gaps="ALL", bfl=None, fmt="FF", fy=131.4, sq=1.65,
+                 repower=dict(xs=["I7", "I8", "I9"], gap="I9", squeeze=1.65), out="e_series_style_ff.json", order_add=20,
+                 style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, dist_tol=0.015, split_color=True,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1))),
+    "g_ff": dict(axial_w=0.5, preset="g_series_style.json", rear="ALL", gaps="ALL", bfl=None, fmt="FF", fy=100.26, sq=1.65,
+                 repower=dict(xs=["I7", "I8", "I9"], gap="I9", squeeze=1.65), out="g_series_style_ff.json", order_add=20,
+                 style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, dist_tol=0.015, split_color=True,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1))),
+    "neil50_ff": dict(axial_w=0.5, preset="neil_2x_50.json", rear="ALL", gaps="ALL", bfl=None, fmt="FF", fy=50.0, sq=1.6,
+                      no_feasible=True, repower=dict(xs=["S3", "S4"], gap="S16", squeeze=1.6, s0=0.6, fixed=dict(xs=["S14", "S17", "S18"], s=0.956)), out="neil_2x_50_ff.json", order_add=20,
+                      style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, dist_tol=0.015, split_color=True,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1))),
+    "neil65_ff": dict(axial_w=0.5, preset="neil_2x_65.json", rear="ALL", gaps="ALL", bfl=None, fmt="FF", fy=65.03, sq=1.6,
+                      no_feasible=True, repower=dict(xs=["S3", "S4"], gap="S16", squeeze=1.6, s0=0.6, fixed=dict(xs=["S14", "S17", "S18"], s=0.956)), out="neil_2x_65_ff.json", order_add=20,
+                      style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, dist_tol=0.015, split_color=True,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1))),
+    "neil85_ff": dict(axial_w=0.5, preset="neil_2x_85.json", rear="ALL", gaps="ALL", bfl=None, fmt="FF", fy=85.01, sq=1.6,
+                      no_feasible=True, repower=dict(xs=["S3", "S4"], gap="S16", squeeze=1.6, s0=0.6, fixed=dict(xs=["S14", "S17", "S18"], s=0.956)), out="neil_2x_85_ff.json", order_add=20,
+                      style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, dist_tol=0.015, split_color=True,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1))),
 }
 CFG = dict(CONFIGS["neil_2x_50"])
 PRESET = CFG["preset"]
@@ -329,7 +351,8 @@ def bounds(rx0, x0):
     for sid in GAPS:
         k = _scale(rx0, sid)
         glass = _sf(rx0, sid)["medium"] != "air"
-        lo.append((MIN_GLASS if glass else 0.1) / k); hi.append((16.0 if glass else 30.0) / k)
+        d0 = _sf(rx0, sid)["d"] or 0.0                      # 0.9.3：上限不低于原设计的 1.3 倍（Neil S15 原厚 18.75 mm > 16 mm，被截薄就坏了）
+        lo.append((MIN_GLASS if glass else 0.1) / k); hi.append(max(16.0 if glass else 30.0, 1.3 * d0 * k) / k)
     if BFL:
         k = _scale(rx0, BFL)
         lo.append(0.8 * x0[-1]); hi.append(1.3 * x0[-1])      # 后截距：起点 ±（放大后的镜头按比例）
@@ -395,7 +418,8 @@ class Merit:
         self.targets_xy = [(max(q["x_per_mille"] / 1000 * self.H, 0.003), max(q["y_per_mille"] / 1000 * self.H, 0.003)) for q in q0]
         # 0.9.1：分开对齐「单色清晰度」与「横向色差」（只对齐复色光斑时，优化器会拿色边换单色模糊——软的总量对了，软的样子变了）
         self.split = bool(CFG.get("split_color"))
-        self.npf = 5 if self.split else 3
+        self.axial = float(CFG.get("axial_w", 0.0)) if self.split else 0.0   # 0.9.3：复色光斑也对齐（管轴向色差——单色 + 横向色差对上了，
+        self.npf = (7 if self.axial else 5) if self.split else 3          # 不同颜色焦点前后错开的量没人管）
         self.targets_mono = [(max(q["mono_x"] / 1000 * self.H, 0.002), max(q["mono_y"] / 1000 * self.H, 0.002)) for q in q0]
         self.targets_lat = [(q["lat_x"] / 1000 * self.H, q["lat_y"] / 1000 * self.H) for q in q0]
         fx0 = self.fy0 / self.sq0
@@ -513,6 +537,9 @@ class Merit:
                     sl = lambda t: max(0.25 * abs(t), 0.002)          # 色差容差：原版的 25%，至少 2 µm
                     res += [sw * (Xs[0].std() / tmx - 1.0), sw * (Ys[0].std() / tmy - 1.0),
                             (lx_ - tlx) / sl(tlx), (ly_ - tly) / sl(tly), 20.0 * lost]
+                    if self.axial:
+                        res += [self.axial * sw * (math.sqrt(((X - cen[0]) ** 2).mean()) / tx - 1.0),
+                                self.axial * sw * (math.sqrt(((Y - cen[1]) ** 2).mean()) / ty - 1.0)]
                 else:
                     res += [sw * (math.sqrt(((X - cen[0]) ** 2).mean()) / tx - 1.0), sw * (math.sqrt(((Y - cen[1]) ** 2).mean()) / ty - 1.0), 20.0 * lost]
             else:
@@ -639,13 +666,41 @@ def repower(rx, neg, pos, gap, squeeze):
     return rx
 
 
+def repower_numeric(rx, xs, gap, squeeze, fixed=None, s0=0.8):
+    """0.9.3：通用的压缩比重配（变形器结构不是一对无焦正负组时用，如 Isco 的两个子系统、Neil 的多片柱面）：
+    把 xs 这几个 X 向柱面的曲率同乘 1/s、调 gap 这一面后的间隔 d，两个未知数解两个方程——整支压缩比 = squeeze、
+    X / Y 近轴像面重合。之后整支等比缩放回原焦距由 Merit.normalize 管。"""
+    from scipy.optimize import fsolve
+    rx = copy.deepcopy(rx)
+    for i in (fixed or {}).get("xs", []):                   # 另一组 X 柱面按给定比例先缩放（Neil：后组 S14 / S17 / S18 × 1/0.956）
+        _sf(rx, i)["R_x"] = _sf(rx, i)["R_x"] / fixed["s"]
+    base = {i: _sf(rx, i)["R_x"] for i in xs}; d0 = _sf(rx, gap)["d"]
+
+    def build(v):
+        r = copy.deepcopy(rx)
+        for i in xs:
+            _sf(r, i)["R_x"] = base[i] / v[0]
+        _sf(r, gap)["d"] = float(v[1])
+        return r
+
+    def f(v):
+        S = O.layout(build(v))
+        fy, by = O.paraxial_infinity(S, "Ry"); fx, bx = O.paraxial_infinity(S, "Rx")
+        return [fy / fx - squeeze, (by - bx) / 10.0]
+    sol, info, ier, msg = fsolve(f, [s0, d0], full_output=True)
+    if ier != 1 or sol[1] <= 0:
+        raise RuntimeError(f"repower_numeric 没解出来（{msg}；s {sol[0]:.3f}、d {sol[1]:.2f}）")
+    return build(sol)
+
+
 def start_rx():
     """优化起点：IMAX / 全部面重新设计 = 原设计整支放大到该画幅（覆盖与风格逐点相同）；repower = 原焦距、变形器换压缩比、
     光窗换成该画幅；其余 = 原设计。"""
     rx = load()
     if CFG.get("repower"):
         rp = CFG["repower"]
-        rx = repower(rx, rp["neg"], rp["pos"], rp["gap"], rp["squeeze"])
+        rx = (repower_numeric(rx, rp["xs"], rp["gap"], rp["squeeze"], rp.get("fixed"), rp.get("s0", 0.8)) if "xs" in rp
+              else repower(rx, rp["neg"], rp["pos"], rp["gap"], rp["squeeze"]))
         W, H = O.FORMAT_SIZES[FMT]
         rx["sensor"] = {"width": W, "height": H, "max_gate": [W, H], "format": f"{FMT} {W:g} × {H:g}"}
     elif FMT == "IMAX" or CFG.get("style") == "relative":
@@ -659,7 +714,7 @@ def optimize(iters=6, nfev=400, out=None, start=None, fy_target=None, sq_target=
     rx0 = start_rx()
     M = Merit(rx0, fy_target, sq_target)
     x = pack(rx0) if not start else np.array(json.load(open(start))["x"])
-    if not start:                                   # 从已有的解接着优化时不做「推开边厚」（加厚会毁掉设计；边厚由评价函数的平滑惩罚管）
+    if not start and not CFG.get("no_feasible"):    # 从已有的解接着优化时不做「推开边厚」（加厚会毁掉设计；边厚由评价函数的平滑惩罚管）
         x = make_feasible(rx0, M, x)
     lo, hi = bounds(rx0, x)
     x = np.clip(x, lo + 1e-9, hi - 1e-9)
@@ -687,6 +742,11 @@ def optimize(iters=6, nfev=400, out=None, start=None, fy_target=None, sq_target=
         if c_ < best_[0]:                                    # 另存代价最低的一轮（换光束后代价可能回升）
             best_ = (c_, x.copy())
             json.dump(dict(x=x.tolist(), rx=unpack(rx0, x), cost=c_), open(path_.replace(".json", "_best.json"), "w"), ensure_ascii=False, indent=1)
+        elif c_ > 1.5 * best_[0]:                            # 0.9.3：明显变差（光线丢了、边厚撞了）→ 退回最好的一组再接着找
+            print(f"  (cost {c_:.1f} > best {best_[0]:.1f}：退回最好的一轮)"); sys.stdout.flush()
+            x = best_[1].copy()
+    if float(0.5 * (M(x) @ M(x))) > best_[0]:
+        x = best_[1].copy()
     rx = unpack(rx0, x)
     r = M(x); nf = M.npf * len(M.flds); nl = 2 * len(M.lock_flds)
     k = nf + nl
@@ -734,6 +794,16 @@ NAMES = {
                        "设想厂商出全画幅版：50 mm 不变，变形器重配成 1.65×（大画幅变形镜头的常见做法），整支重新优化，用满全画幅 36 × 24（2.48:1）"),
     "c_65": ("C 系列风格（1968）· 65 mm 5 齿孔 50 mm 1.3×（BlenderLens 重新设计）", "C 风格 50 mm 65 mm 5 齿孔（1.3×）",
              "设想厂商出 65 mm 版（参照 Ultra Panavision 70 1.25× / Hawk65 1.3×）：50 mm 不变，变形器重配成 1.3×，整支重新优化，用满 52.48 × 23.01 片门（2.97:1）"),
+    "e_ff": ("E 系列风格 · 全画幅 131 mm 1.65×（BlenderLens 重新设计）", "E 风格 131 mm 全画幅（1.65×）",
+             "设想的全画幅版：131 mm 不变，Isco 变形器的水平子系统重配成 1.65×，整支重新优化，用满 36 × 24（2.48:1）"),
+    "g_ff": ("G 系列风格 · 全画幅 100 mm 1.65×（BlenderLens 重新设计）", "G 风格 100 mm 全画幅（1.65×）",
+             "设想的全画幅版：100 mm 不变，Isco 变形器的水平子系统重配成 1.65×，整支重新优化，用满 36 × 24（2.48:1）"),
+    "neil50_ff": ("Neil 现代变形 · 全画幅 50 mm 1.6×（BlenderLens 重新设计）", "Neil 50 mm 全画幅（1.6×）",
+                  "设想的全画幅版（参照思锐自家全画幅 1.6×）：50 mm 不变，前变形组重配成 1.6×，整支重新优化，用满 36 × 24（2.4:1）"),
+    "neil65_ff": ("Neil 现代变形 · 全画幅 65 mm 1.6×（BlenderLens 重新设计）", "Neil 65 mm 全画幅（1.6×）",
+                  "设想的全画幅版（参照思锐自家全画幅 1.6×）：65 mm 不变，前变形组重配成 1.6×，整支重新优化，用满 36 × 24（2.4:1）"),
+    "neil85_ff": ("Neil 现代变形 · 全画幅 85 mm 1.6×（BlenderLens 重新设计）", "Neil 85 mm 全画幅（1.6×）",
+                  "设想的全画幅版（参照思锐自家全画幅 1.6×）：85 mm 不变，前变形组重配成 1.6×，整支重新优化，用满 36 × 24（2.4:1）"),
     "neil_2x_50": ("Neil 2× 50 mm · 全画幅同焦段（BlenderLens 重新优化）", "Neil 2× 50 mm 全画幅（重新优化）",
                    "同一个前变形部分，后组重新优化"),
 }
@@ -753,7 +823,7 @@ def build_preset(path, out_name=None):
     ri0 = CV.coverage_report(orig, 1e7, 4.0)["relative_illumination"]
     W, H = ff_gate(orig)
     rx0 = start_rx()
-    M = Merit(rx0)
+    M = Merit(rx0, CFG.get("fy"), CFG.get("sq"))               # 0.9.3：按目标焦距归一（数值重配的起点焦距略有偏差）
     base = unpack(rx0, M.normalize(x))
     sq_nom = CFG.get("sq") or O.desqueeze(orig)               # 标称解挤压：变形器重配时 = 新压缩比（如 1.65）
     base.setdefault("anamorphic", {})["desqueeze"] = sq_nom
@@ -781,7 +851,9 @@ def build_preset(path, out_name=None):
     m.update(name=name, short_name=short, tagline=tag, order=m.get("order", 0) + CFG.get("order_add", 20))
     if CFG.get("repower"):
         m["note"] = (f"不是任何真实镜头：设想厂商出这支镜头的全画幅版。BlenderLens 用 tools/reoptimize.py 设计（玻璃与片数不变）："
-                     f"焦距 {M.fy0:.0f} mm 不变；变形器按解析关系重配成 {CFG['sq']}×（负组焦距 = 正组 / 压缩比，再求间隔使 X 向无焦），"
+                     f"焦距 {M.fy0:.0f} mm 不变；变形器重配成 {CFG['sq']}×（" + ("X 向柱面 " + "、".join(CFG["repower"]["xs"]) + " 的光焦度与 "
+                     + CFG["repower"]["gap"] + " 后的间隔按压缩比与两向像面重合求解" if "xs" in CFG["repower"] else
+                     "负组焦距 = 正组 / 压缩比，再求间隔使 X 向无焦") + "），"
                      f"然后全部曲率与间隔一起优化。风格目标 = 原版在它自己 S35 光窗上同一相对位置的：X / Y 光斑 / 画高（中心 → 四角的软硬比例）、"
                      f"横 / 竖畸变 %（容差 {100 * CFG.get('dist_tol', 0.005):.1f} 个百分点）、f/4 相对照度；后截距 ≥ 原版的 90%。"
                      f"角落放行 {frac:.2f}（四角照度 {ri['corner']:.2f}，原版 {ri0['corner']:.2f}）。")

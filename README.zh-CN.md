@@ -25,6 +25,13 @@
 
 ---
 
+## 0.9.3 新增：E、G、Neil 的全画幅重新设计
+
+- **又多了五个全画幅预设**，做法和 C 风格全画幅版相同：焦距保持原值，变形器重配成全画幅用的压缩比，整支镜头重新优化，让它在 36 × 24 上的表现逐点对齐原版在它自己 S35 光窗上的样子。对齐的项目包括单色清晰度、横向和轴向色差、畸变、暗角。
+  - E 风格 131 mm、G 风格 100 mm：1.65×（2.48:1）。最差的位置模糊度分别是原版的 1.06 倍、1.02 倍。
+  - Neil 50 / 65 / 85 mm：1.6×（2.4:1，和思锐自家的全画幅产品一致）。最差的位置分别是原版的 1.17 倍、1.27 倍、1.01 倍；近摄时压缩比变小的特点保留。
+- 这些是 BlenderLens 自己设计的镜头，不是真实镜头；详细数据见 `blenderlens/HANDOFF.md` §6.17。
+
 ## 0.9.2 新增：渲镜头更快、单帧亮点、内置时间质检
 
 - **更快**：`bl.enable_gpu(denoise_gpu=True)` 把 OIDN 降噪放到 GPU 上（Blender 默认在 CPU 上做）。3842 × 1624 一帧从 53 秒降到 38 秒。结果与 CPU 降噪不逐位相同，所以不默认打开，`bl.diagnose()` 会提示。Cryptomatte 解码快了 20 倍，物体多的场景里 fill 和运动矢量这两步明显变快。
@@ -155,12 +162,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.9.2.zip`](dist/blenderlens-0.9.2.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.9.3.zip`](dist/blenderlens-0.9.3.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.9.2.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.3.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。

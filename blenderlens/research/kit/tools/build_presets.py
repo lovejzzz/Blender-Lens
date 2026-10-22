@@ -746,6 +746,14 @@ if __name__ == "__main__":
     # 0.9.1：C 风格 50 mm 65 mm 5 齿孔版（1.3×，参照 Ultra Panavision 70 / Hawk65；参数在 tools/reopt_c_series_style_65.json）
     RO.use("c_65")
     RO.build_preset(os.path.join(os.path.dirname(os.path.abspath(__file__)), "reopt_c_series_style_65.json"))
+    # 0.9.3：E / G（1.65×）与 Neil 50 / 65 / 85（1.6×）的全画幅同焦段重新设计（参数在 tools/reopt_*_ff.json）
+    for cfg, f in (("e_ff", "reopt_e_series_style_ff.json"), ("g_ff", "reopt_g_series_style_ff.json"),
+                   ("neil50_ff", "reopt_neil_2x_50_ff.json"), ("neil65_ff", "reopt_neil_2x_65_ff.json"),
+                   ("neil85_ff", "reopt_neil_2x_85_ff.json")):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f)
+        if os.path.exists(path):
+            RO.use(cfg)
+            RO.build_preset(path)
     for fn in ("e_series_style.json", "panavision_rear_134.json", "panavision_rear_134_tele.json",
                "neil_2x_50.json", "neil_2x_65.json", "neil_2x_85.json"):
         rx = O.load(os.path.join(PDIR, fn))

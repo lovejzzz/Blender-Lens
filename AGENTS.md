@@ -52,7 +52,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `blenderlens/spikes.py` / `verify.py` | 孤立亮点检测、抑制、spike_report（0.9.2）/ 相机输入指纹 verify_inputs（0.9.2） | 否 |
 | `blenderlens/agent.py` / `api.py` / `ui.py` | AI 接口 / 稳定脚本接口 / 面板与属性 | 是 |
 | `tools/build_presets.py` | 从专利转录数据生成 E/G/Panavision/Neil 处方，并给 C/E/G 加补偿板 | 否 |
-| `tools/reoptimize.py` | 同焦段重新设计（0.9.1）：焦距不变、解析重配变形器压缩比、整支优化（玻璃 / 片数不变），风格目标 = 原版在 S35 上的软硬比例 / 畸变 % / 暗角；参数存 `tools/reopt_*.json`，由 build_presets 生成 `c_series_style_ff` / `_65` | 否 |
+| `tools/reoptimize.py` | 同焦段重新设计（0.9.1）：焦距不变、解析重配变形器压缩比、整支优化（玻璃 / 片数不变），风格目标 = 原版在 S35 上的软硬比例 / 畸变 % / 暗角；参数存 `tools/reopt_*.json`，由 build_presets 生成 C / E / G / Neil 的 `*_ff` 与 `c_series_style_65`（0.9.3：数值重配 `repower_numeric`、轴向色差项 `axial_w`） | 否 |
 | `tools/build_pupil_tables.py` | 预设出瞳表（改了处方的光学部分或 `pupil.py` 后必须重跑） | 否 |
 | `blenderlens/research/` | `ROADMAP.md`（计划与验收）、`RESEARCH.md`（来源、核对、修正记录）、专利原件 | – |
 

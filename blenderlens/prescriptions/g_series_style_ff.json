@@ -1,0 +1,684 @@
+{
+  "meta": {
+    "name": "G 系列风格 · 全画幅 100 mm 1.65×（BlenderLens 重新设计）",
+    "short_name": "G 风格 100 mm 全画幅（1.65×）",
+    "order": 23,
+    "tagline": "设想的全画幅版：100 mm 不变，Isco 变形器的水平子系统重配成 1.65×，整支重新优化，用满 36 × 24（2.48:1）",
+    "note": "不是任何真实镜头：设想厂商出这支镜头的全画幅版。BlenderLens 用 tools/reoptimize.py 设计（玻璃与片数不变）：焦距 100 mm 不变；变形器重配成 1.65×（X 向柱面 I7、I8、I9 的光焦度与 I9 后的间隔按压缩比与两向像面重合求解），然后全部曲率与间隔一起优化。风格目标 = 原版在它自己 S35 光窗上同一相对位置的：X / Y 光斑 / 画高（中心 → 四角的软硬比例）、横 / 竖畸变 %（容差 1.5 个百分点）、f/4 相对照度；后截距 ≥ 原版的 90%。角落放行 0.60（四角照度 0.87，原版 0.94）。",
+    "units": "mm",
+    "conventions": {
+      "origin": "像面（传感器）",
+      "object_side": "+Z",
+      "light_travels": "-Z",
+      "surface_order": "从物方到像方",
+      "radius_sign": "R > 0：曲率中心在像方（-Z 一侧）；R < 0：在物方；null = 平面（无穷大）",
+      "surface_z": "z = z_vertex - sag(x, y)",
+      "d": "该面到下一面的轴上距离（专利原值，使用时乘该组 scale）",
+      "medium": "该面之后（像方一侧）的介质",
+      "cylinder": "柱面镜只在水平主截面（x）有光焦度：R_y = null",
+      "aperture": "每面 aperture 为物理 mm（已缩放，不再乘 scale）：柱面镜片 rect(semi_x, semi_y)；球面镜片 circle(clear 通光半径, outer 外半径，二者之间为黑色平台)"
+    },
+    "reoptimized": {
+      "tool": "tools/reoptimize.py",
+      "base": "g_series_style.json",
+      "variables": [
+        "I1",
+        "I2",
+        "I5",
+        "I6",
+        "I7",
+        "I8",
+        "I9",
+        "I11",
+        "I12",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8",
+        "P9",
+        "P10",
+        "P11"
+      ],
+      "gaps": [
+        "K1",
+        "K2",
+        "I1",
+        "I2",
+        "I3",
+        "I4",
+        "I5",
+        "I6",
+        "I7",
+        "I8",
+        "I9",
+        "I10",
+        "I11",
+        "I12",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8",
+        "P9",
+        "P10"
+      ],
+      "data": "reopt_g_series_style_ff.json",
+      "corner_pupil_fraction": 0.6,
+      "corner_RI": 0.872,
+      "corner_RI_original": 0.9442
+    }
+  },
+  "glasses": {
+    "air": {
+      "nd": 1.0,
+      "vd": null
+    },
+    "N_1713_539": {
+      "nd": 1.713,
+      "vd": 53.9,
+      "note": "US 4,234,242 镧冕（≈ LaK8 类）"
+    },
+    "N_1648_338": {
+      "nd": 1.64831,
+      "vd": 33.8,
+      "note": "US 4,234,242 火石（≈ SF2 类）"
+    },
+    "I_LAFN21": {
+      "nd": 1.78831,
+      "vd": 47.49,
+      "n_C": 1.78332,
+      "n_F": 1.79992,
+      "catalog": "SCHOTT:N-LAF21",
+      "note": "LaF N21（Isco 原表 n_d/n_C/n_F）；色散曲线形状取其无铅后继 N-LAF21，并校正到专利的 C / F 线"
+    },
+    "I_SF11": {
+      "nd": 1.78472,
+      "vd": 25.76,
+      "n_C": 1.77599,
+      "n_F": 1.80645,
+      "catalog": "SCHOTT:SF11",
+      "note": "SF 11（Isco 原表 n_d/n_C/n_F；与 Schott 目录 SF11 相差 ≤ 5e-6）"
+    },
+    "BL_COMP": {
+      "nd": 1.5168,
+      "vd": 64.17,
+      "catalog": "SCHOTT:N-BK7",
+      "note": "补偿板（一阶等效的反向旋转柱面对，见 optics.compensator）"
+    }
+  },
+  "groups": [
+    {
+      "id": "compensator",
+      "scale": 1.0,
+      "note": "0.8：发腮补偿（Auto Panatar 式，一阶等效）。补偿强度为 0 时是一块平行平板，对成像无影响（只多两个反射面）",
+      "surfaces": [
+        {
+          "id": "K1",
+          "R_x": null,
+          "R_y": null,
+          "d": 5.0,
+          "medium": "BL_COMP",
+          "aperture": {
+            "shape": "circle",
+            "clear": 59.25,
+            "outer": 59.25
+          },
+          "note": "马鞍面：曲率随对焦（凸轮表 focus.compensator）"
+        },
+        {
+          "id": "K2",
+          "R_x": null,
+          "R_y": null,
+          "d": 29.13942092890246,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 58.25,
+            "outer": 59.25
+          }
+        }
+      ]
+    },
+    {
+      "id": "anamorph",
+      "role": "前置无焦变形器：前组在垂直方向放大 1.31×（伽利略），后组在水平方向缩小到 0.627×（反伽利略），合计约 2.09×",
+      "source": {
+        "patent": "US 5,184,880 — A. Lisziewicz, Anamorphic attachment（Isco Optische Werke），1990 申请 / 1993 授权，实施例 3",
+        "url": "https://patents.google.com/patent/US5184880A/en",
+        "table": "第 11–12 栏主表 + 对焦表（已对照扫描件）；间隔取对焦表 infinite 行",
+        "patent_values": {
+          "Fg": 100.0,
+          "Fx": 62.71,
+          "Fy": 131.0,
+          "anamorphic_factor": 2.089,
+          "entrance_to_focal_plane_mm": 375.012
+        },
+        "focus_table": [
+          [
+            "inf",
+            96.425,
+            57.78,
+            4.45
+          ],
+          [
+            50.0,
+            96.918,
+            56.975,
+            3.91
+          ],
+          [
+            30.0,
+            97.244,
+            56.439,
+            3.55
+          ],
+          [
+            20.0,
+            97.648,
+            55.771,
+            3.1
+          ],
+          [
+            15.0,
+            98.047,
+            55.104,
+            2.65
+          ],
+          [
+            10.0,
+            98.83,
+            53.773,
+            1.75
+          ],
+          [
+            7.5,
+            99.593,
+            52.449,
+            0.84
+          ],
+          [
+            5.0,
+            101.057,
+            49.823,
+            -0.96
+          ],
+          [
+            4.0,
+            102.095,
+            47.876,
+            -2.31
+          ],
+          [
+            3.5,
+            102.803,
+            46.499,
+            -3.27
+          ],
+          [
+            3.0,
+            103.702,
+            44.682,
+            -4.54
+          ],
+          [
+            2.5,
+            104.868,
+            42.179,
+            -6.32
+          ]
+        ],
+        "verified": "以专利自带 f=100 BK7 主镜近轴追迹：Fx 62.55、Fy 131.01、比 2.0946"
+      },
+      "scale": 0.763,
+      "surfaces": [
+        {
+          "id": "I1",
+          "R_x": null,
+          "R_y": 378.5771085648467,
+          "d": 20.564212722157418,
+          "medium": "I_LAFN21",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 40.0,
+            "semi_y": 36.5
+          }
+        },
+        {
+          "id": "I2",
+          "R_x": null,
+          "R_y": -192.7862136735022,
+          "d": 5.282499935543664,
+          "medium": "I_SF11",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 40.0,
+            "semi_y": 36.5
+          }
+        },
+        {
+          "id": "I3",
+          "R_x": null,
+          "R_y": null,
+          "d": 38.82457081522225,
+          "medium": "air",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 40.0,
+            "semi_y": 36.5
+          }
+        },
+        {
+          "id": "I4",
+          "R_x": null,
+          "R_y": null,
+          "d": 9.49412859532494,
+          "medium": "I_SF11",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 26.75,
+            "semi_y": 27.25
+          }
+        },
+        {
+          "id": "I5",
+          "R_x": null,
+          "R_y": -151.0450034448295,
+          "d": 3.936167157773209,
+          "medium": "I_LAFN21",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 26.75,
+            "semi_y": 27.25
+          }
+        },
+        {
+          "id": "I6",
+          "R_x": null,
+          "R_y": 371.20444174664095,
+          "d": 10.74783619270355,
+          "medium": "air",
+          "acts": "垂直",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 26.75,
+            "semi_y": 27.25
+          }
+        },
+        {
+          "id": "I7",
+          "R_x": -110.99868420795187,
+          "R_y": null,
+          "d": 3.6812897728522627,
+          "medium": "I_LAFN21",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 23.0,
+            "semi_y": 24.75
+          }
+        },
+        {
+          "id": "I8",
+          "R_x": 71.64480302941219,
+          "R_y": null,
+          "d": 13.562910808762709,
+          "medium": "I_SF11",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 23.0,
+            "semi_y": 24.75
+          }
+        },
+        {
+          "id": "I9",
+          "R_x": 542.9540430078868,
+          "R_y": null,
+          "d": 30.764289803048268,
+          "medium": "air",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 23.0,
+            "semi_y": 24.75
+          }
+        },
+        {
+          "id": "I10",
+          "R_x": null,
+          "R_y": null,
+          "d": 2.3640058524440266,
+          "medium": "I_SF11",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 21.5,
+            "semi_y": 20.0
+          }
+        },
+        {
+          "id": "I11",
+          "R_x": 102.60360677681412,
+          "R_y": null,
+          "d": 14.033558768191249,
+          "medium": "I_LAFN21",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 21.5,
+            "semi_y": 20.0
+          }
+        },
+        {
+          "id": "I12",
+          "R_x": -123.68422562085411,
+          "R_y": null,
+          "d": 37.00093576870292,
+          "medium": "air",
+          "acts": "水平",
+          "aperture": {
+            "shape": "rect",
+            "semi_x": 21.5,
+            "semi_y": 20.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "prime",
+      "role": "后组球面主镜：双高斯 6 片 5 组，f/2，2ω = 46°",
+      "source": {
+        "patent": "US 4,234,242 — S. Nakamura, Gauss Type Photographic Lens（Nippon Kogaku），1979-01-30 申请（优先权 1978-02-03）/ 1980-11-18 授权",
+        "url": "https://patents.google.com/patent/US4234242A",
+        "table": "实施例 1（f = 100 归一化）",
+        "patent_values": {
+          "f": 100.0,
+          "f_number": 2.0,
+          "bfl": 74.8,
+          "total_length": 128.3
+        },
+        "verified": "近轴追迹 EFL = 100.000、BFL = 74.84；r2 取说明书 3682.171（权利要求 6682.171 为笔误，代入得 EFL 99.40）；2026-10-18 逐位对照扫描原件（第 5–6 栏 Example 1）无误"
+      },
+      "normalized_f": 100.0,
+      "target_f": 76.3,
+      "scale": 0.763,
+      "f_number": 3.0,
+      "surfaces": [
+        {
+          "id": "P1",
+          "R_x": 96.46002639691564,
+          "R_y": 96.46002639691564,
+          "d": 5.22298491933954,
+          "medium": "N_1713_539",
+          "element": "L1",
+          "aperture": {
+            "shape": "circle",
+            "clear": 15.25,
+            "outer": 15.25
+          }
+        },
+        {
+          "id": "P2",
+          "R_x": -414.1770638382185,
+          "R_y": -414.1770638382185,
+          "d": 0.13108402787755333,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 15.0,
+            "outer": 15.25
+          }
+        },
+        {
+          "id": "P3",
+          "R_x": 35.29250013119026,
+          "R_y": 35.29250013119026,
+          "d": 6.287653955240102,
+          "medium": "N_1713_539",
+          "element": "L2",
+          "aperture": {
+            "shape": "circle",
+            "clear": 14.25,
+            "outer": 14.25
+          }
+        },
+        {
+          "id": "P4",
+          "R_x": 125.80797943092543,
+          "R_y": 125.80797943092543,
+          "d": 1.5439773439210391,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.5,
+            "outer": 14.25
+          }
+        },
+        {
+          "id": "P5",
+          "R_x": 532.8407741969899,
+          "R_y": 532.8407741969899,
+          "d": 1.048672216019229,
+          "medium": "N_1648_338",
+          "element": "L3",
+          "aperture": {
+            "shape": "circle",
+            "clear": 13.25,
+            "outer": 13.25
+          }
+        },
+        {
+          "id": "P6",
+          "R_x": 28.11716371921384,
+          "R_y": 28.11716371921384,
+          "d": 14.529312961072677,
+          "medium": "air",
+          "note": "光阑在此空气间隔内，专利未给位置",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.0,
+            "outer": 13.25
+          }
+        },
+        {
+          "id": "P7",
+          "R_x": -34.94919105584582,
+          "R_y": -34.94919105584582,
+          "d": 1.0884671231405314,
+          "medium": "N_1648_338",
+          "element": "L4 负（胶合）",
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.5,
+            "outer": 12.5
+          }
+        },
+        {
+          "id": "P8",
+          "R_x": -42.403363247298984,
+          "R_y": -42.403363247298984,
+          "d": 10.120398109137493,
+          "medium": "N_1713_539",
+          "element": "L4 正（胶合）",
+          "aperture": {
+            "shape": "circle",
+            "clear": 11.5,
+            "outer": 12.5
+          }
+        },
+        {
+          "id": "P9",
+          "R_x": -39.74851155793444,
+          "R_y": -39.74851155793444,
+          "d": 0.13108402787755333,
+          "medium": "air",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.5,
+            "outer": 12.5
+          }
+        },
+        {
+          "id": "P10",
+          "R_x": -71.10243854576142,
+          "R_y": -71.10243854576142,
+          "d": 3.3855039471631976,
+          "medium": "N_1713_539",
+          "element": "L5",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.25,
+            "outer": 12.5
+          }
+        },
+        {
+          "id": "P11",
+          "R_x": -50.554122897457965,
+          "R_y": -50.554122897457965,
+          "d": null,
+          "medium": "air",
+          "note": "d = BFL，由近轴追迹求出",
+          "aperture": {
+            "shape": "circle",
+            "clear": 12.5,
+            "outer": 12.5
+          }
+        }
+      ],
+      "stop": {
+        "after_surface": "P6",
+        "offset_fraction": 0.5,
+        "assumed": true,
+        "note": "暂取间隔中点，待按出瞳/渐晕调整",
+        "f_number": 3.0,
+        "semi_diameter_at_f_number": 10.937,
+        "z_at_infinity": 83.297
+      }
+    }
+  ],
+  "anamorphic": {
+    "desqueeze": 1.65,
+    "type": "front",
+    "note": "Isco 实施例 3 实际压缩比 2.09（专利 Fy/Fx），按此解挤压使无穷远处圆形不变形；按 Panavision 名义 2.0 解挤压会窄 4.5%"
+  },
+  "look": {
+    "reference": "Panavision G Series 100 mm T3，最近对焦 91.4 cm（panavision.com）；页面描述：excellent glare resistance、minimal breathing",
+    "f_number": 3.0,
+    "min_focus_mm": 914.0,
+    "mumps_correction": 1.0,
+    "coating_nm": 100.0,
+    "flare_color": "PHYSICAL",
+    "flare_gain": 0.15,
+    "corner_pupil_fraction": 0.75,
+    "veiling_glare": 0.005
+  },
+  "focus": {
+    "mechanism": "按专利：中间两组（I4–I9）一起移动 Δ2；后组 I10–I12 与主镜由凸轮跟随移动 Δ1；前组 I1–I3 相对焦面固定。两截面同时求解",
+    "groups": [
+      {
+        "ids": [
+          "I10",
+          "I11",
+          "I12",
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11"
+        ],
+        "moves": [
+          1,
+          0
+        ]
+      },
+      {
+        "ids": [
+          "I4",
+          "I5",
+          "I6",
+          "I7",
+          "I8",
+          "I9"
+        ],
+        "moves": [
+          0,
+          1
+        ]
+      }
+    ],
+    "solve": [
+      "Ry",
+      "Rx"
+    ],
+    "min_distance_mm": 914.0,
+    "compensator": {
+      "surface": "K1",
+      "level": 1.0,
+      "d1": [
+        0.0,
+        0.661264,
+        1.349241,
+        2.065633,
+        2.812305,
+        3.591306,
+        4.404891,
+        5.255555,
+        6.146065,
+        7.079503,
+        8.059312,
+        9.089365,
+        10.174029
+      ],
+      "phi": [
+        0.0,
+        2.90730045e-05,
+        5.96393029e-05,
+        9.1820842e-05,
+        0.000125753497,
+        0.000161589145,
+        0.00019949812,
+        0.000239672146,
+        0.000282327843,
+        0.000327710964,
+        0.000376101527,
+        0.00042782009,
+        0.000483235469
+      ],
+      "note": "凸轮表：对焦环行程 Δ1（mm）→ 补偿板光焦度 φ（1/mm，水平 −φ / 垂直 +φ），完全补偿时每个距离的压缩比 = 无穷远；level（0–1）是补偿强度，界面 Mumps Correction 写入"
+    }
+  },
+  "sensor": {
+    "format": "全画幅 36 × 24 mm（解挤压后 2.48:1）",
+    "width": 36.0,
+    "height": 24.0,
+    "max_gate": [
+      36.0,
+      24.0
+    ]
+  },
+  "aperture_design": {
+    "method": "真实光线追迹：传感器 9 个视场点 × 光阑边缘 48 点 + 中心，追到物方取各面最大高度",
+    "margin": 0.07,
+    "corner_pupil_fraction": 0.6,
+    "round_to_mm": 0.25,
+    "note": "角落视场只放行 60% 光瞳 → 机械渐晕，即边缘猫眼焦外的来源；收光圈后渐晕消失、焦外变圆"
+  }
+}

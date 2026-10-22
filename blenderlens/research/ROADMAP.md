@@ -32,6 +32,11 @@
 | 8.6 | **Geometry 模式亚像素平移**（旧问题 §7.2） | 单片透镜复现 → 查像素中心约定 | 偏移 < 0.05 px | 小 |
 | 8.7 | **外部数据回归** | 新测试 `test_reference.py`：前置预设的散景高宽比随离焦趋向挤压比；后置 PV 1.34× 散景接近圆（ASC / FDTimes 的定性结论）；呼吸方向以垂直为主（E 系列、Hawk 的描述）；最近对焦距离与 Panavision 公布值比对 | 全部通过或在文档里解释差异 | 小 |
 
+## 0.9.3 —— E / G / Neil 的全画幅同焦段重新设计（2026-10-22，用户需求；见 HANDOFF §6.17、RESEARCH §6.22）
+
+✅ e_series_style_ff / g_series_style_ff（1.65×）、neil_2x_50 / 65 / 85_ff（1.6×）：焦距不变、清晰度逐点 ×1.01–1.27、畸变差 ≤ 3.75 个百分点。✅ 评价函数补轴向色差；变量上限以原设计为准；变差时退回。
+还没做：Laowa 广角与 Panavision 后置 1.34× 的全画幅重新设计（Laowa 视场太广、PV 的变形组在后面，方法要改）。
+
 ## 0.9.2 —— 速度、孤立亮点、时间质检（2026-10-21，MessyRoom Day 5 全片复盘；见 HANDOFF §6.16）
 
 ✅ GPU 降噪选项与 diagnose 提示（整帧 −28%）；Cryptomatte 解码 20 倍快（fill / vector）；passes="delivery"（每帧 −71%）；exclude_spp 的实测与建议（开 knee 时降采样让雨变暗）。✅ temporal_denoise 的孤立亮点抑制、bl.spike_report 与 render_shot 的自动质检（热图）。✅ 镜头级 visibility / pre / post。✅ bl.verify_inputs + EXR 头的相机输入指纹。✅ exclude_motion_blur。✅ 覆盖报告的横向色差（4K 像素）。

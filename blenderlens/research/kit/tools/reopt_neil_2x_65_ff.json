@@ -1,0 +1,674 @@
+{
+ "x": [
+  -3.018632014681197e-05,
+  -0.001525691755737861,
+  -0.006958474316165825,
+  0.006092550783243828,
+  -0.0024235968991007367,
+  0.007599623118073447,
+  -0.0053548399529377315,
+  0.004189494669906693,
+  0.00313526134831654,
+  -0.015824577334690587,
+  -0.016572445427280477,
+  -0.012045391558460896,
+  0.010172279511283234,
+  0.01141711415486612,
+  0.012106497976607105,
+  0.009186821314080865,
+  -0.012432825494489543,
+  0.017167968423254572,
+  0.0015488276248525363,
+  -0.0004992803570346369,
+  0.019669109977493947,
+  0.02349608388347338,
+  0.003822374319971608,
+  0.048956608527161084,
+  0.015679444961409248,
+  0.011527581934706719,
+  0.06120862889644568,
+  -0.01463782443981563,
+  0.03108426802939237,
+  0.018628525952017135,
+  -0.020938400544699413,
+  4.938464681277614,
+  6.150602798357851,
+  4.490068774951361,
+  17.330968071158996,
+  3.3479028702359703,
+  6.403902023822467,
+  3.4913799319506498,
+  2.4221166236222516,
+  11.88310332033048,
+  0.9797151430112508,
+  7.838505124876745,
+  11.524423902741212,
+  3.3283989338476627,
+  2.225421913294018,
+  20.854738308494184,
+  3.54840492631409,
+  9.84713232510399,
+  1.7170780116359698,
+  5.106648457584968,
+  1.0854072240892874,
+  2.7327370013332546,
+  12.724352939195168,
+  3.280652658747051,
+  0.44501637576740005,
+  4.036345096759521,
+  1.307205417168251,
+  1.678608469634902,
+  7.379781219097197,
+  1.8007529485970781,
+  3.238640619290645,
+  13.23615085962306
+ ],
+ "rx": {
+  "meta": {
+   "name": "Neil 2× 现代前置变形 65 mm（Sirui 专利 CN 111562632 B，f/3）",
+   "short_name": "Neil 2× 现代变形 65 mm（真实处方）",
+   "order": 7,
+   "tagline": "Iain Neil（Panavision 后置变形组的设计者）为思锐设计的现代 2× 前置变形：同一前组配三个可换后组；内对焦、无呼吸式凸轮",
+   "note": "专利实施例原样收录（不是 Panavision 镜头）。前变形部分 G1：X 柱面 3 片、Y 柱面 3 片加球面；G1b 两片整体移动对焦。像面在专利里取 X/Y 柱面以模拟弯曲物面，这里用平面传感器，所以边缘有该设计本身的场曲。",
+   "units": "mm",
+   "conventions": {
+    "origin": "像面（传感器）",
+    "object_side": "+Z",
+    "light_travels": "-Z",
+    "surface_order": "从物方到像方",
+    "radius_sign": "R > 0：曲率中心在像方（-Z 一侧）；R < 0：在物方；null = 平面（无穷大）",
+    "surface_z": "z = z_vertex - sag(x, y)",
+    "d": "该面到下一面的轴上距离（专利原值，使用时乘该组 scale）",
+    "medium": "该面之后（像方一侧）的介质",
+    "cylinder": "柱面镜只在水平主截面（x）有光焦度：R_y = null",
+    "aperture": "每面 aperture 为物理 mm（已缩放，不再乘 scale）：柱面镜片 rect(semi_x, semi_y)；球面镜片 circle(clear 通光半径, outer 外半径，二者之间为黑色平台)"
+   }
+  },
+  "glasses": {
+   "air": {
+    "nd": 1.0,
+    "vd": null
+   },
+   "OH_STIH53": {
+    "nd": 1.84666,
+    "vd": 23.778,
+    "code": "847238",
+    "name": "S-TIH53",
+    "catalog": "OHARA:S-TIH53",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_SFPL51": {
+    "nd": 1.496999,
+    "vd": 81.546,
+    "code": "497816",
+    "name": "S-FPL51",
+    "catalog": "OHARA:S-FPL51",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_SLAH65": {
+    "nd": 1.804,
+    "vd": 46.57,
+    "code": "804466",
+    "name": "S-LAH65",
+    "catalog": "OHARA:S-LAH65",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_SPHM52": {
+    "nd": 1.618,
+    "vd": 63.334,
+    "code": "618634",
+    "name": "S-PHM52",
+    "catalog": "OHARA:S-PHM52",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_SBAM4": {
+    "nd": 1.60562,
+    "vd": 43.707,
+    "code": "606437",
+    "name": "S-BAM4",
+    "catalog": "OHARA:S-BAM4",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_STIH6": {
+    "nd": 1.805181,
+    "vd": 25.425,
+    "code": "805254",
+    "name": "S-TIH6",
+    "catalog": "OHARA:S-TIH6",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_SLAH55V": {
+    "nd": 1.834807,
+    "vd": 42.725,
+    "code": "835427",
+    "name": "S-LAH55V",
+    "catalog": "OHARA:S-LAH55V",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_SYGH51": {
+    "nd": 1.754998,
+    "vd": 52.321,
+    "code": "755523",
+    "name": "S-YGH51",
+    "catalog": "OHARA:S-YGH51",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_STIM8": {
+    "nd": 1.595509,
+    "vd": 39.242,
+    "code": "596392",
+    "name": "S-TIM8",
+    "catalog": "OHARA:S-TIM8",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   },
+   "OH_STIM28": {
+    "nd": 1.688931,
+    "vd": 31.075,
+    "code": "689311",
+    "name": "S-TIM28",
+    "catalog": "OHARA:S-TIM28",
+    "note": "Ohara 目录值（refractiveindex.info / OHARA 2017）"
+   }
+  },
+  "groups": [
+   {
+    "id": "front",
+    "role": "前变形部分 G1（2.06×）：G1a / G1b（对焦）/ G1c",
+    "scale": 1.0,
+    "surfaces": [
+     {
+      "id": "S1",
+      "R_x": -33127.588759957274,
+      "R_y": -33127.588759957274,
+      "d": 4.938464681277614,
+      "medium": "OH_STIH53",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S2",
+      "R_x": -655.4403903928655,
+      "R_y": -655.4403903928655,
+      "d": 6.150602798357851,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S3",
+      "R_x": -143.70966314797118,
+      "R_y": null,
+      "d": 4.490068774951361,
+      "medium": "OH_SFPL51",
+      "shape": "XCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S4",
+      "R_x": 164.13486494856505,
+      "R_y": null,
+      "d": 17.330968071158996,
+      "medium": "air",
+      "shape": "XCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S5",
+      "R_x": -412.60986939331576,
+      "R_y": -412.60986939331576,
+      "d": 3.3479028702359703,
+      "medium": "OH_SFPL51",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S6",
+      "R_x": 131.58547265611065,
+      "R_y": 131.58547265611065,
+      "d": 6.403902023822467,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S7",
+      "R_x": null,
+      "R_y": -186.74694459381323,
+      "d": 3.4913799319506498,
+      "medium": "OH_SLAH65",
+      "shape": "YCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S8",
+      "R_x": null,
+      "R_y": 238.69227169162903,
+      "d": 2.4221166236222516,
+      "medium": "air",
+      "shape": "YCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S9",
+      "R_x": null,
+      "R_y": 318.95267695528605,
+      "d": 11.88310332033048,
+      "medium": "OH_SPHM52",
+      "shape": "YCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S10",
+      "R_x": null,
+      "R_y": -63.192841037706785,
+      "d": 0.9797151430112508,
+      "medium": "air",
+      "shape": "YCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S11",
+      "R_x": null,
+      "R_y": -60.34112493463791,
+      "d": 7.838505124876745,
+      "medium": "OH_STIH53",
+      "shape": "YCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S12",
+      "R_x": null,
+      "R_y": -83.01930204150004,
+      "d": 11.524423902741212,
+      "medium": "air",
+      "shape": "YCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S13",
+      "R_x": null,
+      "R_y": null,
+      "d": 3.3283989338476627,
+      "medium": "OH_SBAM4",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S14",
+      "R_x": 98.30638244759064,
+      "R_y": null,
+      "d": 2.225421913294018,
+      "medium": "air",
+      "shape": "XCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S15",
+      "R_x": 87.58780778011115,
+      "R_y": 87.58780778011115,
+      "d": 20.854738308494184,
+      "medium": "OH_STIH6",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S16",
+      "R_x": 82.6002698660058,
+      "R_y": 82.6002698660058,
+      "d": 3.54840492631409,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S17",
+      "R_x": 108.85157834378205,
+      "R_y": null,
+      "d": 9.84713232510399,
+      "medium": "OH_SFPL51",
+      "shape": "XCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S18",
+      "R_x": -80.43223967417691,
+      "R_y": null,
+      "d": 1.7170780116359698,
+      "medium": "air",
+      "shape": "XCyl",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S19",
+      "R_x": 58.248010209843315,
+      "R_y": 58.248010209843315,
+      "d": 5.106648457584968,
+      "medium": "OH_SLAH55V",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S20",
+      "R_x": 645.6496410278128,
+      "R_y": 645.6496410278128,
+      "d": 1.0854072240892874,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S21",
+      "R_x": -2002.8827209211163,
+      "R_y": -2002.8827209211163,
+      "d": 2.7327370013332546,
+      "medium": "OH_SBAM4",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S22",
+      "R_x": 50.84114131977672,
+      "R_y": 50.84114131977672,
+      "d": 12.724352939195168,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     }
+    ],
+    "source": {
+     "patent": "CN 111562632 B / US 11,287,618 B2 — I. A. Neil, Anamorphic objective lens system（广东思锐光学 Sirui），2019 优先权",
+     "url": "https://patents.google.com/patent/CN111562632B/en",
+     "url_us": "https://patents.google.com/patent/US11287618B2/en",
+     "table": "中国授权本表 2（第 29 页，逐位核对）；美国本同号表格印刷错误多，不采用",
+     "patent_values": {
+      "fly": 65.0,
+      "flx_approx": 32.5,
+      "f_number": 3.0,
+      "image_half_x": 10.65,
+      "image_half_y": 8.91
+     }
+    }
+   },
+   {
+    "id": "rear",
+    "role": "后非变形部分 G2（65 mm 版），含可调光阑",
+    "scale": 1.0,
+    "f_number": 3.0,
+    "stop": {
+     "after_surface": "S28",
+     "offset_mm": 3.99,
+     "semi_diameter": 6.62,
+     "f_number": 3.0,
+     "note": "光阑 S29（专利：全开 f/3 时孔径半直径 6.62）"
+    },
+    "surfaces": [
+     {
+      "id": "S23",
+      "R_x": 42.56028387366193,
+      "R_y": 42.56028387366193,
+      "d": 3.280652658747051,
+      "medium": "OH_SYGH51",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S24",
+      "R_x": 261.617496427568,
+      "R_y": 261.617496427568,
+      "d": 0.44501637576740005,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S25",
+      "R_x": 20.426251533441107,
+      "R_y": 20.426251533441107,
+      "d": 4.036345096759521,
+      "medium": "OH_SPHM52",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S26",
+      "R_x": 63.777767801171024,
+      "R_y": 63.777767801171024,
+      "d": 1.307205417168251,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S27",
+      "R_x": 86.74846170377202,
+      "R_y": 86.74846170377202,
+      "d": 1.678608469634902,
+      "medium": "OH_STIM8",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S28",
+      "R_x": 16.337565765307787,
+      "R_y": 16.337565765307787,
+      "d": 7.379781219097197,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S30",
+      "R_x": -68.31616297295852,
+      "R_y": -68.31616297295852,
+      "d": 1.8007529485970781,
+      "medium": "OH_STIM28",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S31",
+      "R_x": 32.17061437812946,
+      "R_y": 32.17061437812946,
+      "d": 3.238640619290645,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S32",
+      "R_x": 53.68111264282389,
+      "R_y": 53.68111264282389,
+      "d": 13.23615085962306,
+      "medium": "OH_SLAH55V",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     },
+     {
+      "id": "S33",
+      "R_x": -47.759139857182234,
+      "R_y": -47.759139857182234,
+      "d": 43.071,
+      "medium": "air",
+      "shape": "Sph",
+      "aperture": {
+       "shape": "circle",
+       "clear": 200.0,
+       "outer": 200.0
+      }
+     }
+    ]
+   }
+  ],
+  "image_distance_mm": 43.071,
+  "anamorphic": {
+   "desqueeze": 2.06,
+   "type": "front",
+   "note": "专利称约 2×；近轴压缩比 FLY/FLX = 2.06（三个焦段相同，由前变形部分决定），按光学实际值解挤压（与 E/G 一致）"
+  },
+  "look": {
+   "reference": "思锐专利实施例；成品镜头规格未公开。最近对焦取专利 FD3：物面到第一面 868 mm",
+   "f_number": 3.0,
+   "coating": "BROADBAND",
+   "coating_nm": 94.0,
+   "flare_color": "PHYSICAL",
+   "flare_gain": 1.0,
+   "veiling_glare": 0.008,
+   "min_focus_mm": 1078.2
+  },
+  "focus": {
+   "mechanism": "G1b（L3–L4，S5–S8）整体移动：S4 后间隔减小、S8 后间隔增大同样多（专利 FD1/FD2/FD3：15.511/12.339/9.120 与 2.285/5.458/8.677）。一个自由度同时对准两向（X 残差 ≤ 0.07 mm）。近轴求解的行程比专利多 2–4%（FD2 3.31 vs 3.17、FD3 6.54 vs 6.39 mm），三个后组相同，来自前组：专利按弯曲像面上的最佳聚焦定位，像方相差约 0.05 mm，在 f/3 景深以内",
+   "groups": [
+    {
+     "ids": [
+      "S5",
+      "S6",
+      "S7",
+      "S8"
+     ],
+     "moves": [
+      1,
+      0
+     ]
+    }
+   ],
+   "solve": [
+    "Ry"
+   ],
+   "min_distance_mm": 1078.2
+  },
+  "sensor": {
+   "width": 36.0,
+   "height": 24.0,
+   "max_gate": [
+    36.0,
+    24.0
+   ],
+   "format": "FF 36 × 24"
+  }
+ },
+ "cost": 106.59671663572561
+}

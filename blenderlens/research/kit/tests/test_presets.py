@@ -212,6 +212,34 @@ ok(c6["relative_illumination"]["corner"] > 0.65, f"C 65: corner RI at f/4 {c6['r
 q6 = RO.quality(RO.open_apertures(rx), *O.FORMAT_SIZES["65MM"])
 ratio = max(a["per_mille_of_height"] / b["per_mille_of_height"] for a, b in zip(q6, qo))
 ok(ratio < 1.4, f"C 65: sharpness profile within ×{ratio:.2f} of the original at every field point")
+# ── 0.9.3：E / G（1.65×）与 Neil 50 / 65 / 85（1.6×）的全画幅同焦段重新设计：与原版在它自己光窗上的风格对齐 ──
+REDESIGNS = (("e_series_style_ff.json", "e_series_style.json", 1.65, 3.5, 1.15), ("g_series_style_ff.json", "g_series_style.json", 1.65, 3.5, 1.15),
+             ("neil_2x_50_ff.json", "neil_2x_50.json", 1.6, 3.5, 1.25), ("neil_2x_65_ff.json", "neil_2x_65.json", 1.6, 4.0, 1.3),
+             ("neil_2x_85_ff.json", "neil_2x_85.json", 1.6, 3.5, 1.25))
+for fn, ofn, sq_t, dist_tol, sharp_tol in REDESIGNS:
+    if not os.path.exists(os.path.join(O.PRESCRIPTION_DIR, fn)):
+        continue
+    rx, orig = P(fn), P(ofn)
+    S, So = O.layout(rx), O.layout(orig)
+    (fx, bx), (fy, by) = O.paraxial_infinity(S, "Rx"), O.paraxial_infinity(S, "Ry")
+    fy0 = O.paraxial_infinity(So, "Ry")[0]
+    ok(abs(fy / fy0 - 1) < 1e-3 and abs(fy / fx - sq_t) < 0.01 and O.desqueeze(rx) == sq_t,
+       f"{fn}: fY {fy:.2f} mm (original {fy0:.2f}), squeeze {fy / fx:.4f}")
+    ok(abs(bx - by) < 0.05 and by >= 0.9 * O.paraxial_infinity(So, "Ry")[1] - 0.01 and (rx["sensor"]["width"], rx["sensor"]["height"]) == (36.0, 24.0),
+       f"{fn}: X / Y image planes coincide, BFL {by:.2f} mm, full 36 × 24 gate")
+    d1, d2 = O.solve_focus(rx, rx["focus"]["min_distance_mm"])
+    ok(not [e for e in O.edge_report(rx, d1, d2) if e["min_gap"] < 0], f"{fn}: no edge clash at MFD")
+    cn, co = CV.coverage_report(rx, 1e7, 4.0), CV.coverage_report(orig, 1e7, 4.0)
+    dd = max(abs(cn["distortion_pct"][k] - co["distortion_pct"][k]) for k in cn["distortion_pct"])
+    ok(dd < dist_tol and cn["relative_illumination"]["corner"] > co["relative_illumination"]["corner"] - 0.1,
+       f"{fn}: distortion within {dd:.2f} points; corner RI {cn['relative_illumination']['corner']:.2f} (original {co['relative_illumination']['corner']:.2f})")
+    qn = RO.quality(RO.open_apertures(rx), 36.0, 24.0)
+    qo = RO.quality(RO.open_apertures(orig), orig["sensor"]["width"], orig["sensor"]["height"])
+    ratio = max(a["per_mille_of_height"] / b["per_mille_of_height"] for a, b in zip(qn, qo))
+    ok(ratio < sharp_tol, f"{fn}: sharpness profile within ×{ratio:.2f} of the original at every field point")
+    if O.compensator(rx):
+        mfd = rx["focus"]["min_distance_mm"]
+        ok(abs(O.squeeze_at(rx, mfd) / O.squeeze_at(rx, math.inf) - 1) < 0.002, f"{fn}: compensated squeeze at MFD {O.squeeze_at(rx, mfd):.4f}")
 # ── 0.9.2：横向色差进覆盖报告（光斑重心，4K 像素）；相机输入指纹稳定、随处方变化 ──
 import verify as VF
 cr = CV.coverage_report(O.prepare(P("c_series_style.json"), "S35", 0, "FULL"), 3000.0, 4.0)["lateral_color_px"]
