@@ -28,7 +28,7 @@ python3 tools/blcli.py render --preset c_series_style --focus-m 3 --gpu --out re
 | `bl.temporal_check(mode="moving")` / `bl.temporal_denoise(in_dir, out_dir, frames)` / `bl.render_shot(source_camera, frames, out_dir, ...)` | 0.8.4：运镜闪烁 / 时间降噪 / 渲一个镜头（HANDOFF §6.8） |
 | `bl.render_sequence(shots)` / `bl.shots_from_markers()` / `bl.focus_track(cam, target, frames, rack)` / `exclude_collections=[...]` | 0.8.5：多镜头 / 对焦跟随 / 雨等排除层；透射面与倒影的矢量自动（HANDOFF §6.9）；0.9.1 `exclude_clamp` / `exclude_knee` 压雨层亮点（§6.15） |
 | `bl.spike_report(dir, frames)` / `temporal_denoise(..., spike_suppress=True)` / `render_shot(qc=True, visibility=..., pre=, post=)` / `bl.verify_inputs(preset, gate)` / `passes="delivery"` / `exclude_motion_blur` / `bl.enable_gpu(denoise_gpu=True)` | 0.9.2：孤立亮点质检与抑制、镜头级覆盖、相机输入指纹、精简通道、排除层运动模糊、GPU 降噪（HANDOFF §6.16） |
-| `bl.build(preset, format="FF" / "IMAX" / "65MM")` / `bl.coverage(cam)` | 画幅版本（整支镜头等比放大，0.9.1 起用满整个片门，解挤压后比例随压缩比）/ 覆盖与畸变报告（HANDOFF §6.10、§6.12、§6.14） |
+| `bl.build(preset, format="FF" / "IMAX" / "65MM", aspect=2.37)` / `bl.coverage(cam)` | 画幅版本（整支镜头等比放大，0.9.1 起用满整个片门，解挤压后比例随压缩比）/ 覆盖与畸变报告（HANDOFF §6.10、§6.12、§6.14） |
 | `bl.build / set_focus / set_stop / set_mumps_correction / lens_info / render_still / render_frames / follow_camera / enable_gpu` | 原有稳定接口，见 `blenderlens/HANDOFF.md` §6 |
 
 距离一律用米（`focus_m`）；镜头内部毫米；场景单位任意。GPU（Metal）必须在本进程第一次 GPU 渲染之前 `bl.enable_gpu()`。

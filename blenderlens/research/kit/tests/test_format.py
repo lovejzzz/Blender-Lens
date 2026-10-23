@@ -86,4 +86,14 @@ try:
     ok(False, "未知画幅应报错")
 except ValueError as e:
     ok("FF" in str(e), "未知画幅版本 → ValueError（列出可选值）")
+# ── 0.9.4：aspect → 整个光窗里该比例的最大矩形（满高收窄 / 满宽降高），解挤压后正好是这个比例 ──
+for fn, fmt, asp in (("c_series_style_ff.json", "S35", 2.37), ("c_series_style.json", "S35", 2.39), ("c_series_style.json", "S35", 1.85),
+                     ("sirui_ff_35.json", "S35", 2.76)):
+    rx = O.prepare(O.load(os.path.join(O.PRESCRIPTION_DIR, fn)), fmt, 0.0, "FULL")
+    W, H = rx["sensor"]["width"], rx["sensor"]["height"]
+    w, h = O.aspect_gate(rx, asp)
+    r2 = O.prepare(O.load(os.path.join(O.PRESCRIPTION_DIR, fn)), fmt, 0.0, "CUSTOM", w, h)
+    got = r2["sensor"]["width"] * O.desqueeze(r2) / r2["sensor"]["height"]
+    ok(abs(got / asp - 1) < 1e-4 and w <= W + 1e-6 and h <= H + 1e-6 and (abs(w - W) < 1e-6 or abs(h - H) < 1e-6),
+       f"{fn} aspect {asp}: gate {w:.3f} × {h:.3f} mm in {W:g} × {H:g} → {got:.4f}:1")
 print("FORMAT OK")

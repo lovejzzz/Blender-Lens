@@ -1405,6 +1405,13 @@ def render_frame_multilayer(scene, filepath, flare=True, n_grid=260, blur_px=0.8
         del veil
         fill = fill_first_sample_passes(scene, cam_ob, parts, vl.name, W, H, region)
         comb["header"]["blenderlens/fill"] = json.dumps(fill)
+        try:                                             # 0.9.4：实际光窗与交付比例（gate_size_mm / aspect）
+            _rx = read_prescription(); _s = _rx["sensor"]
+            comb["header"]["blenderlens/gate"] = json.dumps(dict(width_mm=_s["width"], height_mm=_s["height"], gate=_s.get("gate", "FULL"),
+                                                                 desqueeze=O.desqueeze(_rx),
+                                                                 aspect=round(_s["width"] * O.desqueeze(_rx) / _s["height"], 4)))
+        except Exception:
+            pass
         try:                                             # 0.9.2：相机输入指纹（与 bl.verify_inputs 同一算法），混用版本时比头就行
             from . import verify as VF
             comb["header"]["blenderlens/inputs"] = json.dumps(VF.fingerprint(read_prescription()))

@@ -913,6 +913,18 @@ def image_circle_radius(rx):
     s = rx["sensor"].get("full_aperture") or rx["sensor"]
     return 0.5 * math.hypot(s["width"], s["height"])
 
+def aspect_gate(rx, aspect):
+    """0.9.4（MessyRoom：改传感器尺寸直接出任意交付比例，不事后裁切）：解挤压后宽高比 = aspect、装在当前光窗（整个传感器 /
+    片门）里的最大矩形——比光窗本身宽就取满宽、降低高度，否则取满高、收窄宽度。→ (宽, 高) mm（压缩前）。"""
+    if not aspect or aspect <= 0:
+        raise ValueError(f"aspect 要是正数（解挤压后的宽高比，如 2.37），收到 {aspect!r}")
+    W, H = rx["sensor"]["width"], rx["sensor"]["height"]
+    D = desqueeze(rx)
+    if W * D / H >= aspect:
+        return round(aspect * H / D, 4), round(H, 4)
+    return round(W, 4), round(W * D / aspect, 4)
+
+
 def apply_gate(rx, gate="FULL", width=None, height=None):
     """按画幅改处方的 sensor（光窗，压缩前）。口径不重算：镜头本身不变，只是用光窗里的一部分。
     2.39 / 16:9：解挤压后达到该宽高比、且装在处方原光窗里的最大矩形（与原光窗同中心）。"""

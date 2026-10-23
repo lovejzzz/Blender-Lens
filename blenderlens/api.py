@@ -49,24 +49,34 @@ def camera(scene=None):
 
 def build(preset="c_series_style.json", scene=None, *, prescription=None, focal_mm=0.0, gate="FULL",
           gate_size_mm=None, units="AUTO", height=1080, set_render=True, coated=True, film_nm=100.0,
-          name="BL_Camera", make_active=True, format="S35"):
+          name="BL_Camera", make_active=True, format="S35", aspect=None):
     """搭一支镜头并返回相机对象。
     preset：自带预设文件名，或任意 JSON 路径；prescription：直接给处方 dict（优先）。
     focal_mm：缩放到这个垂直焦距（0 = 原生）；gate：'FULL' / '2.39' / '16:9'（抽取，裁切）/ '16:9_NATIVE'（原生 16:9 满像圈，不裁切）/ 'CUSTOM'（配 gate_size_mm=(w, h)）。
     units：'AUTO' / 'SCENE'（保留米制等场景单位）/ 'MM'。
     format：'S35'（原设计）/ 'FF'（全画幅）/ 'IMAX'（IMAX 15/70）/ '65MM'（65 mm 5 齿孔，0.9.1）：用满整个传感器 / 片门（解挤压后的比例 = 片门
     宽高比 × 压缩比），整支镜头等比放大到设计像圈罩住片门（焦距 × k，覆盖与观感与原设计逐点相同，景深更浅）。
-    focal_mm 在该版本上再缩放（光窗不变）。见 optics.FORMATS。"""
+    focal_mm 在该版本上再缩放（光窗不变）。见 optics.FORMATS。
+    aspect（0.9.4）：交付画面比例（解挤压后），如 2.37——在整个光窗里取这个比例的最大矩形（比光窗宽就满宽降高，否则满高收窄），
+    等于 gate="CUSTOM" + 自动算好的 gate_size_mm；输出分辨率随之（不加黑边）。用到的光窗记在相机属性 bl_gate_size_mm。"""
     scene = scene or bpy.context.scene
     if prescription is not None:
         rx = optics.normalize(prescription)
     else:
         path = preset if os.path.isabs(preset) or os.path.exists(preset) else os.path.join(optics.PRESCRIPTION_DIR, preset)
         rx = optics.load(path)
+    if aspect:
+        if gate not in (None, "", "FULL", "CUSTOM") or gate_size_mm:
+            raise ValueError("aspect 与 gate / gate_size_mm 只能给一个（aspect 在整个光窗里取比例）")
+        gate_size_mm = optics.aspect_gate(optics.prepare(rx, format, focal_mm, "FULL"), aspect)
+        gate = "CUSTOM"
     w, h = gate_size_mm or (None, None)
     rx = optics.prepare(rx, format, focal_mm, gate, w, h)
     cam_ob = rig.build(SimpleNamespace(scene=scene), rx, coated=coated, film_nm=film_nm, name=name, units=units)
     cam_ob["bl_focal_mm"] = float(focal_mm or 0.0); cam_ob["bl_gate"] = gate; cam_ob["bl_format"] = format or "S35"
+    cam_ob["bl_gate_size_mm"] = [float(rx["sensor"]["width"]), float(rx["sensor"]["height"])]
+    if aspect:
+        cam_ob["bl_aspect"] = float(aspect)
     _coverage_check(cam_ob)
     if set_render:
         if make_active:

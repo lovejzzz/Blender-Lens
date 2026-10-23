@@ -33,6 +33,10 @@ Rendered with 0.9.0: same real 3D scene (Poly Haven CC0 models and HDRI) and cam
 
 ---
 
+## What's new in 0.9.4: any delivery ratio straight from the sensor
+
+- **`aspect=2.37`** in `bl.build`, `render_shot` and `render_sequence` picks the largest gate with that desqueezed ratio inside the full sensor (for example 34.47 × 24 mm for the 1.65× full-frame C-style). No cropping afterwards and no letterbox. `gate_size_mm=(w, h)` now also works for shot and sequence renders, and the gate used is written to the log and to each EXR header.
+
 ## What's new in 0.9.3: full-frame redesigns of E, G and Neil
 
 - **Five more full-frame presets** built the same way as the C-style one: each keeps the original focal length, its anamorphic attachment is re-powered to a full-frame squeeze, and the whole lens is re-optimized so that on 36 × 24 it matches the original on its own Super 35 gate. That covers monochromatic sharpness, lateral and axial colour, distortion and vignetting, compared point by point.
@@ -170,12 +174,12 @@ Gallery rendered with 0.6 (full gate, CPU / first GPU path, about 3–5 minutes 
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.9.3.zip`](dist/blenderlens-0.9.3.zip) from this repository.
+1. Download [`dist/blenderlens-0.9.4.zip`](dist/blenderlens-0.9.4.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.9.3.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.4.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.

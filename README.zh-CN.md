@@ -25,6 +25,10 @@
 
 ---
 
+## 0.9.4 新增：直接按交付比例设传感器
+
+- **`aspect=2.37`**：`bl.build`、`render_shot`、`render_sequence` 都能用，会在整个传感器里取解挤压后正好是这个比例的最大光窗（例如 1.65× 全画幅 C 风格是 34.47 × 24 mm）。不用事后裁切，也没有黑边。`gate_size_mm=(宽, 高)` 现在在渲镜头时也能用，实际用到的光窗会写进日志和每帧 EXR 头。
+
 ## 0.9.3 新增：E、G、Neil 的全画幅重新设计
 
 - **又多了五个全画幅预设**，做法和 C 风格全画幅版相同：焦距保持原值，变形器重配成全画幅用的压缩比，整支镜头重新优化，让它在 36 × 24 上的表现逐点对齐原版在它自己 S35 光窗上的样子。对齐的项目包括单色清晰度、横向和轴向色差、畸变、暗角。
@@ -162,12 +166,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.9.3.zip`](dist/blenderlens-0.9.3.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.9.4.zip`](dist/blenderlens-0.9.4.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.9.3.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.4.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。

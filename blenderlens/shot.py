@@ -93,7 +93,7 @@ def render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None, 
                 exposure="keep", stop=True, focus=True, seed=0, units="SCENE", exr_codec=None, half_color=None,
                 guard_min_gb=4.0, guard_wait_s=1800.0, file_ext=".exr", lock=True, exclude_collections=None, exclude_mode="hide",
                 settings=None, focus_target=None, rack=None, exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None, exclude_motion_blur=None, format="S35",
-                qc=True, visibility=None, pre=None, post=None):
+                qc=True, visibility=None, pre=None, post=None, gate_size_mm=None, aspect=None):
     """见 _render_shot 的说明（参数完全相同）。"""
     locals_ = dict(locals())
     return _with_overrides(scene, visibility, pre, post,
@@ -105,7 +105,7 @@ def _render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None,
                 exposure="keep", stop=True, focus=True, seed=0, units="SCENE", exr_codec=None, half_color=None,
                 guard_min_gb=4.0, guard_wait_s=1800.0, file_ext=".exr", lock=True, exclude_collections=None, exclude_mode="hide",
                 settings=None, focus_target=None, rack=None, exclude_spp=None, exclude_bounces=None, exclude_clamp=None, exclude_knee=None, exclude_motion_blur=None, format="S35",
-                qc=True, visibility=None, pre=None, post=None):
+                qc=True, visibility=None, pre=None, post=None, gate_size_mm=None, aspect=None):
     """渲一个镜头 → 日志 dict（同时写 <out_dir>/<name>_log.json）。
     source_camera：源相机（物体或名字）；None = 场景当前的相机（若它不是 BlenderLens 相机）。follow=False 时可以不给。
     frames：帧号序列；None = 场景的起止帧。preset：None = 用场景里已有的 BlenderLens 相机；给了 = 搭一支新镜头
@@ -116,6 +116,8 @@ def _render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None,
     exclude_clamp / exclude_knee（0.9.1，可选）：排除层的亮点控制，见 bl.render_frames。
     qc（0.9.2）：渲完做时间质检（bl.spike_report：Combined / BL_Exclude / BL_Final 每帧的孤立亮点 + 热图 PNG），结果写进日志
       spike_report；可给 dict(delta=0.06, min_lum=0.25, conf=0.8)。False 关。需要 passes（多层输出）且至少 3 帧。
+    gate_size_mm=(宽, 高) / aspect=2.37（0.9.4，搭新镜头时）：自定义光窗（mm，压缩前）或交付画面比例（在整个光窗里取最大矩形），
+      输出分辨率随之、不加黑边；用到的光窗写进日志 gate_size_mm 与每帧 EXR 头 blenderlens/gate。
     visibility / pre / post（0.9.2，MessyRoom 的「wild wall」）：本镜头渲染期间临时改物体属性，渲完（包括出错时）自动还原：
       visibility={"物体名": {"visible_camera": False, "hide_render": True, ...}}（任何物体属性；名字不存在 → 渲染前 ValueError）；
       pre(scene) / post(scene)：可调用对象，渲染前 / 后各调一次（post 在 finally 里）。
@@ -134,12 +136,15 @@ def _render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None,
     if exposure not in ("keep", "pinhole", "pinhole_centre"):
         raise ValueError(f"exposure 必须是 'keep'、'pinhole' 或 'pinhole_centre'，收到 {exposure!r}")
     cam = api.camera(sc)
+    if (gate_size_mm or aspect) and preset is None:
+        raise ValueError("gate_size_mm / aspect 只在搭新镜头时生效：请同时给 preset（不然会被悄悄忽略）")
     if preset is not None or cam is None:
         if preset is None:
             raise ValueError("场景里没有 BlenderLens 相机：请给 preset")
         pf = preset if preset.endswith(".json") else preset + ".json"
         keep = {k: getattr(sc.cycles, k) for k in _KEEP_CYCLES if hasattr(sc.cycles, k)}
-        cam = api.build(pf, sc, focal_mm=focal_mm or 0.0, gate=gate, units=units, format=format,
+        cam = api.build(pf, sc, focal_mm=focal_mm or 0.0, gate="CUSTOM" if gate_size_mm else (None if aspect else gate),
+                        gate_size_mm=gate_size_mm, aspect=aspect, units=units, format=format,
                         height=height or sc.render.resolution_y, make_active=True)
         for k, v in keep.items():                         # 0.8.5：搭镜头会套 render_preset（改 CPU、弹射数…）→ 换回场景原来的
             setattr(sc.cycles, k, v)
@@ -156,6 +161,7 @@ def _render_shot(source_camera=None, frames=None, out_dir="//shot", preset=None,
     log = dict(version=api.version(), started=time.strftime("%Y-%m-%d %H:%M:%S"),
                host=platform.node(), blend=bpy.data.filepath, camera=cam.name, source=src.name if src else None,
                frames=[frames[0], frames[-1]], n_frames=len(frames), passes=passes, flare=flare, spp=spp,
+               gate_size_mm=list(cam.get("bl_gate_size_mm", [])) or None, aspect=aspect,
                exclude_collections=list(exclude_collections or []), exclude_spp=exclude_spp, exclude_bounces=exclude_bounces, exclude_clamp=exclude_clamp, exclude_knee=exclude_knee, exclude_motion_blur=exclude_motion_blur,
                out_dir=out, records=[])
     if os.path.exists(log_path):                          # 续渲：接着旧日志

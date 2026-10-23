@@ -607,6 +607,13 @@ MessyRoom 的数据（0.9.1，S35 C 50 FULL 原生，3842 × 1624，128 spp，GP
 - Neil 65 是五支里最难的（起点代价 7.4 万，14 轮后 107）：斜方向 0.5–0.7 软约 27%，畸变比原版多 3.75 个百分点（角落水平 −10.6% vs −6.8%）——测试给它单独放宽到 4.0 个百分点，其余四支 3.5。
 - 参数在 `tools/reopt_{e,g}_series_style_ff.json`、`tools/reopt_neil_2x_{50,65,85}_ff.json`，`build_presets.py` 生成预设；`tests/test_presets.py` 对每支检查焦距、压缩比、两向像面、后截距、最近对焦不撞、畸变、四角照度、逐点清晰度、补偿后的近摄压缩比。
 
+## 6.18 任意交付比例：改传感器尺寸，不事后裁切（0.9.4，MessyRoom）
+
+- `bl.build(..., aspect=2.37)`：在整个光窗（该画幅版本的整个传感器 / 片门）里取解挤压后正好是这个比例的最大矩形——比光窗宽就满宽降高，否则满高收窄——等于 `gate="CUSTOM"` + 自动算好的 `gate_size_mm`。输出分辨率按光窗算（`rig.desqueezed_resolution`），不加黑边。例：`c_series_style_ff` 在 36 × 24 上 2.37:1 → 34.473 × 24 mm；C 风格 S35 2.39:1 → 22 × 18.41 mm。`optics.aspect_gate(rx, aspect)` 是纯函数。
+- `bl.render_shot(..., gate_size_mm=(w, h) 或 aspect=2.37)` / `render_sequence`（每个镜头 dict 里或作为公共参数）：只在搭新镜头时生效——没给 preset 却给了这两个参数 → ValueError（以前 render_shot 不传 gate_size_mm，CUSTOM 用不了）。日志记 `gate_size_mm` / `aspect`；每帧 EXR 头新增 `blenderlens/gate`（宽、高、gate、解挤压、解挤压后比例）。命令行 `blcli.py shot / sequence --gate-size 34.4,24 --aspect 2.37`。
+- 取的矩形都在光窗以内，所以覆盖不会比整个光窗差；用 `gate_size_mm` 给出比光窗大的尺寸时照常由 build 的覆盖检查警告。
+- MessyRoom 的中期结果（0.9.3，S1 / S3、1080、裁到 2.37 对比）：用户「全画幅看起来很好，画质很棒」；c_ff 与 neil_2x_50_ff 与 S35 C 是同一家族的观感、没有瑕疵；同焦段同机位时全画幅明显更广（他们保留机位、接受更广的视野）；neil_2x_50_ff 在 S1 左侧比 c_ff 暗角明显（与 f/4 四角 0.52 vs 0.80 一致）。S1 单帧 c_ff 494 s（S35 157 s）——推测是第一次用新镜头时 GPU 内核按新头文件重编译 + 现算出瞳表，第二帧之后要再量。
+
 ## 7. 输出与解挤压
 
 输出宽度 = 高 × 传感器宽高比 × 解挤压比。渲染结果是**已解挤压、方形像素**的正常画面，不需要后期再拉伸。压缩比随视场变化（水平畸变），例如 C 从中心 2.01 到边缘 2.27，属于镜头特征。

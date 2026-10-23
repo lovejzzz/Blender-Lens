@@ -32,6 +32,10 @@
 | 8.6 | **Geometry 模式亚像素平移**（旧问题 §7.2） | 单片透镜复现 → 查像素中心约定 | 偏移 < 0.05 px | 小 |
 | 8.7 | **外部数据回归** | 新测试 `test_reference.py`：前置预设的散景高宽比随离焦趋向挤压比；后置 PV 1.34× 散景接近圆（ASC / FDTimes 的定性结论）；呼吸方向以垂直为主（E 系列、Hawk 的描述）；最近对焦距离与 Panavision 公布值比对 | 全部通过或在文档里解释差异 | 小 |
 
+## 0.9.4 —— 任意交付比例（2026-10-22，MessyRoom；见 HANDOFF §6.18）
+
+✅ `bl.build(aspect=…)`、`render_shot` / `render_sequence` 的 `gate_size_mm` / `aspect`、EXR 头 `blenderlens/gate`、命令行 `--gate-size` / `--aspect`。
+
 ## 0.9.3 —— E / G / Neil 的全画幅同焦段重新设计（2026-10-22，用户需求；见 HANDOFF §6.17、RESEARCH §6.22）
 
 ✅ e_series_style_ff / g_series_style_ff（1.65×）、neil_2x_50 / 65 / 85_ff（1.6×）：焦距不变、清晰度逐点 ×1.01–1.27、畸变差 ≤ 3.75 个百分点。✅ 评价函数补轴向色差；变量上限以原设计为准；变差时退回。

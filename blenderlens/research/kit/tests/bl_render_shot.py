@@ -113,6 +113,19 @@ last = log3["records"][-1]
 rep["guard"] = dict(rendered=last["rendered"], skipped=last.get("skipped"), stopped="stopped" in log3,
                     avail=last.get("avail_gb_before"))
 rep["guard_file_absent"] = not os.path.exists(os.path.join(OUT, "f_0003.exr"))
+# 0.9.4：render_shot 的 aspect / gate_size_mm（交付比例直接改光窗，不事后裁切）
+AOUT = os.path.join(OUT, "aspect")
+la = bl.render_shot(source_camera="Src", frames=[1], out_dir=AOUT, preset="c_series_style_ff", height=100, aspect=2.37,
+                    spp=4, passes="delivery", guard=False, qc=False)
+ra = (sc.render.resolution_x, sc.render.resolution_y)
+ha = json.loads(PS.find(PS.read(os.path.join(AOUT, "f_0001.exr")), "Combined")["header"]["blenderlens/gate"])
+try:
+    bl.render_shot(source_camera="Src", frames=[1], out_dir=os.path.join(OUT, "aspect_bad"), aspect=2.37)
+    aspect_needs_preset = False
+except ValueError:
+    aspect_needs_preset = True
+rep["aspect"] = dict(log_gate=la.get("gate_size_mm"), resolution=list(ra), res_ratio=round(ra[0] / ra[1], 3), header=ha,
+                     needs_preset=aspect_needs_preset)
 rep["PASS"] = bool(rep["follow_matrix_err"] < 1e-4 and abs(rep["follow_fstop"] - 4.0) < 1e-3
                    and abs(rep["follow_focus"] - 12.0) < 1e-3
                    and rep["files"] == ["f_0001.exr", "f_0002.exr", "f_0003.exr", "f_0004.exr"]
@@ -125,5 +138,8 @@ rep["PASS"] = bool(rep["follow_matrix_err"] < 1e-4 and abs(rep["follow_fstop"] -
                    and rep["visibility"]["restored"] is True and rep["qc"]["error"] is None and rep["qc"]["total"] is not None
                    and rep["spikes"]["found"] and rep["spikes"]["found"] >= 1 and rep["spikes"]["heatmap"]
                    and rep["spikes"]["center_after"] < 0.5 * rep["spikes"]["center_without"] and rep["spikes"]["suppressed"]
-                   and rep["spikes"]["header"] is not None and rep["inputs_header_matches_verify"])
+                   and rep["spikes"]["header"] is not None and rep["inputs_header_matches_verify"]
+                   and rep["aspect"]["needs_preset"] and abs(rep["aspect"]["header"]["aspect"] - 2.37) < 1e-3
+                   and abs(rep["aspect"]["res_ratio"] - 2.37) < 0.02 and rep["aspect"]["log_gate"] is not None
+                   and abs(rep["aspect"]["log_gate"][1] - 24.0) < 1e-6)
 print("SHOT", json.dumps(rep, default=str))
