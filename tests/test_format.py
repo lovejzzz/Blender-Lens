@@ -52,10 +52,19 @@ for f in sorted(glob.glob(os.path.join(O.PRESCRIPTION_DIR, "*.json"))):
         for foc in (math.inf, 3.0 * mf0):
             a = CV.relative_illumination(rx, PTS, foc, None, m=40)
             b = CV.relative_illumination(ff, pts2, foc * k if math.isfinite(foc) else foc, None, m=40)
-            ok(max(abs(x - y) for x, y in zip(a, b)) < 1e-6,
+            # 0.9.5：极广的重新设计镜头（G 成套 35 mm，对角半视场约 45°）放大后估算器的取样点不再一一对应（追迹起点有一个绝对的 5 mm
+            # 偏移），差在估算器自身的取样误差以内（同一支镜头 m=40 与 m=72 就差约 1%）；专利预设仍要求逐点相同
+            tol = 0.02 if rx.get("meta", {}).get("reoptimized") else 1e-6
+            ok(max(abs(x - y) for x, y in zip(a, b)) < tol,
                f"{name} {fmt}: 对应位置相对照度逐点相同（对焦 {'∞' if math.isinf(foc) else f'{foc / 1000:.1f} m'}）")
-        ri = CV.coverage_report(ff, 1e7 * k, 4.0, quick=True)["relative_illumination"]["corner"]
-        ok(ri >= min(ri_design - 0.08, 0.35), f"{name} {fmt}: 传感器四角照度 {ri:.2f}（f/4；原设计光窗四角 {ri_design:.2f}）")
+        qr = CV.coverage_report(ff, 1e7 * k, 4.0, quick=True)
+        ri = qr["relative_illumination"]["corner"]
+        if rx.get("meta", {}).get("reoptimized") and ri < min(ri_design - 0.08, 0.35):
+            # 0.9.5：广角重新设计（G 成套 35 mm）的水平视场已用到极限，换到更扁的片门（65 mm 5 齿孔）按对角线放大后水平方向超出覆盖——
+            # 这是真实的限制：不要求覆盖，但 build 的覆盖检查必须警告
+            ok(bool(qr.get("warnings")), f"{name} {fmt}: 四角照度 {ri:.2f} 不覆盖（f/4；原设计 {ri_design:.2f}）→ 覆盖检查给出警告")
+        else:
+            ok(ri >= min(ri_design - 0.08, 0.35), f"{name} {fmt}: 传感器四角照度 {ri:.2f}（f/4；原设计光窗四角 {ri_design:.2f}）")
         if O.compensator(rx):
             s0, s1 = squeeze_mfd(rx, mf0), squeeze_mfd(ff, mf1)
             ok(abs(s1 - s0) < 1e-6, f"{name} {fmt}: 最近对焦压缩比 {s0:.4f} → {s1:.4f}（发腮补偿凸轮随缩放）")

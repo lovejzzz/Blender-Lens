@@ -240,6 +240,25 @@ for fn, ofn, sq_t, dist_tol, sharp_tol in REDESIGNS:
     if O.compensator(rx):
         mfd = rx["focus"]["min_distance_mm"]
         ok(abs(O.squeeze_at(rx, mfd) / O.squeeze_at(rx, math.inf) - 1) < 0.002, f"{fn}: compensated squeeze at MFD {O.squeeze_at(rx, mfd):.4f}")
+# ── 0.9.5：G 风格全画幅成套定焦（观感目标 = G 原版；广角端换结构，畸变按实测上限）──
+GSET = ((35, 0.025, 1.35, 0.45), (40, 0.03, 1.35, 0.6), (50, 0.015, 1.45, 0.7), (75, 0.008, 1.15, 0.75), (100, None, 1.15, 0.8))
+g_orig = P("g_series_style.json"); g_look = g_orig.get("look", {})
+qg = RO.quality(RO.open_apertures(g_orig), g_orig["sensor"]["width"], g_orig["sensor"]["height"])
+for f, dist_frac, sharp_tol, ri_min in GSET:
+    fn = "g_series_style_ff.json" if f == 100 else f"g_series_style_ff_{f}.json"
+    rx = P(fn); S = O.layout(rx)
+    (fx, bx), (fy, by) = O.paraxial_infinity(S, "Rx"), O.paraxial_infinity(S, "Ry")
+    ok(abs(fy - f) < 0.5 and abs(fy / fx - 1.65) < 0.02 and abs(bx - by) < 0.1 and (rx["sensor"]["width"], rx["sensor"]["height"]) == (36.0, 24.0),
+       f"G set {f} mm: fY {fy:.2f}, squeeze {fy / fx:.4f}, X / Y image planes {bx:.2f} / {by:.2f}, 36 × 24")
+    ok(f == 100 or all(rx["look"].get(k) == g_look.get(k) for k in ("coating_nm", "flare_color", "flare_gain", "veiling_glare", "f_number")),
+       f"G set {f} mm: look parameters (coating, flare, veiling glare, stop) match the G original")
+    d1, d2 = O.solve_focus(rx, rx["focus"]["min_distance_mm"])
+    ok(not [e for e in O.edge_report(rx, d1, d2) if e["min_gap"] < 0], f"G set {f} mm: no clash at MFD {rx['focus']['min_distance_mm'] / 1000:.2f} m")
+    cv = CV.coverage_report(rx, 3000.0, 4.0)
+    ok(cv["relative_illumination"]["corner"] >= ri_min, f"G set {f} mm: corner RI at f/4 {cv['relative_illumination']['corner']:.2f} (≥ {ri_min})")
+    qn = RO.quality(RO.open_apertures(rx), 36.0, 24.0)
+    ratio = max(a["per_mille_of_height"] / b["per_mille_of_height"] for a, b in zip(qn, qg))
+    ok(ratio < sharp_tol, f"G set {f} mm: sharpness profile within ×{ratio:.2f} of the G original; distortion edge {cv['distortion_pct']['edge_h']:.1f}%, 4K bow {cv['edge_vertical_bow_px']} px")
 # ── 0.9.2：横向色差进覆盖报告（光斑重心，4K 像素）；相机输入指纹稳定、随处方变化 ──
 import verify as VF
 cr = CV.coverage_report(O.prepare(P("c_series_style.json"), "S35", 0, "FULL"), 3000.0, 4.0)["lateral_color_px"]

@@ -32,6 +32,11 @@
 | 8.6 | **Geometry 模式亚像素平移**（旧问题 §7.2） | 单片透镜复现 → 查像素中心约定 | 偏移 < 0.05 px | 小 |
 | 8.7 | **外部数据回归** | 新测试 `test_reference.py`：前置预设的散景高宽比随离焦趋向挤压比；后置 PV 1.34× 散景接近圆（ASC / FDTimes 的定性结论）；呼吸方向以垂直为主（E 系列、Hawk 的描述）；最近对焦距离与 Panavision 公布值比对 | 全部通过或在文档里解释差异 | 小 |
 
+## 0.9.5 —— G 风格全画幅成套定焦（2026-10-23，MessyRoom Day 6；见 HANDOFF §6.19、RESEARCH §6.23）
+
+✅ g_series_style_ff_35 / 40 / 50 / 75（+ 0.9.3 的 100）：全套 1.65×、f/3、G 的观感参数；清晰度逐点 ×1.05–1.39。✅ reoptimize：style_ref、scale_to、bow_tol、范围包含起点。
+弱点：35 / 40 mm 桶形重（4K 竖线弯 80–95 px）。没做：28 mm（实测四角为 0）、24 mm、变焦。可以继续：给广角端找一个畸变小、口径收得回来的全画幅广角起点（候选：思锐全画幅专利族里的 24 / 28 mm）。
+
 ## 0.9.4 —— 任意交付比例（2026-10-22，MessyRoom；见 HANDOFF §6.18）
 
 ✅ `bl.build(aspect=…)`、`render_shot` / `render_sequence` 的 `gate_size_mm` / `aspect`、EXR 头 `blenderlens/gate`、命令行 `--gate-size` / `--aspect`。

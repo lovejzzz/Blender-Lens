@@ -25,6 +25,11 @@
 
 ---
 
+## 0.9.5 新增：G 风格全画幅成套定焦（35–100 mm）
+
+- **G 风格全画幅成套定焦**：新增 35、40、50、75 mm，和 0.9.3 的 100 mm 凑成一整套。全部是 1.65×、f/3，镀膜、炫光、杂光都沿用 G 原版。每支都按 G 原版的清晰度、色彩和暗角来对齐（比较的是画面上相同相对位置的表现）。和真实厂商的成套镜头一样，广角端换用了另一种光学结构（C 风格全画幅设计），因为 G 的附加镜覆盖不了广角。
+- 清晰度在各个位置都是 G 原版的 1.05–1.39 倍以内，f/4 时四角亮度 0.59–0.88。**广角端桶形畸变明显**：35 / 40 mm 在 4K 画面里竖线会弯 80–95 px。28 mm 试过，四角是黑的，覆盖不了。详细数据见 `blenderlens/HANDOFF.md` §6.19。
+
 ## 0.9.4 新增：直接按交付比例设传感器
 
 - **`aspect=2.37`**：`bl.build`、`render_shot`、`render_sequence` 都能用，会在整个传感器里取解挤压后正好是这个比例的最大光窗（例如 1.65× 全画幅 C 风格是 34.47 × 24 mm）。不用事后裁切，也没有黑边。`gate_size_mm=(宽, 高)` 现在在渲镜头时也能用，实际用到的光窗会写进日志和每帧 EXR 头。
@@ -166,12 +171,12 @@
 
 要求：Blender **5.0 及以上**，不依赖第三方 Python 包。在 macOS / Apple M2 Max / Blender 5.3 上开发与实测，另有 M4 Max 的第三方复测；Windows / Linux 未实测。
 
-1. 下载本仓库的 [`dist/blenderlens-0.9.4.zip`](dist/blenderlens-0.9.4.zip)。
+1. 下载本仓库的 [`dist/blenderlens-0.9.5.zip`](dist/blenderlens-0.9.5.zip)。
 2. Blender → Edit → Preferences → **Get Extensions** → 右上角 ⌄ → **Install from Disk…** → 选这个 zip。
    也可以用命令行：
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.9.4.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.5.zip
    ```
 
 3. 3D 视图按 **N**，出现 **BlenderLens** 标签。

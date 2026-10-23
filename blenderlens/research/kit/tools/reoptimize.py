@@ -63,6 +63,28 @@ CONFIGS = {
                       no_feasible=True, repower=dict(xs=["S3", "S4"], gap="S16", squeeze=1.6, s0=0.6, fixed=dict(xs=["S14", "S17", "S18"], s=0.956)), out="neil_2x_85_ff.json", order_add=20,
                       style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, dist_tol=0.015, split_color=True,
                 qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1))),
+    # 0.9.5：G 风格全画幅成套定焦（MessyRoom Day 6：小房间要广角 G）。75 / 100 从 G 全画幅版起步，35 / 40 / 50 换 C 风格全画幅版的结构
+    # （Rosin 前置 + Nikon 双高斯，能覆盖广角）；全部按 G 原版的观感目标优化，观感参数统一用 G 的。广角端畸变允许更大（真实广角变形都更桶）。
+    "g_ff_75": dict(preset="g_series_style_ff.json", scale_to=75.0, fy=75.0, sq=1.65, rear="ALL", gaps="ALL", bfl=None, fmt="FF",
+                    dist_tol=0.015, out="g_series_style_ff_75.json", order_add=0, style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, split_color=True, axial_w=0.5,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1)), style_ref="g_series_style.json"),
+    "g_ff_50": dict(preset="c_series_style_ff.json", scale_to=50.0, fy=50.0, sq=1.65, rear="ALL", gaps="ALL", bfl=None, fmt="FF",
+                    dist_tol=0.015, out="g_series_style_ff_50.json", order_add=0, style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, split_color=True, axial_w=0.5,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1)), style_ref="g_series_style.json"),
+    "g_ff_40": dict(preset="c_series_style_ff.json", scale_to=40.0, fy=40.0, sq=1.65, rear="ALL", gaps="ALL", bfl=None, fmt="FF",
+                    dist_tol=0.02, out="g_series_style_ff_40.json", order_add=0, style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, split_color=True, axial_w=0.5,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1)), style_ref="g_series_style.json"),
+    "g_ff_35": dict(preset="c_series_style_ff.json", scale_to=35.0, fy=35.0, sq=1.65, rear="ALL", gaps="ALL", bfl=None, fmt="FF",
+                    dist_tol=0.025, out="g_series_style_ff_35.json", order_add=0, style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, split_color=True, axial_w=0.5,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1)), style_ref="g_series_style.json"),
+    # 广角端的另一种起点：Sirui 1.6× 全画幅 35 mm（真实全画幅广角处方，压缩比 1.648）——C 风格起点在 35 / 40 mm 时 4K 竖线弯 80–100 px；
+    # Sirui 的畸变 % 本来就接近 G，但水平畸变从边缘中点到角落变化大（竖线弯），所以加 bow_tol 项
+    "g_ff_40s": dict(no_feasible=True, preset="sirui_ff_35.json", scale_to=40.0, fy=40.0, sq=1.65, rear="ALL", gaps="ALL", bfl=None, fmt="FF",
+                     dist_tol=0.02, bow_tol=0.003, out="g_series_style_ff_40.json", order_add=0, style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, split_color=True, axial_w=0.5,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1)), style_ref="g_series_style.json"),
+    "g_ff_35s": dict(no_feasible=True, preset="sirui_ff_35.json", scale_to=35.0, fy=35.0, sq=1.65, rear="ALL", gaps="ALL", bfl=None, fmt="FF",
+                     dist_tol=0.025, bow_tol=0.003, out="g_series_style_ff_35.json", order_add=0, style="relative", spot_w=1 / 0.15, field_w={(1, 0): 2.0, (1, 1): 3.0, (0.7, 0.7): 1.5}, split_color=True, axial_w=0.5,
+                qpts=((0, 0), (0.5, 0), (0.7, 0), (1, 0), (0, 0.5), (0, 0.7), (0, 1), (0.5, 0.5), (0.7, 0.7), (1, 1)), style_ref="g_series_style.json"),
 }
 CFG = dict(CONFIGS["neil_2x_50"])
 PRESET = CFG["preset"]
@@ -83,6 +105,13 @@ BIG = 200.0
 
 def load():
     return O.load(os.path.join(O.PRESCRIPTION_DIR, PRESET))
+
+
+def load_style():
+    """风格参照（0.9.5，成套镜头）：清晰度 / 色差 / 畸变 / 暗角的目标取自 CFG["style_ref"]（如 G 原版），起点仍是 PRESET
+    （如 C 风格全画幅版缩到 35 mm）——真实厂商的成套镜头也是广角端换一种光学结构、按同一个观感目标配。没给时 = PRESET。"""
+    ref = CFG.get("style_ref")
+    return O.load(os.path.join(O.PRESCRIPTION_DIR, ref)) if ref else load()
 
 
 def open_apertures(rx):
@@ -357,6 +386,8 @@ def bounds(rx0, x0):
         k = _scale(rx0, BFL)
         lo.append(0.8 * x0[-1]); hi.append(1.3 * x0[-1])      # 后截距：起点 ±（放大后的镜头按比例）
     lo, hi = np.array(lo), np.array(hi)
+    x0 = np.asarray(x0, float)                              # 0.9.5：范围一定包含起点（缩放后的镜头可能有 < 0.8 mm 的薄片、|R| < 9 mm 的面；
+    lo = np.minimum(lo, x0 - 1e-6); hi = np.maximum(hi, x0 + 1e-6)   # 一开始就截回边界等于改坏了设计）
     return lo, hi
 
 
@@ -400,7 +431,7 @@ class Merit:
           · 风格锁：原设计在它自己视场内若干物方角度的主光线像高，按焦距比例缩放后，新镜头同样角度的像高要一致（畸变分布）。"""
         self.rx0 = rx0
         self.W, self.H = ff_gate(rx0)
-        orig = open_apertures(load())
+        orig = open_apertures(load_style())
         So = O.layout(orig)
         self.fyo = O.paraxial_infinity(So, "Ry")[0]
         self.sq0 = self.fyo / O.paraxial_infinity(So, "Rx")[0]
@@ -410,7 +441,7 @@ class Merit:
         if sq_target:
             self.sq0 = sq_target
         self.relative = CFG.get("style") == "relative"
-        g0 = load()["sensor"]
+        g0 = load_style()["sensor"]
         self.qpts = tuple(CFG.get("qpts", QPTS))           # 评价的视场点（宽视场的设计要更密：c_65 加了水平 / 竖直 0.7、0.85）
         q0 = quality(orig, g0["width"], g0["height"], pts=self.qpts)
         self.targets = [max(q["per_mille_of_height"] / 1000 * self.H, 0.004) for q in q0]
@@ -435,12 +466,13 @@ class Merit:
             self.lock_flds.append((u, v, ax, ay)); self.lock_ref.append((float(X[0]) * r, float(Y[0]) * r))
         self.L0 = sum(_sf(rx0, i)["d"] * _scale(rx0, i) for i in GAPS)
         self.N0 = self.fnum(lens_o, self.fyo)
-        self.bfl_o = O.paraxial_infinity(So, "Ry")[1] * (self.fy0 / self.fyo)
+        self.bfl_o = (O.paraxial_infinity(S, "Ry")[1] if CFG.get("style_ref")          # 成套镜头：卡口空间按起点镜头自己的
+                      else O.paraxial_infinity(So, "Ry")[1] * (self.fy0 / self.fyo))
         if self.relative:
             # 相对风格：原版在它自己原光窗上、同一相对位置的横 / 竖畸变 %（主光线 vs 近轴）与 f/4 相对照度
             import coverage as CV
             self.dist_t = [self.distortion(lens_o, u, v, g0["width"], g0["height"], fxo, self.fyo) for u, v in self.qpts]
-            self.ri_t = CV.relative_illumination(load(), list(self.qpts), math.inf, 4.0, m=28, margin=3.0)   # 与评价时同一估算方式
+            self.ri_t = CV.relative_illumination(load_style(), list(self.qpts), math.inf, 4.0, m=28, margin=3.0)   # 与评价时同一估算方式
 
     @staticmethod
     def distortion(lens, u, v, W, H, fx, fy):
@@ -548,10 +580,17 @@ class Merit:
                 res += [(cen[0] - r[0]) / sp, (cen[1] - r[1]) / sp]
         if self.relative:
             import coverage as CV
+            dxs = {}
             for (u, v), (tdx, tdy) in zip(self.qpts, self.dist_t):
                 dx, dy = self.distortion(lens, u, v, self.W, self.H, self.fy0 / self.sq0, self.fy0)   # 固定视场角（归一化后 fy = fy0）：主光线缓存命中
                 dt = CFG.get("dist_tol", 0.005)
                 res += [((dx - tdx) / dt) if np.isfinite(dx) else 20.0, ((dy - tdy) / dt) if np.isfinite(dy) else 20.0]
+                dxs[(u, v)] = (dx, tdx)
+            if CFG.get("bow_tol") and (1, 0) in dxs and (1, 1) in dxs:
+                # 0.9.5：竖线弯曲 = 同一条边上水平畸变从中点到角落的变化（Sirui 一类：边缘 −3.6%、角落 −0.1% → 4K 竖线弯 80 px）；
+                # 每个点的畸变 % 都对上也可能弯，单独对齐这个差
+                (a1, t1), (a0, t0) = dxs[(1, 1)], dxs[(1, 0)]
+                res.append(((a1 - a0) - (t1 - t0)) / CFG["bow_tol"] if np.isfinite(a1) and np.isfinite(a0) else 20.0)
             try:
                 ri = CV.relative_illumination(rx, list(self.qpts), math.inf, 4.0, m=28, margin=3.0)   # 不建出瞳表（快）
             except Exception:
@@ -612,11 +651,12 @@ def _eval(x):
     return _M(x)
 
 
-def parallel_jac(M, xs, workers=10):
+def parallel_jac(M, xs, workers=None):
     """有限差分雅可比，多进程并行（fork：子进程继承已建好的 Merit）。→ (jac(x), pool)"""
     import multiprocessing as mp
     global _M
     _M = M
+    workers = workers or int(os.environ.get("REOPT_WORKERS", "10"))   # 几支同时跑时调小（12 核：3 支 × 4）
     pool = mp.get_context("fork").Pool(workers)
     def jac(x, *a):
         f0 = M(x)
@@ -697,6 +737,16 @@ def start_rx():
     """优化起点：IMAX / 全部面重新设计 = 原设计整支放大到该画幅（覆盖与风格逐点相同）；repower = 原焦距、变形器换压缩比、
     光窗换成该画幅；其余 = 原设计。"""
     rx = load()
+    if CFG.get("scale_to"):                                  # 0.9.5：整支等比缩放到目标焦距（光窗不变，口径按比例）
+        rx = O.rescale_to_vertical_efl(rx, CFG["scale_to"], reestimate=False)
+        if CFG.get("style_ref"):                             # 成套镜头的光圈统一用风格参照的（G：f/3）——清晰度目标是在那个 f 值量的
+            n_new = O.nominal_f_number(load_style())
+            st = O.stop_group(rx)["stop"]; n_old = O.nominal_f_number(rx)
+            if abs(n_new - n_old) > 1e-6:
+                if st.get("semi_diameter_at_f_number"):
+                    st["semi_diameter_at_f_number"] *= n_old / n_new
+                st["f_number"] = n_new
+        return open_apertures(rx)
     if CFG.get("repower"):
         rp = CFG["repower"]
         rx = (repower_numeric(rx, rp["xs"], rp["gap"], rp["squeeze"], rp.get("fixed"), rp.get("s0", 0.8)) if "xs" in rp
@@ -804,6 +854,18 @@ NAMES = {
                   "设想的全画幅版（参照思锐自家全画幅 1.6×）：65 mm 不变，前变形组重配成 1.6×，整支重新优化，用满 36 × 24（2.4:1）"),
     "neil85_ff": ("Neil 现代变形 · 全画幅 85 mm 1.6×（BlenderLens 重新设计）", "Neil 85 mm 全画幅（1.6×）",
                   "设想的全画幅版（参照思锐自家全画幅 1.6×）：85 mm 不变，前变形组重配成 1.6×，整支重新优化，用满 36 × 24（2.4:1）"),
+    "g_ff_75": ("G 系列风格 · 全画幅 75 mm 1.65×（成套，BlenderLens 设计）", "G 风格 75 mm 全画幅（成套 1.65×）",
+                 "G 风格全画幅成套定焦的 75 mm：G 全画幅版缩到 75 mm，按 G 原版的观感目标整支优化，镀膜 / 炫光等观感参数与整套一致；36 × 24 → 2.48:1"),
+    "g_ff_50": ("G 系列风格 · 全画幅 50 mm 1.65×（成套，BlenderLens 设计）", "G 风格 50 mm 全画幅（成套 1.65×）",
+                 "G 风格全画幅成套定焦的 50 mm：G 全画幅版缩到 50 mm，按 G 原版的观感目标整支优化，镀膜 / 炫光等观感参数与整套一致；36 × 24 → 2.48:1"),
+    "g_ff_40": ("G 系列风格 · 全画幅 40 mm 1.65×（成套，BlenderLens 设计）", "G 风格 40 mm 全画幅（成套 1.65×）",
+                 "G 风格全画幅成套定焦的 40 mm：广角端换 C 风格全画幅版的结构（Rosin 前置 + 双高斯），按 G 原版的观感目标整支优化，镀膜 / 炫光等观感参数与整套一致；36 × 24 → 2.48:1"),
+    "g_ff_35": ("G 系列风格 · 全画幅 35 mm 1.65×（成套，BlenderLens 设计）", "G 风格 35 mm 全画幅（成套 1.65×）",
+                 "G 风格全画幅成套定焦的 35 mm：广角端换 C 风格全画幅版的结构（Rosin 前置 + 双高斯），按 G 原版的观感目标整支优化，镀膜 / 炫光等观感参数与整套一致；36 × 24 → 2.48:1"),
+    "g_ff_40s": ("G 系列风格 · 全画幅 40 mm 1.65×（成套，BlenderLens 设计）", "G 风格 40 mm 全画幅（成套 1.65×）",
+                  "G 风格全画幅成套定焦的 40 mm：广角端换 Sirui 全画幅广角的结构，按 G 原版的观感目标（含竖线弯曲）整支优化，观感参数与整套一致；36 × 24 → 2.48:1"),
+    "g_ff_35s": ("G 系列风格 · 全画幅 35 mm 1.65×（成套，BlenderLens 设计）", "G 风格 35 mm 全画幅（成套 1.65×）",
+                  "G 风格全画幅成套定焦的 35 mm：广角端换 Sirui 全画幅广角的结构，按 G 原版的观感目标（含竖线弯曲）整支优化，观感参数与整套一致；36 × 24 → 2.48:1"),
     "neil_2x_50": ("Neil 2× 50 mm · 全画幅同焦段（BlenderLens 重新优化）", "Neil 2× 50 mm 全画幅（重新优化）",
                    "同一个前变形部分，后组重新优化"),
 }
@@ -820,7 +882,7 @@ def build_preset(path, out_name=None):
     data = json.load(open(path))
     x = np.array(data["x"])
     orig = load()
-    ri0 = CV.coverage_report(orig, 1e7, 4.0)["relative_illumination"]
+    ri0 = CV.coverage_report(load_style(), 1e7, 4.0)["relative_illumination"]   # 角落放行按风格参照的四角照度选
     W, H = ff_gate(orig)
     rx0 = start_rx()
     M = Merit(rx0, CFG.get("fy"), CFG.get("sq"))               # 0.9.3：按目标焦距归一（数值重配的起点焦距略有偏差）
@@ -846,6 +908,12 @@ def build_preset(path, out_name=None):
         if best is None or d < best[0]:
             best = (d, frac, r, ri)
     _, frac, r, ri = best
+    if CFG.get("style_ref"):                                # 成套镜头：观感参数（镀膜、炫光、杂光、色散…）统一用风格参照的
+        lk = copy.deepcopy(load_style().get("look", {}))
+        for k_ in ("min_focus_mm",):                         # 最近对焦按这支镜头自己的（对焦机构随结构、焦距不同）
+            if k_ in r.get("look", {}):
+                lk[k_] = r["look"][k_]
+        r["look"] = lk
     name, short, tag = NAMES.get(CFG.get("name"), NAMES.get(key))
     m = r["meta"]
     m.update(name=name, short_name=short, tagline=tag, order=m.get("order", 0) + CFG.get("order_add", 20))
@@ -883,7 +951,7 @@ def fingerprint(new_name=None):
     """风格指纹：原版（原光窗）vs 重新优化（全画幅），同一相对位置。"""
     import coverage as CV
     key = PRESET.replace(".json", "")
-    orig = load()
+    orig = load_style()
     new = O.load(os.path.join(O.PRESCRIPTION_DIR, new_name or f"{key}_ff.json"))
     rows = {}
     for tag, rx in (("原版", orig), ("全画幅重优化", new)):
@@ -904,8 +972,8 @@ def fingerprint(new_name=None):
 def compare(path=None):
     path = path or os.path.join(ROOT, "renders", "reopt", PRESET.replace(".json", "_ff_opt.json"))
     new = json.load(open(path))["rx"]
-    orig = open_apertures(load())
-    g = load()["sensor"]
+    orig = open_apertures(load_style())
+    g = load_style()["sensor"]
     Wf, Hf = ff_gate(orig)
     print(f"原版（原光窗 {g['width']:.1f} × {g['height']:.1f}）  vs  原版直接上全画幅  vs  重新优化（全画幅 {Wf} × {Hf}）；‰ = 光斑 / 光窗高")
     a = quality(orig, g["width"], g["height"]); b = quality(orig, Wf, Hf); c = quality(new, Wf, Hf)

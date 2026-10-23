@@ -749,7 +749,10 @@ if __name__ == "__main__":
     # 0.9.3：E / G（1.65×）与 Neil 50 / 65 / 85（1.6×）的全画幅同焦段重新设计（参数在 tools/reopt_*_ff.json）
     for cfg, f in (("e_ff", "reopt_e_series_style_ff.json"), ("g_ff", "reopt_g_series_style_ff.json"),
                    ("neil50_ff", "reopt_neil_2x_50_ff.json"), ("neil65_ff", "reopt_neil_2x_65_ff.json"),
-                   ("neil85_ff", "reopt_neil_2x_85_ff.json")):
+                   ("neil85_ff", "reopt_neil_2x_85_ff.json"),
+                   # 0.9.5：G 风格全画幅成套定焦（35 / 40 / 50 换 C 风格全画幅的结构，75 从 G 全画幅；观感目标 = G 原版）
+                   ("g_ff_75", "reopt_g_series_style_ff_75.json"), ("g_ff_50", "reopt_g_series_style_ff_50.json"),
+                   ("g_ff_40", "reopt_g_series_style_ff_40.json"), ("g_ff_35", "reopt_g_series_style_ff_35.json")):
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f)
         if os.path.exists(path):
             RO.use(cfg)

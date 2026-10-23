@@ -24,7 +24,7 @@ Rendered with 0.9.0: same real 3D scene (Poly Haven CC0 models and HDRI) and cam
 > Panavision has never published the production prescriptions of its C / E / G / T / Primo anamorphic series. The C / E / G presets combine **public patents of the same era and construction** with look parameters set from Panavision's published specs — they are **not replicas**. The only public Panavision anamorphic prescription, US 7,085,066 (a rear 1.34× anamorphic group), is included as-is in two presets.
 
 **At a glance**
-- 17 presets: three Panavision-style front anamorphics, the real Panavision rear 1.34× at both zoom ends, a modern 2× by Iain Neil (Sirui patent) at 50 / 65 / 85 mm, a Laowa 2× wide 29 mm, and a native full-frame Sirui 1.6× 35 mm. On top of those come same-focal-length full-frame redesigns of C, E, G and Neil 50 / 65 / 85 (1.6–1.65×) and a C-style 65 mm 5-perf (1.3×), plus full-frame, IMAX 15/70 and 65 mm versions of every preset.
+- 21 presets: three Panavision-style front anamorphics, the real Panavision rear 1.34× at both zoom ends, a modern 2× by Iain Neil (Sirui patent) at 50 / 65 / 85 mm, a Laowa 2× wide 29 mm, and a native full-frame Sirui 1.6× 35 mm. On top of those come same-focal-length full-frame redesigns of C, E, G and Neil 50 / 65 / 85 (1.6–1.65×), a G-style full-frame set 35–100 mm and a C-style 65 mm 5-perf (1.3×), plus full-frame, IMAX 15/70 and 65 mm versions of every preset.
 - Cycles OSL custom camera (CPU / OptiX) plus a **GPU path for Apple Metal** (about 19× faster than CPU, 57× faster than 0.4).
 - Catalog-accurate glass dispersion (Ohara / Schott), single-layer or broadband multilayer coatings, Auto Panatar-style mumps correction.
 - Deterministic forward-traced flares, diffraction starbursts, ISO 9358-calibrated veiling glare.
@@ -32,6 +32,11 @@ Rendered with 0.9.0: same real 3D scene (Poly Haven CC0 models and HDRI) and cam
 - **AI-native**: a self-describing API, a JSON command line, tiered tests with a metric baseline, and `AGENTS.md`.
 
 ---
+
+## What's new in 0.9.5: a G-style full-frame prime set (35–100 mm)
+
+- **G-style full-frame set**: 35, 40, 50 and 75 mm join the 100 mm from 0.9.3, all 1.65× at f/3 with the G original's coatings, flare and veiling glare. Each one is optimized toward the G original's sharpness, colour and vignetting at the same relative positions. As in real matched sets, the wide end uses a different optical structure, the C-style full-frame design, because the G attachment can't cover wide angles.
+- Sharpness is within 1.05–1.39× of the G original at every point, and corners are 0.59–0.88 at f/4. **The wide end has strong barrel distortion**: vertical lines bow 80–95 px at 4K on 35 / 40 mm. 28 mm was tried and doesn't cover (black corners). Figures are in `blenderlens/HANDOFF.md` §6.19.
 
 ## What's new in 0.9.4: any delivery ratio straight from the sensor
 
@@ -174,12 +179,12 @@ Gallery rendered with 0.6 (full gate, CPU / first GPU path, about 3–5 minutes 
 
 Requirements: Blender **5.0 or newer**, no third-party Python packages. Developed and tested on macOS / Apple M2 Max / Blender 5.3, with an independent re-test on an M4 Max; Windows and Linux are untested.
 
-1. Download [`dist/blenderlens-0.9.4.zip`](dist/blenderlens-0.9.4.zip) from this repository.
+1. Download [`dist/blenderlens-0.9.5.zip`](dist/blenderlens-0.9.5.zip) from this repository.
 2. Blender → Edit → Preferences → **Get Extensions** → ⌄ (top right) → **Install from Disk…** → choose the zip.
    Or from the command line:
 
    ```bash
-   blender --command extension install-file -r user_default -e blenderlens-0.9.4.zip
+   blender --command extension install-file -r user_default -e blenderlens-0.9.5.zip
    ```
 
 3. Press **N** in the 3D Viewport; a **BlenderLens** tab appears.
